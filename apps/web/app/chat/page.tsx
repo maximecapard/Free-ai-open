@@ -1,19 +1,38 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { ModelStatusPill } from "../_components/ModelStatusPill";
+import { PrivacyNotice } from "../_components/PrivacyNotice";
+import { findModeLabel, findTaskLabel } from "../_lib/catalog";
 
-export default function ChatPage() {
+function ChatContent() {
+  const searchParams = useSearchParams();
+  const taskLabel = findTaskLabel(searchParams.get("task"));
+  const modeLabel = findModeLabel(searchParams.get("mode"));
   const [message, setMessage] = useState("");
 
   return (
     <main style={{ maxWidth: 960, margin: "0 auto", padding: 24 }}>
-      <h1>FreeAI Open Chat</h1>
-      <p style={{ opacity: 0.75 }}>
-        Placeholder chat UI. WebLLM runtime should be integrated in a Web Worker.
-      </p>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          gap: 12,
+          marginBottom: 16,
+        }}
+      >
+        <h1 style={{ margin: 0 }}>Chat</h1>
+        <ModelStatusPill taskLabel={taskLabel} modeLabel={modeLabel} />
+      </div>
 
       <section style={{ border: "1px solid #333", borderRadius: 16, padding: 16, minHeight: 320 }}>
-        <p style={{ opacity: 0.6 }}>No runtime connected yet.</p>
+        <p style={{ opacity: 0.6 }}>
+          No runtime connected yet. The local model will load here once the
+          WebLLM runtime is wired in.
+        </p>
       </section>
 
       <form style={{ display: "flex", gap: 12, marginTop: 16 }} onSubmit={(event) => event.preventDefault()}>
@@ -25,6 +44,18 @@ export default function ChatPage() {
         />
         <button type="submit">Send</button>
       </form>
+
+      <div style={{ marginTop: 24 }}>
+        <PrivacyNotice />
+      </div>
     </main>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChatContent />
+    </Suspense>
   );
 }
