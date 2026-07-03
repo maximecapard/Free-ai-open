@@ -84,3 +84,9 @@ Run or mention:
 - tests;
 - manual browser check when relevant;
 - privacy/security implications.
+
+- Do not create large monolithic index.ts or barrel files.
+- Do not use index.ts as a dumping ground for unrelated exports.
+- Prefer small focused files and explicit imports.
+- A package-level index.ts is allowed only for tiny, intentional public APIs.
+- Avoid re-exporting entire modules when it makes dependencies unclear or hurts tree-shaking.
