@@ -47,6 +47,9 @@ importers:
       '@free-ai-open/telemetry':
         specifier: workspace:*
         version: link:../../packages/telemetry
+      '@free-ai-open/types':
+        specifier: workspace:*
+        version: link:../../packages/types
       next:
         specifier: ^16.2.10
         version: 16.2.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
