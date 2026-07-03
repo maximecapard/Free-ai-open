@@ -1,0 +1,36 @@
+import type { ModelRecord } from "./schema";
+
+export const sampleModels: ModelRecord[] = [
+  {
+    id: "sample-general-light",
+    displayName: "Assistant quotidien léger",
+    technicalName: "Sample Browser LLM Q4",
+    source: "huggingface",
+    modelUrl: "hf://replace-with-compatible-webllm-general-model",
+    tasks: ["chat", "writing", "summarization", "translation"],
+    minDeviceTier: 1,
+    recommendedDeviceTier: 2,
+    estimatedDownloadGb: 1.2,
+    estimatedRamGb: 2.5,
+    backend: ["webgpu", "wasm"],
+    license: "verify-before-use",
+    verified: false,
+    status: "experimental",
+  },
+  {
+    id: "sample-coding-light",
+    displayName: "Assistant code léger",
+    technicalName: "Sample Coding Browser LLM Q4",
+    source: "huggingface",
+    modelUrl: "hf://replace-with-compatible-webllm-coding-model",
+    tasks: ["coding", "learning"],
+    minDeviceTier: 2,
+    recommendedDeviceTier: 3,
+    estimatedDownloadGb: 2.4,
+    estimatedRamGb: 4,
+    backend: ["webgpu"],
+    license: "verify-before-use",
+    verified: false,
+    status: "experimental",
+  },
+];
