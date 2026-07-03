@@ -1,14 +1,17 @@
 export type PerformanceMode = "fast" | "balanced" | "performance";
 
-export type TaskCategory =
-  | "chat"
-  | "writing"
-  | "rewrite"
-  | "summarization"
-  | "translation"
-  | "coding"
-  | "learning"
-  | "document_analysis";
+export const taskCategories = [
+  "chat",
+  "writing",
+  "rewrite",
+  "summarization",
+  "translation",
+  "coding",
+  "learning",
+  "document_analysis",
+] as const;
+
+export type TaskCategory = (typeof taskCategories)[number];
 
 export type Backend = "webgpu" | "wasm" | "cpu";
 

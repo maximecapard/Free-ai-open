@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { taskCategories } from "@free-ai-open/types";
 
 const technicalSegmentPattern = "[a-z0-9]+(?:-[a-z0-9]+)*";
 const telemetryEventPattern = new RegExp(`^${technicalSegmentPattern}\\.${technicalSegmentPattern}(?:\\.${technicalSegmentPattern})?$`);
@@ -13,15 +14,7 @@ export const telemetryEventNameSchema = z
   .max(80)
   .regex(telemetryEventPattern, "Telemetry event names must use domain.action or domain.subdomain.action slugs");
 
-export const telemetryTaskSchema = z.enum([
-  "chat",
-  "writing",
-  "summarization",
-  "translation",
-  "coding",
-  "learning",
-  "document-analysis",
-]);
+export const telemetryTaskSchema = z.enum(taskCategories);
 
 export const telemetryModelIdSchema = z
   .string()

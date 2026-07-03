@@ -168,6 +168,9 @@ importers:
 
   packages/telemetry:
     dependencies:
+      '@free-ai-open/types':
+        specifier: workspace:*
+        version: link:../types
       zod:
         specifier: ^4.4.3
         version: 4.4.3

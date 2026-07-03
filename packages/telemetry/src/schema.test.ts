@@ -40,13 +40,44 @@ describe("telemetryEventSchema", () => {
     const result = telemetryEventSchema.safeParse({
       event: "webgpu.device-lost",
       severity: "error",
-      task: "document-analysis",
+      task: "document_analysis",
       modelId: "sample_general.light-v1",
       errorCode: "GPU_DEVICE_LOST",
       contentLogged: false,
       timestamp: "2026-07-04T12:34:56.000Z",
     });
     expect(result.success).toBe(true);
+  });
+
+  it("accepts telemetry task categories from the shared task list", () => {
+    expect(
+      telemetryEventSchema.safeParse({
+        event: "router.task-selected",
+        severity: "info",
+        task: "rewrite",
+        contentLogged: false,
+      }).success
+    ).toBe(true);
+
+    expect(
+      telemetryEventSchema.safeParse({
+        event: "router.task-selected",
+        severity: "info",
+        task: "document_analysis",
+        contentLogged: false,
+      }).success
+    ).toBe(true);
+  });
+
+  it("rejects hyphenated document-analysis because task categories use underscores", () => {
+    const result = telemetryEventSchema.safeParse({
+      event: "router.task-selected",
+      severity: "info",
+      task: "document-analysis",
+      contentLogged: false,
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it("rejects a prompt placed in event", () => {
@@ -65,6 +96,17 @@ describe("telemetryEventSchema", () => {
       errorCode: "Here is the answer to your question",
       contentLogged: false,
     });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects document content placed in an allowed technical field", () => {
+    const result = telemetryEventSchema.safeParse({
+      event: "document.analysis-failed",
+      severity: "error",
+      errorCode: "Confidential uploaded document text",
+      contentLogged: false,
+    });
+
     expect(result.success).toBe(false);
   });
 
