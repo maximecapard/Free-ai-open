@@ -1,0 +1,29 @@
+node_modules
+.next
+out
+dist
+coverage
+.env
+.env.local
+.env.*.local
+.DS_Store
+.cache
+.vercel
+.netlify
+.turbo
+*.log
+
+# Secrets / credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*credentials*.json
+*serviceAccount*.json
+firebase-debug.log
+.netlify/state.json
+.vscode/*.env
+
+# Source template archive / working docs (not part of the tracked project)
+*.zip
+FreeAI_Open_DocumentationV1.docx

@@ -1,0 +1,25 @@
+{
+  "name": "free-ai-open",
+  "private": true,
+  "version": "0.0.1",
+  "description": "Open-source browser-based local AI assistant with privacy-first model routing.",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm --filter @free-ai-open/web dev",
+    "build": "pnpm --filter @free-ai-open/web build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
+    "format": "prettier --write ."
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "prettier": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  },
+  "packageManager": "pnpm@latest"
+}
