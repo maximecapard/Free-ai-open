@@ -4,7 +4,7 @@ import { telemetryEventSchema } from "./schema";
 describe("telemetryEventSchema", () => {
   it("accepts a minimal valid event", () => {
     const result = telemetryEventSchema.safeParse({
-      event: "model_load_completed",
+      event: "model.load-completed",
       severity: "info",
       contentLogged: false,
     });
@@ -13,7 +13,7 @@ describe("telemetryEventSchema", () => {
 
   it("accepts a fully populated valid event", () => {
     const result = telemetryEventSchema.safeParse({
-      event: "inference_completed",
+      event: "model.router.decision",
       severity: "info",
       appVersion: "0.0.1",
       backend: "webgpu",
@@ -36,9 +36,71 @@ describe("telemetryEventSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts a technical telemetry event with strict fields", () => {
+    const result = telemetryEventSchema.safeParse({
+      event: "webgpu.device-lost",
+      severity: "error",
+      task: "document-analysis",
+      modelId: "sample_general.light-v1",
+      errorCode: "GPU_DEVICE_LOST",
+      contentLogged: false,
+      timestamp: "2026-07-04T12:34:56.000Z",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a prompt placed in event", () => {
+    const result = telemetryEventSchema.safeParse({
+      event: "Please summarize this private email for me",
+      severity: "info",
+      contentLogged: false,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a response placed in errorCode", () => {
+    const result = telemetryEventSchema.safeParse({
+      event: "inference.failed",
+      severity: "error",
+      errorCode: "Here is the answer to your question",
+      contentLogged: false,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a natural-language phrase in modelId", () => {
+    const result = telemetryEventSchema.safeParse({
+      event: "model.load-failed",
+      severity: "warn",
+      modelId: "the helpful model selected by the user",
+      contentLogged: false,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects an invalid timestamp", () => {
+    const result = telemetryEventSchema.safeParse({
+      event: "telemetry.received",
+      severity: "info",
+      contentLogged: false,
+      timestamp: "July 4th at noon",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a valid ISO timestamp", () => {
+    const result = telemetryEventSchema.safeParse({
+      event: "telemetry.received",
+      severity: "info",
+      contentLogged: false,
+      timestamp: "2026-07-04T12:00:00.000Z",
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects forbidden content-bearing fields via strict mode", () => {
     const result = telemetryEventSchema.safeParse({
-      event: "chat_completed",
+      event: "chat.completed",
       severity: "info",
       contentLogged: false,
       prompt: "this should never be here",
@@ -46,9 +108,21 @@ describe("telemetryEventSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects all forbidden content-bearing field names", () => {
+    for (const field of ["prompt", "response", "document", "messages", "chatHistory"]) {
+      const result = telemetryEventSchema.safeParse({
+        event: "telemetry.received",
+        severity: "info",
+        contentLogged: false,
+        [field]: "private content",
+      });
+      expect(result.success).toBe(false);
+    }
+  });
+
   it("rejects contentLogged: true", () => {
     const result = telemetryEventSchema.safeParse({
-      event: "chat_completed",
+      event: "chat.completed",
       severity: "info",
       contentLogged: true,
     });
@@ -57,7 +131,7 @@ describe("telemetryEventSchema", () => {
 
   it("rejects an invalid severity value", () => {
     const result = telemetryEventSchema.safeParse({
-      event: "chat_completed",
+      event: "chat.completed",
       severity: "verbose",
       contentLogged: false,
     });
