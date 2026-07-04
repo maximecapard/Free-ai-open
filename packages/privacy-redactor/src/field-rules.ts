@@ -37,7 +37,10 @@ const FORBIDDEN_FIELD_NAMES = new Set([
   "emailbody",
   "emailcontent",
   "emailtext",
+  "filebody",
+  "filecontent",
   "filepath",
+  "filetext",
   "history",
   "inputtext",
   "localfilepath",
@@ -70,6 +73,7 @@ const FORBIDDEN_FIELD_PARTS = [
   "clientsecret",
   "documentcontent",
   "emailcontent",
+  "filecontent",
   "inputtext",
   "localfilepath",
   "outputtext",
@@ -81,7 +85,7 @@ const FORBIDDEN_FIELD_PARTS = [
 ];
 
 const CONTENT_FIELD_PATTERN =
-  /(prompt|response|message|document|chat|email|user|input|output)(content|text|body|history|value|raw|data)$/;
+  /(prompt|response|message|document|chat|email|file|user|input|output)(content|text|body|history|value|raw|data)$/;
 
 export function normalizeFieldName(key: string): string {
   return key.toLowerCase().replace(/[^a-z0-9]/g, "");
