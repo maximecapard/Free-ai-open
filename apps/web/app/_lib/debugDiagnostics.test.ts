@@ -63,18 +63,18 @@ describe("findLoadTimeMs", () => {
 });
 
 describe("findGenerationMetrics", () => {
-  it("returns firstTokenMs and tokensPerSecond from the most recent generation entry", () => {
+  it("returns firstTokenMs, tokensPerSecond, and generationDurationMs from the most recent generation entry", () => {
     const logs: LocalLogRecord[] = [
       log({
         id: "1",
         event: "inference.completed",
         severity: "info",
         timestamp: "2026-01-01T00:00:00.000Z",
-        performanceMetrics: { firstTokenMs: 240, tokensPerSecond: 18 },
+        performanceMetrics: { firstTokenMs: 240, tokensPerSecond: 18, totalTimeMs: 3200 },
       }),
     ];
 
-    expect(findGenerationMetrics(logs)).toEqual({ firstTokenMs: 240, tokensPerSecond: 18 });
+    expect(findGenerationMetrics(logs)).toEqual({ firstTokenMs: 240, tokensPerSecond: 18, generationDurationMs: 3200 });
   });
 
   it("returns null when no generation has completed yet", () => {

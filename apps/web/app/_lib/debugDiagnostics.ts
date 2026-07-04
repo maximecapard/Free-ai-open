@@ -9,6 +9,7 @@ export interface LastRuntimeStatus {
 export interface GenerationMetrics {
   firstTokenMs?: number | null;
   tokensPerSecond?: number;
+  generationDurationMs?: number;
 }
 
 // `logs` is assumed sorted most-recent-first, as returned by getRecentLocalLogs.
@@ -28,10 +29,17 @@ export function findLoadTimeMs(logs: readonly LocalLogRecord[]): number | undefi
 
 export function findGenerationMetrics(logs: readonly LocalLogRecord[]): GenerationMetrics | null {
   const log = logs.find(
-    (entry) => entry.performanceMetrics?.tokensPerSecond !== undefined || entry.performanceMetrics?.firstTokenMs !== undefined
+    (entry) =>
+      entry.performanceMetrics?.tokensPerSecond !== undefined ||
+      entry.performanceMetrics?.firstTokenMs !== undefined ||
+      entry.performanceMetrics?.totalTimeMs !== undefined
   );
   if (!log?.performanceMetrics) return null;
-  return { firstTokenMs: log.performanceMetrics.firstTokenMs, tokensPerSecond: log.performanceMetrics.tokensPerSecond };
+  return {
+    firstTokenMs: log.performanceMetrics.firstTokenMs,
+    tokensPerSecond: log.performanceMetrics.tokensPerSecond,
+    generationDurationMs: log.performanceMetrics.totalTimeMs,
+  };
 }
 
 export function toRecentErrors(logs: readonly LocalLogRecord[]): DiagnosticError[] {
