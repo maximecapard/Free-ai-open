@@ -14,6 +14,7 @@
     "vitest": "^4.1.9"
   },
   "dependencies": {
+    "@free-ai-open/device-profiler": "workspace:*",
     "@free-ai-open/types": "workspace:*",
     "@free-ai-open/model-registry": "workspace:*"
   }
