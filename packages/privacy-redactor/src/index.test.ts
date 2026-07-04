@@ -119,6 +119,35 @@ describe("redactTelemetryPayload", () => {
     expect(result.auth.localFilePath).toBe("[FORBIDDEN_FIELD_REMOVED]");
   });
 
+  it("redacts runtime content-bearing field names before logging or telemetry", () => {
+    const result = redactTelemetryPayload({
+      runtime: {
+        prompt: "private prompt",
+        response: "private response",
+        messages: ["private message"],
+        conversation: "private conversation",
+        document: "private document",
+        userText: "private user text",
+        inputText: "private input text",
+        outputText: "private output text",
+        chatHistory: "private chat history",
+        modelId: "sample-general-light",
+      },
+    }) as { runtime: Record<string, unknown> };
+
+    expect(result.runtime.prompt).toBe("[FORBIDDEN_FIELD_REMOVED]");
+    expect(result.runtime.response).toBe("[FORBIDDEN_FIELD_REMOVED]");
+    expect(result.runtime.messages).toBe("[FORBIDDEN_FIELD_REMOVED]");
+    expect(result.runtime.conversation).toBe("[FORBIDDEN_FIELD_REMOVED]");
+    expect(result.runtime.document).toBe("[FORBIDDEN_FIELD_REMOVED]");
+    expect(result.runtime.userText).toBe("[FORBIDDEN_FIELD_REMOVED]");
+    expect(result.runtime.inputText).toBe("[FORBIDDEN_FIELD_REMOVED]");
+    expect(result.runtime.outputText).toBe("[FORBIDDEN_FIELD_REMOVED]");
+    expect(result.runtime.chatHistory).toBe("[FORBIDDEN_FIELD_REMOVED]");
+    expect(result.runtime.modelId).toBe("sample-general-light");
+    expect(stringify(result)).not.toContain("private");
+  });
+
   it("prevents telemetry payloads from containing prompt text", () => {
     const result = redactTelemetryPayload({ prompt: "my private prompt text" });
 

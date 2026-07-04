@@ -1,7 +1,79 @@
 import { describe, expect, it } from "vitest";
 import { telemetryEventSchema } from "./schema";
 
+const validRuntimeTelemetryEvents = [
+  {
+    event: "model.load.started",
+    severity: "info",
+    modelId: "sample-general-light",
+    backend: "webgpu",
+    contentLogged: false,
+  },
+  {
+    event: "model.load.completed",
+    severity: "info",
+    modelId: "sample-general-light",
+    backend: "webgpu",
+    loadTimeMs: 1200,
+    contentLogged: false,
+  },
+  {
+    event: "model.load.failed",
+    severity: "error",
+    modelId: "sample-general-light",
+    backend: "webgpu",
+    errorCode: "MODEL_LOAD_FAILED",
+    fallbackAttempted: true,
+    fallbackResult: "failed",
+    contentLogged: false,
+  },
+  {
+    event: "inference.started",
+    severity: "info",
+    modelId: "sample-general-light",
+    task: "chat",
+    promptLength: 42,
+    contentLogged: false,
+  },
+  {
+    event: "inference.completed",
+    severity: "info",
+    modelId: "sample-general-light",
+    task: "chat",
+    firstTokenMs: 350,
+    tokensPerSecond: 18.2,
+    promptLength: 42,
+    responseLength: 128,
+    contentLogged: false,
+  },
+  {
+    event: "inference.failed",
+    severity: "error",
+    modelId: "sample-general-light",
+    task: "chat",
+    errorCode: "INFERENCE_FAILED",
+    fallbackAttempted: true,
+    fallbackResult: "success",
+    promptLength: 42,
+    contentLogged: false,
+  },
+  {
+    event: "inference.cancelled",
+    severity: "info",
+    modelId: "sample-general-light",
+    task: "chat",
+    promptLength: 42,
+    contentLogged: false,
+  },
+] as const;
+
 describe("telemetryEventSchema", () => {
+  it("accepts runtime telemetry fixtures that contain only technical data", () => {
+    for (const event of validRuntimeTelemetryEvents) {
+      expect(telemetryEventSchema.safeParse(event).success).toBe(true);
+    }
+  });
+
   it("accepts a minimal valid event", () => {
     const result = telemetryEventSchema.safeParse({
       event: "model.load-completed",
@@ -99,6 +171,32 @@ describe("telemetryEventSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects user content placed in allowed runtime telemetry fields", () => {
+    const invalidRuntimeEvents = [
+      {
+        event: "Please answer this private medical question",
+        severity: "info",
+        contentLogged: false,
+      },
+      {
+        event: "inference.failed",
+        severity: "error",
+        errorCode: "The user asked me to rewrite a private email",
+        contentLogged: false,
+      },
+      {
+        event: "inference.completed",
+        severity: "info",
+        modelId: "the user asked about a private contract",
+        contentLogged: false,
+      },
+    ];
+
+    for (const event of invalidRuntimeEvents) {
+      expect(telemetryEventSchema.safeParse(event).success).toBe(false);
+    }
+  });
+
   it("rejects document content placed in an allowed technical field", () => {
     const result = telemetryEventSchema.safeParse({
       event: "document.analysis-failed",
@@ -151,7 +249,17 @@ describe("telemetryEventSchema", () => {
   });
 
   it("rejects all forbidden content-bearing field names", () => {
-    for (const field of ["prompt", "response", "document", "messages", "chatHistory"]) {
+    for (const field of [
+      "prompt",
+      "response",
+      "messages",
+      "conversation",
+      "document",
+      "userText",
+      "inputText",
+      "outputText",
+      "chatHistory",
+    ]) {
       const result = telemetryEventSchema.safeParse({
         event: "telemetry.received",
         severity: "info",
