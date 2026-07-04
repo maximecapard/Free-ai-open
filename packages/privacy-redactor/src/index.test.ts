@@ -127,6 +127,7 @@ describe("redactTelemetryPayload", () => {
         messages: ["private message"],
         conversation: "private conversation",
         document: "private document",
+        fileContent: "private file content",
         userText: "private user text",
         inputText: "private input text",
         outputText: "private output text",
@@ -140,6 +141,7 @@ describe("redactTelemetryPayload", () => {
     expect(result.runtime.messages).toBe("[FORBIDDEN_FIELD_REMOVED]");
     expect(result.runtime.conversation).toBe("[FORBIDDEN_FIELD_REMOVED]");
     expect(result.runtime.document).toBe("[FORBIDDEN_FIELD_REMOVED]");
+    expect(result.runtime.fileContent).toBe("[FORBIDDEN_FIELD_REMOVED]");
     expect(result.runtime.userText).toBe("[FORBIDDEN_FIELD_REMOVED]");
     expect(result.runtime.inputText).toBe("[FORBIDDEN_FIELD_REMOVED]");
     expect(result.runtime.outputText).toBe("[FORBIDDEN_FIELD_REMOVED]");
