@@ -32,4 +32,16 @@
 - WebGPU crash/device lost.
 - Excessive fingerprinting.
 - Storage exhaustion.
+- Local conversation storage leakage.
 - Malicious dependency.
+
+## Local conversation storage
+
+Conversations are sensitive local data. The conversation store must:
+
+- stay browser-local;
+- avoid `fetch`, `sendBeacon`, Supabase, Google Drive, and server endpoints;
+- avoid local technical logs for message content;
+- enforce limits on conversation count, message count, and message size;
+- keep schema version metadata for future migrations;
+- exclude conversation content from diagnostic reports.

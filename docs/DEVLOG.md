@@ -11,9 +11,10 @@ FreeAI Open is an alpha-stage, local-first browser AI assistant. The current cod
 - device profiling and task-based model routing;
 - privacy redaction, structured technical logging, and telemetry schema validation;
 - local technical logs in IndexedDB;
-- a debug dashboard and privacy-safe diagnostic report export.
+- a debug dashboard and privacy-safe diagnostic report export;
+- a local-only conversation-store package wired into the `/chat` UI through a history sidebar for create, resume, rename, and delete.
 
-The product is not yet a complete MVP. Local conversation persistence, broad model support, encrypted sync, and production-ready telemetry persistence remain future work.
+The product is not yet a complete MVP. Broad model support, encrypted sync, import/export UX, production-ready telemetry persistence, and browser end-to-end coverage remain future work.
 
 ## Sprint 1 - App shell, model registry, privacy redactor, telemetry schema
 
@@ -83,6 +84,7 @@ The product is not yet a complete MVP. Local conversation persistence, broad mod
 - Stop generation could leave the runtime stuck in `generating` in some WebLLM edge cases.
 - Runtime recovery still required stronger worker teardown behavior.
 - The model catalog remained intentionally small.
+- Full persisted conversations were still missing.
 
 ## Sprint 4 - Local logs, debug dashboard, diagnostic report
 
@@ -144,11 +146,42 @@ The product is not yet a complete MVP. Local conversation persistence, broad mod
 - Reload model is implemented in the UI, but a full UI interaction test is still useful.
 - Runtime behavior still depends on WebLLM/browser behavior for real-world cancel confirmation timing.
 
+## Sprint 5 - Local conversation history
+
+### Built
+
+- Added `@free-ai-open/conversation-store`.
+- Added local IndexedDB persistence with memory fallback.
+- Added schema versioning, `createdAt`, and `updatedAt`.
+- Added limits for total conversations, messages per conversation, message size, and title size.
+- Added create/list/get/add message/rename/delete/clear/recent APIs.
+- Added a chat history sidebar (`ChatHistorySidebar`) to `/chat`: new chat, select-to-resume, inline rename, and delete with a confirm step.
+- Sending a message lazily creates a conversation, derives a title from the first message, and persists the user message before generation starts.
+- Assistant replies are persisted once generation completes or is cancelled, including partial text from a stopped generation.
+- The last-viewed conversation resumes automatically after a refresh, tracked by a small local ID pointer, not conversation content.
+- Local storage failures surface a dismissable notice without blocking chatting.
+
+### Privacy and architecture notes
+
+- Conversation content stays in the browser.
+- The conversation store does not call network APIs, server endpoints, Supabase, Google Drive, telemetry, or local logs.
+- Diagnostic report tests ensure conversation content fields are not exported.
+- Conversation content is only passed to `@free-ai-open/conversation-store` calls, never to `logEvent`, local technical logs, or diagnostic reports.
+- The `conversationId` passed to `ai-runtime`'s `generate()` is only a non-content technical ID used for runtime and console correlation; it is not sent to the server or stored in local technical logs.
+
+### Remaining limits after Sprint 5
+
+- New chat and conversation switching are disabled while a reply is generating or cancelling, to avoid mixing streamed tokens across conversations.
+- The local model is single-turn: persisted conversation history is not replayed back into the model as context.
+- There is no encrypted sync, import/export UI, or multi-device persistence.
+- IndexedDB schema migration is intentionally simple and currently starts at schema version 1.
+- Browser end-to-end tests for persisted chat sessions are still pending.
+
 ## Cross-cutting remaining work
 
-- Implement local conversation persistence without sending content to the server.
 - Expand and validate the model registry before adding more model records.
-- Add broader browser/E2E tests for chat, Stop, Reload model, and debug export.
+- Add broader browser/E2E tests for chat, Stop, Reload model, persisted conversation history, and debug export.
+- Add conversation import/export UX if it remains in scope.
 - Keep Supabase usage limited to future technical metadata or optional features until schema and privacy boundaries are explicitly designed.
 - Keep Google Drive sync future-only and client-side encrypted if implemented later.
 - Document any new third-party service before integration.

@@ -205,6 +205,14 @@ describe("diagnostic report", () => {
       inputText: "private input text",
       outputText: "private output text",
       chatHistory: "private chat history",
+      conversations: [
+        {
+          messages: [
+            { role: "user", content: "private stored conversation prompt" },
+            { role: "assistant", content: "private stored conversation response" },
+          ],
+        },
+      ],
       localLogs: [
         {
           id: "log-1",
@@ -240,6 +248,8 @@ describe("diagnostic report", () => {
       "inputText",
       "outputText",
       "chatHistory",
+      "conversations",
+      "private stored conversation",
       "private",
     ]) {
       expect(serialized).not.toContain(forbidden);

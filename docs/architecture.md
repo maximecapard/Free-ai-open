@@ -44,6 +44,7 @@ Server data is technical only:
 - `model-router`: task/mode/device based model selection.
 - `model-registry`: model metadata and validation.
 - `local-storage`: IndexedDB and local persistence.
+- `conversation-store`: local-only browser conversation persistence.
 - `logger`: structured local logs.
 - `privacy-redactor`: removes sensitive data.
 - `telemetry`: event schemas and client/server helpers.
