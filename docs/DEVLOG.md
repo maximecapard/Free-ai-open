@@ -120,7 +120,7 @@ FreeAI Open is an alpha-stage, local-first browser AI assistant. The current cod
 ### Privacy notes
 
 - Conversation content is only ever passed to `@free-ai-open/conversation-store` calls, never to `logEvent`, local technical logs, or diagnostic reports.
-- The `conversationId` passed to `ai-runtime`'s `generate()` is only used for console log correlation (already redacted by the logger package) and is a plain ID, not content.
+- The `conversationId` passed to `ai-runtime`'s `generate()` is only a non-content technical ID used for runtime and console correlation; it is not sent to the server or stored in local technical logs.
 
 ### Remaining limits after this sprint
 
