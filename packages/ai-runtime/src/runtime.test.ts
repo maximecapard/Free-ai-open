@@ -177,4 +177,28 @@ describe("createInferenceRuntime", () => {
     expect(mocks.mockEngine.unload).toHaveBeenCalledTimes(1);
     expect(runtime.getState()).toEqual({ status: "idle", modelId: null, loadProgress: 0, error: null });
   });
+
+  it("dispose resolves and still resets to idle even when engine.unload() rejects", async () => {
+    mocks.mockEngine.unload.mockRejectedValueOnce(new Error("device already lost"));
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+
+    await expect(runtime.dispose()).resolves.toBeUndefined();
+    expect(runtime.getState()).toEqual({ status: "idle", modelId: null, loadProgress: 0, error: null });
+  });
+
+  it("logs a technical, content-free warning when dispose fails to unload", async () => {
+    mocks.mockEngine.unload.mockRejectedValueOnce(new Error("device already lost"));
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    mocks.createLogEvent.mockClear();
+
+    await runtime.dispose();
+
+    expect(mocks.createLogEvent).toHaveBeenCalledWith(
+      "model.unload.failed",
+      "warn",
+      expect.objectContaining({ errorCode: expect.any(String) })
+    );
+  });
 });

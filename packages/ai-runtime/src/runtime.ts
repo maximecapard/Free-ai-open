@@ -120,9 +120,14 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
   }
 
   async function dispose(): Promise<void> {
-    await engine?.unload();
-    engine = null;
-    setState(IDLE_STATE);
+    try {
+      await engine?.unload();
+    } catch (rawError) {
+      logEvent(createLogEvent("model.unload.failed", "warn", { errorCode: classifyRuntimeError(rawError, "generate").code }));
+    } finally {
+      engine = null;
+      setState(IDLE_STATE);
+    }
   }
 
   return {
