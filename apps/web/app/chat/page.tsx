@@ -17,8 +17,15 @@ import type { ChatMessageItem } from "../_components/ChatTranscript";
 import { findModeLabel, findTaskLabel, isPerformanceMode, isTaskCategory } from "../_lib/catalog";
 import { rejectionReasonLabel } from "../_lib/routeExplanation";
 import { runtimeErrorLabel } from "../_lib/runtimeErrorLabel";
+import { terminateWorkerAfter } from "../_lib/workerTeardown";
 
 const IDLE_RUNTIME_STATE: RuntimeState = { status: "idle", modelId: null, loadProgress: 0, error: null };
+
+// Bounds how long teardown waits for a graceful runtime.dispose() (which
+// calls the WebLLM engine's unload()) before terminating the worker anyway.
+// A wedged engine (e.g. after a cancel timeout) can leave dispose() pending
+// forever; the worker must never be leaked waiting on it.
+const TEARDOWN_GRACE_MS = 2_000;
 
 function ChatContent() {
   const searchParams = useSearchParams();
@@ -77,7 +84,18 @@ function ChatContent() {
     const worker = workerRef.current;
     runtimeRef.current = null;
     workerRef.current = null;
-    runtime?.dispose().finally(() => worker?.terminate());
+
+    if (!worker) return;
+    if (!runtime) {
+      worker.terminate();
+      return;
+    }
+
+    // Never depends on dispose() resolving: the worker is guaranteed to be
+    // terminated within TEARDOWN_GRACE_MS regardless of whether the engine's
+    // unload() call ever settles, so a new runtime can always be created
+    // right after this call returns.
+    terminateWorkerAfter(runtime.dispose(), worker, TEARDOWN_GRACE_MS);
   }, []);
 
   // Also used by the "Reload model" recovery button, so a stuck runtime
