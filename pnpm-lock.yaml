@@ -35,6 +35,12 @@ importers:
       '@free-ai-open/device-profiler':
         specifier: workspace:*
         version: link:../../packages/device-profiler
+      '@free-ai-open/diagnostic-report':
+        specifier: workspace:*
+        version: link:../../packages/diagnostic-report
+      '@free-ai-open/local-logs':
+        specifier: workspace:*
+        version: link:../../packages/local-logs
       '@free-ai-open/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -84,6 +90,9 @@ importers:
       '@free-ai-open/device-profiler':
         specifier: workspace:*
         version: link:../device-profiler
+      '@free-ai-open/local-logs':
+        specifier: workspace:*
+        version: link:../local-logs
       '@free-ai-open/logger':
         specifier: workspace:*
         version: link:../logger

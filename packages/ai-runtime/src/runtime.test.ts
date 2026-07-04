@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
     timestamp: "2026-01-01T00:00:00.000Z",
     contentLogged: false as const,
   })),
+  addLocalLog: vi.fn(),
   CreateWebWorkerMLCEngine: vi.fn(),
   mockEngine: {
     chat: { completions: { create: vi.fn() } },
@@ -26,6 +27,10 @@ vi.mock("@free-ai-open/device-profiler", () => ({
 vi.mock("@free-ai-open/logger", () => ({
   logEvent: mocks.logEvent,
   createLogEvent: mocks.createLogEvent,
+}));
+
+vi.mock("@free-ai-open/local-logs", () => ({
+  addLocalLog: mocks.addLocalLog,
 }));
 
 vi.mock("@mlc-ai/web-llm", () => ({
@@ -48,6 +53,7 @@ beforeEach(() => {
   mocks.detectWebGPUAvailability.mockReset().mockResolvedValue(true);
   mocks.logEvent.mockReset();
   mocks.createLogEvent.mockClear();
+  mocks.addLocalLog.mockReset().mockResolvedValue(null);
   mocks.mockEngine.chat.completions.create.mockReset();
   mocks.mockEngine.interruptGenerate.mockReset();
   mocks.mockEngine.unload.mockReset().mockResolvedValue(undefined);
@@ -200,5 +206,88 @@ describe("createInferenceRuntime", () => {
       "warn",
       expect.objectContaining({ errorCode: expect.any(String) })
     );
+  });
+
+  describe("local-logs persistence", () => {
+    it("lowercases mixed-case model IDs before persisting (local-logs rejects uppercase modelId)", async () => {
+      const runtime = createInferenceRuntime(fakeWorker());
+      await runtime.loadModel("SmolLM2-135M-Instruct-q0f32-MLC");
+
+      expect(mocks.addLocalLog).toHaveBeenCalledWith(
+        expect.objectContaining({ event: "model.load.started", modelId: "smollm2-135m-instruct-q0f32-mlc" })
+      );
+      expect(mocks.addLocalLog).toHaveBeenCalledWith(
+        expect.objectContaining({ event: "model.load.completed", modelId: "smollm2-135m-instruct-q0f32-mlc" })
+      );
+    });
+
+    it("uppercases the errorCode before persisting (local-logs rejects lowercase-with-underscore codes)", async () => {
+      mocks.detectWebGPUAvailability.mockResolvedValue(false);
+      const runtime = createInferenceRuntime(fakeWorker());
+      await runtime.loadModel("test-model");
+
+      expect(mocks.addLocalLog).toHaveBeenCalledWith(
+        expect.objectContaining({ event: "model.load.failed", errorCode: "WEBGPU_UNAVAILABLE" })
+      );
+    });
+
+    it("records loadTimeMs on successful model load", async () => {
+      const runtime = createInferenceRuntime(fakeWorker());
+      await runtime.loadModel("test-model");
+
+      expect(mocks.addLocalLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "model.load.completed",
+          performanceMetrics: expect.objectContaining({ loadTimeMs: expect.any(Number) }),
+        })
+      );
+    });
+
+    it("records firstTokenMs and tokensPerSecond on completed generation", async () => {
+      mocks.mockEngine.chat.completions.create.mockResolvedValue(
+        (async function* () {
+          yield { choices: [{ delta: { content: "Hel" }, finish_reason: null }] };
+          yield { choices: [{ delta: { content: "lo" }, finish_reason: null }] };
+          yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+        })()
+      );
+
+      const runtime = createInferenceRuntime(fakeWorker());
+      await runtime.loadModel("test-model");
+
+      // Date.now() is mocked only for the generate() call, so timings are
+      // deterministic instead of racing real elapsed time (which can be
+      // 0ms in a fast test run). generate() calls Date.now() exactly 3
+      // times: generationStartedAt, firstTokenAt, and the final totalTimeMs.
+      const timestamps = [0, 100, 2000];
+      vi.spyOn(Date, "now").mockImplementation(() => timestamps.shift() ?? 2000);
+
+      await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+      expect(mocks.addLocalLog).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: "inference.completed",
+          performanceMetrics: { firstTokenMs: 100, tokensPerSecond: 1, totalTimeMs: 2000 },
+        })
+      );
+
+      vi.restoreAllMocks();
+    });
+
+    it("never persists prompt or response content", async () => {
+      mocks.mockEngine.chat.completions.create.mockResolvedValue(
+        (async function* () {
+          yield { choices: [{ delta: { content: "super secret reply" }, finish_reason: "stop" }] };
+        })()
+      );
+
+      const runtime = createInferenceRuntime(fakeWorker());
+      await runtime.loadModel("test-model");
+      await drain(runtime.generate({ conversationId: "c1", prompt: "super secret prompt" }));
+
+      for (const call of mocks.addLocalLog.mock.calls) {
+        expect(JSON.stringify(call)).not.toContain("super secret");
+      }
+    });
   });
 });

@@ -3,6 +3,7 @@ import type { InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import { detectWebGPUAvailability } from "@free-ai-open/device-profiler";
 import { createLogEvent, logEvent } from "@free-ai-open/logger";
 import { classifyRuntimeError } from "./errors";
+import { recordLocalLog, toLocalLogErrorCode, toLocalLogModelId } from "./local-log-bridge";
 import { DEFAULT_MODEL_ID } from "./model";
 import type { GenerateChunk, GenerateInput, InferenceChatWorker, RuntimeError, RuntimeState } from "./types";
 
@@ -29,14 +30,25 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
   }
 
   async function loadModel(modelId: string = DEFAULT_MODEL_ID): Promise<void> {
+    const loadStartedAt = Date.now();
+    const localModelId = toLocalLogModelId(modelId);
+
     setState({ status: "loading_model", modelId, loadProgress: 0, error: null });
     logEvent(createLogEvent("model.load.started", "info", { modelId }));
+    recordLocalLog({ event: "model.load.started", severity: "info", modelId: localModelId, runtimeStatus: "loading_model" });
 
     const webgpuAvailable = await detectWebGPUAvailability();
     if (!webgpuAvailable) {
       const error: RuntimeError = { code: "webgpu_unavailable", message: "WebGPU is not available in this browser." };
       setState({ status: "error", error });
       logEvent(createLogEvent("model.load.failed", "error", { modelId, errorCode: error.code }));
+      recordLocalLog({
+        event: "model.load.failed",
+        severity: "error",
+        modelId: localModelId,
+        runtimeStatus: "error",
+        errorCode: toLocalLogErrorCode(error.code),
+      });
       return;
     }
 
@@ -46,12 +58,28 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
           setState({ loadProgress: report.progress });
         },
       });
+      const loadTimeMs = Date.now() - loadStartedAt;
       setState({ status: "ready", loadProgress: 1 });
       logEvent(createLogEvent("model.load.completed", "info", { modelId }));
+      recordLocalLog({
+        event: "model.load.completed",
+        severity: "info",
+        modelId: localModelId,
+        backend: "webgpu",
+        runtimeStatus: "ready",
+        performanceMetrics: { loadTimeMs },
+      });
     } catch (rawError) {
       const error = classifyRuntimeError(rawError, "load");
       setState({ status: "error", error });
       logEvent(createLogEvent("model.load.failed", "error", { modelId, errorCode: error.code }));
+      recordLocalLog({
+        event: "model.load.failed",
+        severity: "error",
+        modelId: localModelId,
+        runtimeStatus: "error",
+        errorCode: toLocalLogErrorCode(error.code),
+      });
     }
   }
 
@@ -61,6 +89,8 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       return;
     }
 
+    const localModelId = state.modelId ? toLocalLogModelId(state.modelId) : undefined;
+
     setState({ status: "generating" });
     logEvent(
       createLogEvent("inference.started", "info", {
@@ -68,6 +98,11 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         promptLength: input.prompt.length,
       })
     );
+    recordLocalLog({ event: "inference.started", severity: "info", modelId: localModelId, backend: "webgpu", runtimeStatus: "generating" });
+
+    const generationStartedAt = Date.now();
+    let firstTokenAt: number | null = null;
+    let tokenCount = 0;
 
     try {
       const stream = await engine.chat.completions.create({
@@ -82,6 +117,8 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         const choice = chunk.choices[0];
         const text = choice?.delta?.content ?? "";
         if (text) {
+          if (firstTokenAt === null) firstTokenAt = Date.now();
+          tokenCount += 1;
           responseLength += text.length;
           yield { type: "token", text };
         }
@@ -90,6 +127,11 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
           break;
         }
       }
+
+      const totalTimeMs = Date.now() - generationStartedAt;
+      const firstTokenMs = firstTokenAt !== null ? firstTokenAt - generationStartedAt : null;
+      const tokensPerSecond =
+        tokenCount > 0 && totalTimeMs > 0 ? Math.round((tokenCount / (totalTimeMs / 1000)) * 10) / 10 : undefined;
 
       setState({ status: "ready" });
       yield { type: "done" };
@@ -100,6 +142,14 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
           { conversationId: input.conversationId, responseLength }
         )
       );
+      recordLocalLog({
+        event: cancelled ? "inference.cancelled" : "inference.completed",
+        severity: "info",
+        modelId: localModelId,
+        backend: "webgpu",
+        runtimeStatus: "ready",
+        performanceMetrics: { firstTokenMs, tokensPerSecond, totalTimeMs },
+      });
     } catch (rawError) {
       const error = classifyRuntimeError(rawError, "generate");
       const cancelled = error.code === "generation_interrupted";
@@ -112,6 +162,13 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
           { conversationId: input.conversationId, errorCode: error.code }
         )
       );
+      recordLocalLog({
+        event: cancelled ? "inference.cancelled" : "inference.failed",
+        severity: cancelled ? "info" : "error",
+        modelId: localModelId,
+        runtimeStatus: "ready",
+        errorCode: cancelled ? undefined : toLocalLogErrorCode(error.code),
+      });
     }
   }
 
@@ -123,7 +180,9 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     try {
       await engine?.unload();
     } catch (rawError) {
-      logEvent(createLogEvent("model.unload.failed", "warn", { errorCode: classifyRuntimeError(rawError, "generate").code }));
+      const errorCode = classifyRuntimeError(rawError, "generate").code;
+      logEvent(createLogEvent("model.unload.failed", "warn", { errorCode }));
+      recordLocalLog({ event: "model.unload.failed", severity: "warn", errorCode: toLocalLogErrorCode(errorCode) });
     } finally {
       engine = null;
       setState(IDLE_STATE);

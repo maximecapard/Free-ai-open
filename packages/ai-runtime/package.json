@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@free-ai-open/device-profiler": "workspace:*",
+    "@free-ai-open/local-logs": "workspace:*",
     "@free-ai-open/logger": "workspace:*",
     "@mlc-ai/web-llm": "^0.2.84"
   },
