@@ -90,3 +90,4 @@ Run or mention:
 - Prefer small focused files and explicit imports.
 - A package-level index.ts is allowed only for tiny, intentional public APIs.
 - Avoid re-exporting entire modules when it makes dependencies unclear or hurts tree-shaking.
+- Documentation must stay in sync with the code. When a task changes behavior, architecture, runtime states, privacy/security guarantees, logging, telemetry, model routing, debugging, or developer workflow, update the relevant documentation files in the same branch. Do not document unimplemented features as completed.
