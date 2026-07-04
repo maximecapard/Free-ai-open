@@ -1,5 +1,17 @@
 # Roadmap
 
+## Status after v0.5.0-alpha
+
+Local conversation history (store + `/chat` history sidebar) shipped in `v0.5.0-alpha`. Next up:
+
+- **Sprint 6 (next):** local export/import of conversations.
+- **Future:** client-side encrypted export.
+- **Future:** optional Google Drive sync.
+- **Future:** better/more transparent model selection.
+- **Future:** benchmarks page.
+
+None of the "Future" items above are implemented yet. See the detailed phases below for full scope.
+
 ## Phase 0 — Project setup
 
 - Next.js scaffold

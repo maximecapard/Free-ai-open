@@ -89,6 +89,10 @@ Forbidden fields:
 - Run lint, typecheck, and tests before finalizing.
 - Summarize what changed, what was not changed, and known risks.
 
+## Documentation rule
+
+Documentation must stay in sync with the code. When a task changes behavior, architecture, runtime states, privacy/security guarantees, logging, telemetry, diagnostics, model routing, storage, or developer workflow, update all relevant documentation files in the same branch. Do not document unimplemented features as completed.
+
 ## Definition of done
 
 A task is done only when:

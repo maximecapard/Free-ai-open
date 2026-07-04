@@ -150,32 +150,60 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, impo
 
 ### Built
 
-- Added `@free-ai-open/conversation-store`.
-- Added local IndexedDB persistence with memory fallback.
-- Added schema versioning, `createdAt`, and `updatedAt`.
-- Added limits for total conversations, messages per conversation, message size, and title size.
-- Added create/list/get/add message/rename/delete/clear/recent APIs.
+- Added `@free-ai-open/conversation-store`: local IndexedDB persistence with an in-memory fallback, schema versioning (`createdAt`, `updatedAt`), and limits for total conversations, messages per conversation, message size, and title size.
+- Added create/list/get/add message/rename/delete/clear/recent APIs on the store.
 - Added a chat history sidebar (`ChatHistorySidebar`) to `/chat`: new chat, select-to-resume, inline rename, and delete with a confirm step.
-- Sending a message lazily creates a conversation, derives a title from the first message, and persists the user message before generation starts.
-- Assistant replies are persisted once generation completes or is cancelled, including partial text from a stopped generation.
-- The last-viewed conversation resumes automatically after a refresh, tracked by a small local ID pointer, not conversation content.
-- Local storage failures surface a dismissable notice without blocking chatting.
+- Sending a message lazily creates a conversation (title derived from the first message) and persists the user message before generation starts.
+- The assistant reply is persisted once generation completes or is cancelled, including partial text from a stopped generation.
+- The last-viewed conversation resumes automatically after a refresh, tracked by a small local ID pointer (not conversation content) with a most-recent fallback.
+- Local storage failures (create/add/rename/delete) surface a small dismissable notice without blocking chatting; the chat still works in-memory if persistence fails.
 
-### Privacy and architecture notes
+### Privacy notes
 
-- Conversation content stays in the browser.
-- The conversation store does not call network APIs, server endpoints, Supabase, Google Drive, telemetry, or local logs.
+- Conversation content stays in the browser and is only ever passed to `@free-ai-open/conversation-store` calls, never to `logEvent`, local technical logs, or diagnostic reports.
+- The package does not call network APIs, server endpoints, Supabase, Google Drive, telemetry, or local logs.
+- The `conversationId` passed to `ai-runtime`'s `generate()` is a non-content technical identifier: it may appear in structured console logs for local debugging, but it is not user content, it is not stored in local technical logs, and it is not included in diagnostic reports.
 - Diagnostic report tests ensure conversation content fields are not exported.
-- Conversation content is only passed to `@free-ai-open/conversation-store` calls, never to `logEvent`, local technical logs, or diagnostic reports.
-- The `conversationId` passed to `ai-runtime`'s `generate()` is only a non-content technical ID used for runtime and console correlation; it is not sent to the server or stored in local technical logs.
 
-### Remaining limits after Sprint 5
+### Known limitations after Sprint 5
 
 - New chat and conversation switching are disabled while a reply is generating or cancelling, to avoid mixing streamed tokens across conversations.
 - The local model is single-turn: persisted conversation history is not replayed back into the model as context.
 - There is no encrypted sync, import/export UI, or multi-device persistence.
 - IndexedDB schema migration is intentionally simple and currently starts at schema version 1.
-- Browser end-to-end tests for persisted chat sessions are still pending.
+- No dedicated browser end-to-end tests for persisted chat sessions yet; this sprint's UI flow was verified manually.
+
+### Planned work (not implemented yet)
+
+- Sprint 6: local export/import of conversations (see `docs/roadmap.md`).
+- Later: client-side encrypted export, optional Google Drive sync, improved model selection, and a benchmarks page. None of these exist in the code yet.
+
+## Sprint 5.1 - v0.5.0-alpha polish and robustness tests
+
+### Built
+
+- Corrected the `conversationId` description in this log to state precisely what it is (a non-content technical identifier), where it can appear (structured console logs), and where it must not appear (local technical logs, diagnostic reports).
+- Reviewed `README.md`, `CHANGELOG.md`, `docs/privacy.md`, `docs/security.md`, and `docs/architecture.md` for consistency with the actual Sprint 5 implementation.
+- Cut the `v0.5.0-alpha` changelog entry.
+- Added `docs/RELEASE_CHECKLIST.md`.
+- Added a short near-term section to `docs/roadmap.md`.
+- Added an explicit documentation-sync rule to `AGENTS.md` and `CLAUDE.md`.
+- Added a real IndexedDB unit test for `@free-ai-open/conversation-store` using `fake-indexeddb`.
+- Added memory fallback coverage for the no-IndexedDB path.
+- Added active conversation ID pointer tests for save/read/clear and localStorage failure handling.
+- Strengthened local-log privacy coverage for `conversation`, `conversations`, and `messages` fields.
+- Added an explicit diagnostic-report privacy test proving conversation-shaped input does not export `conversation`, `conversations`, or `messages` fields.
+- Re-ran the conversation-store network isolation test to verify no `fetch`/`sendBeacon` path is used by store operations.
+
+### Known limitations after Sprint 5.1
+
+- No application behavior changed.
+- No Playwright or browser E2E framework was added; persisted chat refresh and delete confirmation remain release-checklist/manual smoke-test items until a browser test framework is introduced deliberately.
+- The known limitations listed under Sprint 5 above still apply unchanged.
+
+### Planned work (not implemented yet)
+
+- Same as Sprint 5's planned work: local export/import (Sprint 6), then encrypted export, optional Google Drive sync, better model selection, and benchmarks.
 
 ## Cross-cutting remaining work
 
