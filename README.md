@@ -88,6 +88,9 @@ One agent, one branch, one clear scope.
 ## Documentation map
 
 - `PROJECT_BRIEF.md` — presentation document
+- `CHANGELOG.md` — versioned alpha milestone history
+- `docs/DEVLOG.md` — sprint-by-sprint development history
+- `docs/adr/` — architecture decision records
 - `docs/architecture.md` — technical architecture
 - `docs/roadmap.md` — implementation phases
 - `docs/ai-workflow.md` — how Claude Code and Codex should work together
@@ -98,3 +101,10 @@ One agent, one branch, one clear scope.
 - `docs/drive-sync.md` — future encrypted Google Drive sync
 - `prompts/` — ready-to-use prompts for Claude Code and Codex
 - `tickets/` — phase-by-phase task cards
+
+## Development history
+
+For the current alpha history, see:
+
+- `CHANGELOG.md` for release-oriented changes and tagged alpha milestones.
+- `docs/DEVLOG.md` for sprint-level implementation notes, privacy boundaries, and known remaining limits.
