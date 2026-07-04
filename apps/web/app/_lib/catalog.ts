@@ -40,3 +40,11 @@ export function findTaskLabel(id: string | null | undefined): string | null {
 export function findModeLabel(id: string | null | undefined): string | null {
   return performanceModes.find((mode) => mode.id === id)?.label ?? null;
 }
+
+export function isTaskCategory(value: string | null | undefined): value is TaskCategory {
+  return taskCategories.some((task) => task.id === value);
+}
+
+export function isPerformanceMode(value: string | null | undefined): value is PerformanceMode {
+  return performanceModes.some((mode) => mode.id === value);
+}
