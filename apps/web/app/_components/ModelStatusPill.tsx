@@ -1,11 +1,15 @@
 interface ModelStatusPillProps {
   taskLabel: string | null;
   modeLabel: string | null;
+  modelName?: string | null;
 }
 
-export function ModelStatusPill({ taskLabel, modeLabel }: ModelStatusPillProps) {
-  const label =
-    taskLabel && modeLabel ? `${taskLabel} · ${modeLabel} · no model connected yet` : "No task selected";
+export function ModelStatusPill({ taskLabel, modeLabel, modelName }: ModelStatusPillProps) {
+  const label = !taskLabel || !modeLabel
+    ? "No task selected"
+    : modelName
+      ? `${taskLabel} · ${modeLabel} · ${modelName} (not loaded)`
+      : `${taskLabel} · ${modeLabel} · no compatible model found`;
 
   return (
     <span

@@ -7,13 +7,13 @@ export default function OnboardingIntroPage() {
       <h1 style={{ fontSize: 32, marginBottom: 16 }}>Let&apos;s set things up</h1>
       <p style={{ fontSize: 17, lineHeight: 1.6, opacity: 0.85 }}>
         FreeAI Open runs the AI model directly in your browser — nothing you
-        type is sent anywhere. In two short steps, tell us what you want to do
-        and how you want it to feel, and we&apos;ll suggest a model that fits
-        your device.
+        type is sent anywhere. In a few short steps, we&apos;ll check what
+        your device can run, then ask what you want to do and how you want it
+        to feel, and suggest a model that fits.
       </p>
 
       <Link
-        href="/onboarding/task"
+        href="/onboarding/device"
         style={{
           display: "inline-block",
           marginTop: 32,

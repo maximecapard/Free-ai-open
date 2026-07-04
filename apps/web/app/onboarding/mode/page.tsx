@@ -20,7 +20,7 @@ export default async function OnboardingModePage({ searchParams }: OnboardingMod
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: "48px 24px" }}>
-      <p style={{ opacity: 0.6, fontSize: 14 }}>Step 2 of 2 · {taskLabel}</p>
+      <p style={{ opacity: 0.6, fontSize: 14 }}>Step 3 of 3 · {taskLabel}</p>
       <h1 style={{ fontSize: 28, margin: "8px 0 24px" }}>How should it feel?</h1>
 
       <div style={{ display: "grid", gap: 12 }}>

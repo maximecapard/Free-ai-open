@@ -17,3 +17,16 @@ export function createLogEvent(event: string, level: LogLevel, data?: Record<str
     contentLogged: false,
   };
 }
+
+const CONSOLE_METHOD_BY_LEVEL: Record<LogLevel, "debug" | "info" | "warn" | "error"> = {
+  debug: "debug",
+  info: "info",
+  warn: "warn",
+  error: "error",
+  critical: "error",
+};
+
+export function logEvent(event: LogEvent): void {
+  const method = CONSOLE_METHOD_BY_LEVEL[event.level];
+  console[method](`[${event.event}]`, event);
+}
