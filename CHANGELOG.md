@@ -8,15 +8,22 @@ This project follows a format close to Keep a Changelog. Versions are alpha mile
 
 ### Added
 
+- Added Sprint 5.1 robustness tests for local conversation persistence: real IndexedDB coverage via `fake-indexeddb`, no-IndexedDB memory fallback, active conversation ID pointer storage, local-log rejection of conversation content, and diagnostic-report privacy exclusion for conversation-shaped input.
+- Added a release checklist TODO for future browser-level coverage of persisted chat refresh and delete confirmation flows instead of adding a heavy E2E framework prematurely.
+
+## [0.5.0-alpha] - 2026-07-05
+
+### Added
+
 - Added `@free-ai-open/conversation-store` for local-only browser conversation persistence.
-- Added IndexedDB-backed conversation storage with in-memory fallback when IndexedDB is unavailable.
+- Added IndexedDB-backed conversation storage with an in-memory fallback when IndexedDB is unavailable.
 - Added strict TypeScript types for conversations, messages, metadata, IDs, and roles.
 - Added local limits for maximum conversations, messages per conversation, message size, and title size.
 - Added unit tests for create/list/get, adding messages, renaming, deleting, clearing, memory fallback, storage failures, and network isolation.
 - Wired the local conversation store into the `/chat` UI: a history sidebar lets users create, resume, rename, and delete conversations.
 - Sending a message now lazily creates a local conversation (titled from the first message) instead of sending anything to a server.
 - Assistant replies are saved locally once generation finishes or is cancelled, including partial replies from a stopped generation.
-- The active conversation resumes automatically after a page refresh, using a local, non-sensitive ID pointer.
+- The active conversation resumes automatically after a page refresh, using a local, non-sensitive ID pointer, with no cloud or cross-device sync involved.
 - Added "Stored locally" / "This conversation stays on your device" messaging and a note that clearing site data deletes local history.
 - Added non-blocking storage-error notices in the chat UI so a local persistence failure never blocks chatting.
 
@@ -25,12 +32,12 @@ This project follows a format close to Keep a Changelog. Versions are alpha mile
 - Conversation content remains local browser data.
 - Conversation storage does not use `fetch`, `sendBeacon`, Supabase, Google Drive, telemetry, local logs, or server endpoints.
 - Diagnostic reports continue to reject conversation content fields.
-- The chat UI never passes conversation content to `logEvent`, local technical logs, or diagnostic reports; only a non-content conversation ID is used for console log correlation.
+- The chat UI never passes conversation content to `logEvent`, local technical logs, or diagnostic reports. The `conversationId` used for console log correlation is a non-content technical identifier, not user content.
 
 ### Known Limits
 
-- Conversations are not synced across devices.
-- No import/export UX has been added.
+- Conversations are stored per-browser only; there is no cloud sync or cross-device persistence.
+- No import/export UX has been added yet (planned for Sprint 6, see `docs/roadmap.md`).
 - Browser end-to-end tests for persisted chat sessions are still pending.
 - The local model only sees the current prompt; persisted history is not replayed back into the model as context yet.
 - Switching or starting a new conversation is disabled while a reply is generating or cancelling, to avoid mixing streamed tokens across conversations.
@@ -81,6 +88,7 @@ This project follows a format close to Keep a Changelog. Versions are alpha mile
 - Added a simple local chat flow using the browser runtime.
 - Added runtime error classification and privacy safety tests.
 
-[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.4.1-alpha...HEAD
+[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.5.0-alpha...HEAD
+[0.5.0-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.4.1-alpha...v0.5.0-alpha
 [0.4.1-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.4.0-alpha...v0.4.1-alpha
 [0.4.0-alpha]: https://github.com/maximecapard/Free-ai-open/releases/tag/v0.4.0-alpha

@@ -19,6 +19,12 @@ The project aims to turn browser LLM runtimes such as WebLLM into a real consume
 
 > Local by default. Observable when it breaks. Private always.
 
+## Status
+
+FreeAI Open is in **alpha / early development** (current version: `v0.5.0-alpha`). Expect incomplete features, rough edges, and breaking changes between alpha releases.
+
+Inference runs entirely in your browser: performance depends on your browser, WebGPU/WASM support, your device's hardware, and the model selected. See [`CHANGELOG.md`](CHANGELOG.md) for what has shipped and [`docs/DEVLOG.md`](docs/DEVLOG.md) for implementation history and known limitations.
+
 ## Recommended stack
 
 - **Framework:** Next.js + TypeScript
@@ -88,8 +94,11 @@ One agent, one branch, one clear scope.
 ## Documentation map
 
 - `PROJECT_BRIEF.md` — presentation document
+- `CHANGELOG.md` — released and unreleased changes per version
+- `docs/DEVLOG.md` — sprint-by-sprint implementation history and known limitations
 - `docs/architecture.md` — technical architecture
 - `docs/roadmap.md` — implementation phases
+- `docs/RELEASE_CHECKLIST.md` — checklist to run before cutting a release
 - `docs/ai-workflow.md` — how Claude Code and Codex should work together
 - `docs/privacy.md` — privacy policy and non-negotiable rules
 - `docs/security.md` — security design

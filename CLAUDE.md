@@ -75,6 +75,10 @@ Use small, scoped commits:
 - `test(redactor): cover secrets and forbidden fields`
 - `docs: add telemetry policy`
 
+## Documentation rule
+
+Documentation must stay in sync with the code. When a task changes behavior, architecture, runtime states, privacy/security guarantees, logging, telemetry, diagnostics, model routing, storage, or developer workflow, update all relevant documentation files in the same branch. Do not document unimplemented features as completed.
+
 ## Before finishing any task
 
 Run or mention:

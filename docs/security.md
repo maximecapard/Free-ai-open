@@ -45,3 +45,5 @@ Conversations are sensitive local data. The conversation store must:
 - enforce limits on conversation count, message count, and message size;
 - keep schema version metadata for future migrations;
 - exclude conversation content from diagnostic reports.
+
+Sprint 5.1 test coverage includes the real IndexedDB store through `fake-indexeddb`, no-IndexedDB memory fallback, active conversation ID pointer behavior, local-log rejection of conversation content fields, diagnostic-report exclusion of conversation-shaped input, and network isolation for conversation-store operations.
