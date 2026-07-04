@@ -1,17 +1,14 @@
-export interface RuntimeStatus {
-  backend: "webgpu" | "wasm" | "cpu" | "unknown";
-  modelId?: string;
-  ready: boolean;
-}
-
-export interface GenerateInput {
-  conversationId: string;
-  prompt: string;
-  modelId: string;
-}
-
-export interface GenerateChunk {
-  type: "token" | "done" | "error";
-  text?: string;
-  errorCode?: string;
-}
+export { classifyRuntimeError } from "./errors";
+export { DEFAULT_MODEL_ID } from "./model";
+export { createInferenceRuntime } from "./runtime";
+export type { InferenceRuntime } from "./runtime";
+export type {
+  GenerateChunk,
+  GenerateInput,
+  InferenceChatWorker,
+  RuntimeError,
+  RuntimeErrorCode,
+  RuntimeState,
+  RuntimeStatus,
+} from "./types";
+export { createInferenceWorkerHandler } from "./worker-handler";

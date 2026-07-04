@@ -9,7 +9,13 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
+  "dependencies": {
+    "@free-ai-open/device-profiler": "workspace:*",
+    "@free-ai-open/logger": "workspace:*",
+    "@mlc-ai/web-llm": "^0.2.84"
+  },
   "devDependencies": {
+    "@types/node": "^26.1.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   }

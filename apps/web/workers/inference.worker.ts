@@ -1,12 +1,9 @@
-// WebLLM runtime should be initialized here, not in a Server Component.
-// Keep this worker as the boundary for heavy browser inference work.
+// WebLLM runtime is initialized here, not in a Server Component.
+// This worker is the boundary for heavy browser inference work.
+import { createInferenceWorkerHandler } from "@free-ai-open/ai-runtime";
 
-self.onmessage = async (event: MessageEvent) => {
-  const { type } = event.data ?? {};
+const handler = createInferenceWorkerHandler();
 
-  if (type === "PING") {
-    self.postMessage({ type: "PONG" });
-  }
-};
+self.onmessage = handler.onmessage.bind(handler);
 
 export {};
