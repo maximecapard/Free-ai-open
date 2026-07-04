@@ -9,16 +9,16 @@ import type { ModelRouterResult } from "@free-ai-open/model-router";
 import { clearLocalLogs, getRecentLocalLogs } from "@free-ai-open/local-logs";
 import type { LocalLogRecord } from "@free-ai-open/local-logs";
 import { buildDiagnosticReport, copyDiagnosticReportToClipboardData, exportDiagnosticReportAsJson } from "@free-ai-open/diagnostic-report";
-import type { DiagnosticReport, DiagnosticReportInput } from "@free-ai-open/diagnostic-report";
-import type { PerformanceMode, TaskCategory } from "@free-ai-open/types";
+import type { DiagnosticReport } from "@free-ai-open/diagnostic-report";
+import type { PerformanceMode } from "@free-ai-open/types";
 import { recommendPerformanceMode } from "../_lib/deviceRecommendation";
 import {
   findGenerationMetrics,
   findLastRuntimeStatus,
   findLoadTimeMs,
   findLoadedModelId,
-  toRecentErrors,
 } from "../_lib/debugDiagnostics";
+import { buildDebugDiagnosticReportInput, DEBUG_PREVIEW_TASK } from "../_lib/debugReportInput";
 import { DebugSystemStatus } from "../_components/DebugSystemStatus";
 import { DebugModelSection } from "../_components/DebugModelSection";
 import { DebugPerformanceSection } from "../_components/DebugPerformanceSection";
@@ -26,30 +26,20 @@ import { DebugRecentLogs } from "../_components/DebugRecentLogs";
 import { DebugPrivacySection } from "../_components/DebugPrivacySection";
 import { DebugActions } from "../_components/DebugActions";
 
-const PREVIEW_TASK: TaskCategory = "chat";
 const MAX_LOGS = 25;
 
 function isIndexedDbAvailable(): boolean {
   return typeof indexedDB !== "undefined";
 }
 
-function buildReportInput(
-  deviceProfile: DeviceProfile | null,
-  routeResult: ModelRouterResult | null,
-  mode: PerformanceMode,
-  logs: LocalLogRecord[]
-): DiagnosticReportInput {
-  return {
+function buildReportInput(deviceProfile: DeviceProfile | null, routeResult: ModelRouterResult | null, mode: PerformanceMode, logs: LocalLogRecord[]) {
+  return buildDebugDiagnosticReportInput({
     appVersion: process.env.NEXT_PUBLIC_APP_VERSION,
-    runtimeStatus: findLastRuntimeStatus(logs)?.status,
-    deviceProfile: deviceProfile ?? undefined,
-    performanceMode: mode,
-    task: PREVIEW_TASK,
-    routerResult: routeResult ? { selectedModel: routeResult.selectedModel, fallbackModel: routeResult.fallbackModel } : null,
-    loadedModelId: findLoadedModelId(logs) ?? undefined,
-    recentErrors: toRecentErrors(logs),
-    localLogs: logs,
-  };
+    deviceProfile,
+    routeResult,
+    mode,
+    logs,
+  });
 }
 
 export default function DebugPage() {
@@ -71,7 +61,7 @@ export default function DebugPage() {
     const profile = await detectDeviceProfile();
     const previewMode = recommendPerformanceMode(profile.deviceTier);
     const result = selectRecommendedModel({
-      task: PREVIEW_TASK,
+      task: DEBUG_PREVIEW_TASK,
       performanceMode: previewMode,
       deviceProfile: profile,
       modelRegistry: sampleModels,
@@ -120,6 +110,7 @@ export default function DebugPage() {
       setStatusMessage("No local logs to clear — IndexedDB isn't available in this browser.");
       return;
     }
+    if (!window.confirm("Clear all local technical logs from this browser?")) return;
     await clearLocalLogs();
     setStatusMessage("Local logs cleared.");
     await refresh();
