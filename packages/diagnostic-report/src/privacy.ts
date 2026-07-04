@@ -7,6 +7,7 @@ const FORBIDDEN_FIELD_NAMES = new Set([
   "messages",
   "message",
   "conversation",
+  "conversations",
   "document",
   "documentcontent",
   "filecontent",
