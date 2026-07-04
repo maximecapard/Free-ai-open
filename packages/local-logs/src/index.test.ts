@@ -92,6 +92,9 @@ describe("local logs", () => {
       response: "private response",
       documentContent: "private document",
       fileContent: "private file",
+      conversation: "private conversation",
+      conversations: [{ messages: [{ role: "user", content: "private stored conversation prompt" }] }],
+      messages: [{ role: "assistant", content: "private stored conversation response" }],
       userText: "private user text",
       inputText: "private input text",
       outputText: "private output text",
@@ -107,12 +110,18 @@ describe("local logs", () => {
     expect(serialized).not.toContain("private response");
     expect(serialized).not.toContain("private document");
     expect(serialized).not.toContain("private file");
+    expect(serialized).not.toContain("private conversation");
+    expect(serialized).not.toContain("private stored conversation prompt");
+    expect(serialized).not.toContain("private stored conversation response");
     expect(serialized).not.toContain("private user text");
     expect(serialized).not.toContain("private input text");
     expect(serialized).not.toContain("private output text");
     expect(serialized).not.toContain("private chat history");
     expect(storedLogs[0]).not.toHaveProperty("prompt");
     expect(storedLogs[0]).not.toHaveProperty("response");
+    expect(storedLogs[0]).not.toHaveProperty("conversation");
+    expect(storedLogs[0]).not.toHaveProperty("conversations");
+    expect(storedLogs[0]).not.toHaveProperty("messages");
   });
 
   it("rejects user content placed in allowed technical string fields", async () => {

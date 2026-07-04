@@ -86,31 +86,12 @@ FreeAI Open is an alpha-stage, local-first browser AI assistant. The current cod
 - Worker teardown is covered by unit tests, but not yet by browser-level recovery tests.
 - Runtime behavior still depends on WebLLM/browser behavior for real-world cancel confirmation timing.
 
-## Conversation store work
+## Sprint 5 - Local conversation history
 
 ### Built
 
-- Added `@free-ai-open/conversation-store`.
-- Added local IndexedDB persistence with memory fallback.
-- Added schema versioning, `createdAt`, and `updatedAt`.
-- Added limits for total conversations, messages per conversation, message size, and title size.
-- Added create/list/get/add message/rename/delete/clear/recent APIs.
-
-### Privacy notes
-
-- Conversation content stays in the browser.
-- The package does not call network APIs, server endpoints, Supabase, Google Drive, telemetry, or local logs.
-- Diagnostic report tests ensure conversation content fields are not exported.
-
-### Remaining limits
-
-- There is no encrypted sync, import/export UI, or multi-device persistence.
-- IndexedDB schema migration is intentionally simple and currently starts at schema version 1.
-
-## Chat history UI wiring
-
-### Built
-
+- Added `@free-ai-open/conversation-store`: local IndexedDB persistence with an in-memory fallback, schema versioning (`createdAt`, `updatedAt`), and limits for total conversations, messages per conversation, message size, and title size.
+- Added create/list/get/add message/rename/delete/clear/recent APIs on the store.
 - Added a chat history sidebar (`ChatHistorySidebar`) to `/chat`: new chat, select-to-resume, inline rename, and delete with a confirm step.
 - Sending a message lazily creates a conversation (title derived from the first message) and persists the user message before generation starts.
 - The assistant reply is persisted once generation completes or is cancelled, including partial text from a stopped generation.
@@ -119,11 +100,47 @@ FreeAI Open is an alpha-stage, local-first browser AI assistant. The current cod
 
 ### Privacy notes
 
-- Conversation content is only ever passed to `@free-ai-open/conversation-store` calls, never to `logEvent`, local technical logs, or diagnostic reports.
-- The `conversationId` passed to `ai-runtime`'s `generate()` is only a non-content technical ID used for runtime and console correlation; it is not sent to the server or stored in local technical logs.
+- Conversation content stays in the browser and is only ever passed to `@free-ai-open/conversation-store` calls, never to `logEvent`, local technical logs, or diagnostic reports.
+- The package does not call network APIs, server endpoints, Supabase, Google Drive, telemetry, or local logs.
+- The `conversationId` passed to `ai-runtime`'s `generate()` is a non-content technical identifier: it may appear in structured console logs for local debugging, but it is not user content, it is not stored in local technical logs, and it is not included in diagnostic reports.
+- Diagnostic report tests ensure conversation content fields are not exported.
 
-### Remaining limits after this sprint
+### Known limitations after Sprint 5
 
 - New chat / conversation switching is disabled while a reply is generating or cancelling, to avoid mixing streamed tokens across conversations.
 - The local model is single-turn: persisted conversation history is not replayed back into the model as context.
-- No import/export UI yet, and no cross-device sync.
+- There is no encrypted sync, import/export UI, or multi-device persistence.
+- IndexedDB schema migration is intentionally simple and currently starts at schema version 1.
+- No dedicated browser end-to-end tests for persisted chat sessions yet; this sprint's UI flow was verified manually.
+
+### Planned work (not implemented yet)
+
+- Sprint 6: local export/import of conversations (see `docs/roadmap.md`).
+- Later: client-side encrypted export, optional Google Drive sync, improved model selection, and a benchmarks page. None of these exist in the code yet.
+
+## Sprint 5.1 - v0.5.0-alpha polish and robustness tests
+
+### Built
+
+- Corrected the `conversationId` description in this log to state precisely what it is (a non-content technical identifier), where it can appear (structured console logs), and where it must not appear (local technical logs, diagnostic reports).
+- Reviewed `README.md`, `CHANGELOG.md`, `docs/privacy.md`, `docs/security.md`, and `docs/architecture.md` for consistency with the actual Sprint 5 implementation.
+- Cut the `v0.5.0-alpha` changelog entry.
+- Added `docs/RELEASE_CHECKLIST.md`.
+- Added a short near-term section to `docs/roadmap.md`.
+- Added an explicit documentation-sync rule to `AGENTS.md` and `CLAUDE.md`.
+- Added a real IndexedDB unit test for `@free-ai-open/conversation-store` using `fake-indexeddb`.
+- Added memory fallback coverage for the no-IndexedDB path.
+- Added active conversation ID pointer tests for save/read/clear and localStorage failure handling.
+- Strengthened local-log privacy coverage for `conversation`, `conversations`, and `messages` fields.
+- Added an explicit diagnostic-report privacy test proving conversation-shaped input does not export `conversation`, `conversations`, or `messages` fields.
+- Re-ran the conversation-store network isolation test to verify no `fetch`/`sendBeacon` path is used by store operations.
+
+### Known limitations after Sprint 5.1
+
+- No application behavior changed.
+- No Playwright or browser E2E framework was added; persisted chat refresh and delete confirmation remain release-checklist/manual smoke-test items until a browser test framework is introduced deliberately.
+- The known limitations listed under Sprint 5 above still apply unchanged.
+
+### Planned work (not implemented yet)
+
+- Same as Sprint 5's planned work: local export/import (Sprint 6), then encrypted export, optional Google Drive sync, better model selection, and benchmarks.

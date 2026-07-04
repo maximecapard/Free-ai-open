@@ -1,6 +1,9 @@
+import { indexedDB as fakeIndexedDB } from "fake-indexeddb";
 import { describe, expect, it, vi } from "vitest";
 import { createConversationStoreClient } from "./index";
 import type { Conversation, ConversationId, ConversationStore } from "./types";
+
+const DB_NAME = "free-ai-open-conversations";
 
 class MemoryTestStore implements ConversationStore {
   records = new Map<ConversationId, Conversation>();
@@ -68,7 +71,107 @@ function createTestClient(store: ConversationStore | null = new MemoryTestStore(
   });
 }
 
+function requestToPromise<T>(request: IDBRequest<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function resetFakeIndexedDb(): Promise<void> {
+  await requestToPromise(fakeIndexedDB.deleteDatabase(DB_NAME));
+}
+
+async function withFakeIndexedDb(test: () => Promise<void>): Promise<void> {
+  const hadIndexedDb = "indexedDB" in globalThis;
+  const previousIndexedDb = hadIndexedDb ? globalThis.indexedDB : undefined;
+
+  Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: fakeIndexedDB });
+  await resetFakeIndexedDb();
+
+  try {
+    await test();
+  } finally {
+    await resetFakeIndexedDb();
+    if (hadIndexedDb) {
+      Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: previousIndexedDb });
+    } else {
+      Reflect.deleteProperty(globalThis, "indexedDB");
+    }
+  }
+}
+
+async function withIndexedDbUnavailable(test: () => Promise<void>): Promise<void> {
+  const hadIndexedDb = "indexedDB" in globalThis;
+  const previousIndexedDb = hadIndexedDb ? globalThis.indexedDB : undefined;
+
+  Reflect.deleteProperty(globalThis, "indexedDB");
+
+  try {
+    await test();
+  } finally {
+    if (hadIndexedDb) {
+      Object.defineProperty(globalThis, "indexedDB", { configurable: true, value: previousIndexedDb });
+    }
+  }
+}
+
 describe("conversation store", () => {
+  it("persists core operations through IndexedDB using fake-indexeddb", async () => {
+    await withFakeIndexedDb(async () => {
+      let id = 0;
+      let minute = 0;
+      const client = createConversationStoreClient({
+        now: () => new Date(`2026-07-04T10:${String(minute++).padStart(2, "0")}:00.000Z`),
+        idFactory: () => `conversation-indexeddb-${++id}`,
+      });
+
+      const conversation = await client.createConversation({ title: "IndexedDB chat" });
+      expect(conversation).toMatchObject({
+        id: "conversation-indexeddb-1",
+        title: "IndexedDB chat",
+        schemaVersion: 1,
+        messageCount: 0,
+        messages: [],
+      });
+
+      await expect(client.listConversations()).resolves.toMatchObject([
+        { id: "conversation-indexeddb-1", title: "IndexedDB chat", messageCount: 0 },
+      ]);
+      await expect(client.getConversation(conversation!.id)).resolves.toMatchObject({
+        id: "conversation-indexeddb-1",
+        title: "IndexedDB chat",
+        messages: [],
+      });
+
+      const withMessage = await client.addMessage(conversation!.id, {
+        role: "user",
+        content: "private prompt stored locally",
+      });
+      expect(withMessage?.messageCount).toBe(1);
+      await expect(client.getConversation(conversation!.id)).resolves.toMatchObject({
+        messages: [expect.objectContaining({ role: "user", content: "private prompt stored locally" })],
+      });
+
+      const renamed = await client.updateConversationTitle(conversation!.id, "Renamed IndexedDB chat");
+      expect(renamed?.title).toBe("Renamed IndexedDB chat");
+      await expect(client.listConversations()).resolves.toMatchObject([
+        { id: "conversation-indexeddb-1", title: "Renamed IndexedDB chat", messageCount: 1 },
+      ]);
+
+      await expect(client.deleteConversation(conversation!.id)).resolves.toBe(true);
+      await expect(client.getConversation(conversation!.id)).resolves.toBeNull();
+      await expect(client.listConversations()).resolves.toEqual([]);
+
+      await client.createConversation({ title: "One" });
+      await client.createConversation({ title: "Two" });
+      await expect(client.listConversations()).resolves.toHaveLength(2);
+
+      await client.clearAllConversations();
+      await expect(client.listConversations()).resolves.toEqual([]);
+    });
+  });
+
   it("creates, lists, and gets conversations", async () => {
     const client = createTestClient();
 
@@ -151,6 +254,25 @@ describe("conversation store", () => {
     await expect(client.getConversation(conversation!.id)).resolves.toMatchObject({
       title: "Memory fallback",
       messages: [expect.objectContaining({ content: "local only" })],
+    });
+  });
+
+  it("falls back to memory storage when IndexedDB is unavailable", async () => {
+    await withIndexedDbUnavailable(async () => {
+      let id = 0;
+      const client = createConversationStoreClient({
+        now: () => baseNow,
+        idFactory: () => `conversation-memory-${++id}`,
+      });
+
+      const conversation = await client.createConversation({ title: "No IndexedDB" });
+      await client.addMessage(conversation!.id, { role: "user", content: "local fallback prompt" });
+
+      await expect(client.getConversation(conversation!.id)).resolves.toMatchObject({
+        id: "conversation-memory-1",
+        title: "No IndexedDB",
+        messages: [expect.objectContaining({ content: "local fallback prompt" })],
+      });
     });
   });
 

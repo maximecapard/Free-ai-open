@@ -256,6 +256,37 @@ describe("diagnostic report", () => {
     }
   });
 
+  it("drops conversation-shaped input without exporting conversation or message keys", () => {
+    const report = buildDiagnosticReport(
+      {
+        runtimeStatus: "ready",
+        conversations: [
+          {
+            id: "conversation-1",
+            messages: [
+              { role: "user", content: "private local question" },
+              { role: "assistant", content: "private local answer" },
+            ],
+          },
+        ],
+        conversation: {
+          messages: [{ role: "user", content: "private active conversation" }],
+        },
+        messages: [{ role: "user", content: "private current message" }],
+      } as unknown as DiagnosticReportInput,
+      { now }
+    );
+    const serialized = JSON.stringify(report);
+
+    expect(report.contentLogged).toBe(false);
+    expect(validateDiagnosticReportPrivacy(report)).toEqual({ valid: true, violations: [] });
+    expect(serialized).not.toMatch(/"conversation"|"conversations"|"messages"/);
+    expect(serialized).not.toContain("private local question");
+    expect(serialized).not.toContain("private local answer");
+    expect(serialized).not.toContain("private active conversation");
+    expect(serialized).not.toContain("private current message");
+  });
+
   it("forces contentLogged to false even if unsafe input says otherwise", () => {
     const report = buildDiagnosticReport({ contentLogged: true } as DiagnosticReportInput, { now });
 
