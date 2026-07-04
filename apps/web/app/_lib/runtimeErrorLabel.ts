@@ -2,6 +2,7 @@ import type { RuntimeErrorCode } from "@free-ai-open/ai-runtime";
 
 const RUNTIME_ERROR_LABELS: Record<RuntimeErrorCode, string> = {
   webgpu_unavailable: "This browser doesn't support WebGPU, so the local model can't run here yet.",
+  gpu_feature_unsupported: "Your browser's WebGPU support is missing a feature this model needs.",
   model_unsupported: "This model isn't supported by your browser or device.",
   model_load_failed: "The model failed to load. Check your connection and try again.",
   generation_interrupted: "Generation was stopped.",

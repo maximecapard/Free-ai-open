@@ -9,6 +9,7 @@ export type RuntimeStatus = "idle" | "loading_model" | "ready" | "generating" | 
 
 export type RuntimeErrorCode =
   | "webgpu_unavailable"
+  | "gpu_feature_unsupported"
   | "model_unsupported"
   | "model_load_failed"
   | "generation_interrupted"
