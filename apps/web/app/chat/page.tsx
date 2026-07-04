@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { detectDeviceProfile } from "@free-ai-open/device-profiler";
 import { sampleModels } from "@free-ai-open/model-registry";
@@ -34,6 +34,8 @@ function ChatContent() {
   const [runtimeState, setRuntimeState] = useState<RuntimeState>(IDLE_RUNTIME_STATE);
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const runtimeRef = useRef<InferenceRuntime | null>(null);
+  const workerRef = useRef<Worker | null>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!task || !mode) return;
@@ -68,22 +70,35 @@ function ChatContent() {
     };
   }, [task, mode]);
 
-  useEffect(() => {
-    if (!task || !mode) return;
+  const teardownRuntime = useCallback(() => {
+    unsubscribeRef.current?.();
+    unsubscribeRef.current = null;
+    const runtime = runtimeRef.current;
+    const worker = workerRef.current;
+    runtimeRef.current = null;
+    workerRef.current = null;
+    runtime?.dispose().finally(() => worker?.terminate());
+  }, []);
+
+  // Also used by the "Reload model" recovery button, so a stuck runtime
+  // (e.g. after a cancel timeout) can be replaced without a page refresh.
+  const initializeRuntime = useCallback(() => {
+    teardownRuntime();
 
     const worker = new Worker(new URL("../../workers/inference.worker.ts", import.meta.url), { type: "module" });
     const runtime = createInferenceRuntime(worker);
+    workerRef.current = worker;
     runtimeRef.current = runtime;
-    const unsubscribe = runtime.subscribe(setRuntimeState);
+    unsubscribeRef.current = runtime.subscribe(setRuntimeState);
     setRuntimeState(runtime.getState());
     runtime.loadModel();
+  }, [teardownRuntime]);
 
-    return () => {
-      unsubscribe();
-      runtime.dispose().finally(() => worker.terminate());
-      runtimeRef.current = null;
-    };
-  }, [task, mode]);
+  useEffect(() => {
+    if (!task || !mode) return;
+    initializeRuntime();
+    return () => teardownRuntime();
+  }, [task, mode, initializeRuntime, teardownRuntime]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -164,6 +179,11 @@ function ChatContent() {
         >
           <strong>Local model unavailable</strong>
           <p style={{ margin: "8px 0 0", fontSize: 14, opacity: 0.9 }}>{runtimeErrorLabel(runtimeState.error.code)}</p>
+          {(runtimeState.error.code === "cancel_timeout" || runtimeState.error.code === "generation_stalled") && (
+            <button type="button" onClick={initializeRuntime} style={{ marginTop: 8 }}>
+              Reload model
+            </button>
+          )}
         </section>
       )}
 
@@ -182,6 +202,10 @@ function ChatContent() {
         {runtimeState.status === "generating" ? (
           <button type="button" onClick={() => runtimeRef.current?.stopGeneration()}>
             Stop
+          </button>
+        ) : runtimeState.status === "cancelling" ? (
+          <button type="button" disabled>
+            Stopping…
           </button>
         ) : (
           <button type="submit" disabled={runtimeState.status !== "ready" || !message.trim()}>

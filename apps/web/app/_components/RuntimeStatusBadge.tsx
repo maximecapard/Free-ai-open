@@ -5,6 +5,7 @@ const STATUS_LABEL: Record<RuntimeState["status"], string> = {
   loading_model: "Loading model",
   ready: "Ready",
   generating: "Generating",
+  cancelling: "Stopping",
   error: "Error",
 };
 
@@ -13,6 +14,7 @@ const STATUS_COLOR: Record<RuntimeState["status"], string> = {
   loading_model: "#e5a53e",
   ready: "#3ecf8e",
   generating: "#3ecf8e",
+  cancelling: "#e5a53e",
   error: "#e5484d",
 };
 

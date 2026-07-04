@@ -10,6 +10,7 @@ const RUNTIME_STATUS_LABEL: Record<LastRuntimeStatus["status"], string> = {
   loading_model: "Loading model",
   ready: "Ready",
   generating: "Generating",
+  cancelling: "Stopping",
   error: "Error",
 };
 

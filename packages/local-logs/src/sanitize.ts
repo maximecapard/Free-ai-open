@@ -16,7 +16,7 @@ const ISO_TIMESTAMP_PATTERN =
 
 const SEVERITIES = new Set<LocalLogSeverity>(["debug", "info", "warn", "error", "critical"]);
 const BACKENDS = new Set(["webgpu", "wasm", "cpu"]);
-const RUNTIME_STATUSES = new Set<RuntimeStatus>(["idle", "loading_model", "ready", "generating", "error"]);
+const RUNTIME_STATUSES = new Set<RuntimeStatus>(["idle", "loading_model", "ready", "generating", "cancelling", "error"]);
 const DEVICE_TIERS = new Set([0, 1, 2, 3, 4]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -18,15 +18,70 @@ export interface InferenceRuntime {
 
 const IDLE_STATE: RuntimeState = { status: "idle", modelId: null, loadProgress: 0, error: null };
 
+// @mlc-ai/web-llm's interruptGenerate() only posts a "please stop" message to
+// the worker; it does not confirm the worker ever noticed. If the underlying
+// decode loop is wedged, the stream never yields a chunk with
+// finish_reason: "abort" and the runtime would otherwise stay stuck in
+// "generating" forever. This bounds how long we wait for that confirmation
+// before surfacing a recoverable error instead of hanging indefinitely.
+const CANCEL_TIMEOUT_MS = 15_000;
+
+// A separate, more generous safety net: even without ever clicking Stop, a
+// generation can occasionally wedge the underlying worker/engine (observed
+// after a prior interrupted generation) and never emit a single token. This
+// only fires if literally nothing has streamed back yet, so it never cuts
+// off a response that is merely slow but making progress.
+const STALL_TIMEOUT_MS = 45_000;
+
 // Must only be called from a Client Component, never from a Server Component.
 export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRuntime {
   let state: RuntimeState = { ...IDLE_STATE };
   let engine: WebWorkerMLCEngine | null = null;
   const listeners = new Set<(state: RuntimeState) => void>();
 
+  // Bumped on every new generate() call and whenever a generation is force-
+  // resolved by one of the timeouts below. A generate() call only commits
+  // its final state/log once it confirms it is still the current
+  // generation, so a late-arriving chunk from an abandoned, timed-out
+  // generation can never clobber state that has already moved on.
+  let generationEpoch = 0;
+  let cancelTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  let stallTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
   function setState(next: Partial<RuntimeState>): void {
     state = { ...state, ...next };
     for (const listener of listeners) listener(state);
+  }
+
+  function clearCancelTimeout(): void {
+    if (cancelTimeoutHandle !== null) {
+      clearTimeout(cancelTimeoutHandle);
+      cancelTimeoutHandle = null;
+    }
+  }
+
+  function clearStallTimeout(): void {
+    if (stallTimeoutHandle !== null) {
+      clearTimeout(stallTimeoutHandle);
+      stallTimeoutHandle = null;
+    }
+  }
+
+  // Shared by the cancel-confirmation timeout and the stall timeout: forces
+  // the runtime into a recoverable error state, but only if nothing has
+  // resolved this same generation in the meantime.
+  function forceRecovery(expectedEpoch: number, error: RuntimeError, event: string, localModelId: string | undefined): void {
+    if (expectedEpoch !== generationEpoch) return;
+    generationEpoch += 1;
+    setState({ status: "error", error });
+    logEvent(createLogEvent(event, "error", { errorCode: error.code }));
+    recordLocalLog({
+      event,
+      severity: "error",
+      modelId: localModelId,
+      runtimeStatus: "error",
+      errorCode: toLocalLogErrorCode(error.code),
+    });
   }
 
   async function loadModel(modelId: string = DEFAULT_MODEL_ID): Promise<void> {
@@ -89,6 +144,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       return;
     }
 
+    const myEpoch = ++generationEpoch;
     const localModelId = state.modelId ? toLocalLogModelId(state.modelId) : undefined;
 
     setState({ status: "generating" });
@@ -104,6 +160,20 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     let firstTokenAt: number | null = null;
     let tokenCount = 0;
 
+    stallTimeoutHandle = setTimeout(() => {
+      stallTimeoutHandle = null;
+      if (firstTokenAt !== null) return; // already producing output; not stalled
+      forceRecovery(
+        myEpoch,
+        {
+          code: "generation_stalled",
+          message: "The local model stopped responding. Try reloading it.",
+        },
+        "inference.stall.timeout",
+        localModelId
+      );
+    }, STALL_TIMEOUT_MS);
+
     try {
       const stream = await engine.chat.completions.create({
         messages: [{ role: "user", content: input.prompt }],
@@ -117,7 +187,10 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         const choice = chunk.choices[0];
         const text = choice?.delta?.content ?? "";
         if (text) {
-          if (firstTokenAt === null) firstTokenAt = Date.now();
+          if (firstTokenAt === null) {
+            firstTokenAt = Date.now();
+            clearStallTimeout();
+          }
           tokenCount += 1;
           responseLength += text.length;
           yield { type: "token", text };
@@ -127,6 +200,13 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
           break;
         }
       }
+
+      // A cancel or stall timeout already force-resolved this generation
+      // while we were waiting on the stream; don't overwrite the recovered
+      // state with this late confirmation.
+      if (myEpoch !== generationEpoch) return;
+      clearCancelTimeout();
+      clearStallTimeout();
 
       const totalTimeMs = Date.now() - generationStartedAt;
       const firstTokenMs = firstTokenAt !== null ? firstTokenAt - generationStartedAt : null;
@@ -151,6 +231,10 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         performanceMetrics: { firstTokenMs, tokensPerSecond, totalTimeMs },
       });
     } catch (rawError) {
+      if (myEpoch !== generationEpoch) return;
+      clearCancelTimeout();
+      clearStallTimeout();
+
       const error = classifyRuntimeError(rawError, "generate");
       const cancelled = error.code === "generation_interrupted";
       setState({ status: "ready", error: cancelled ? null : error });
@@ -173,10 +257,45 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
   }
 
   function stopGeneration(): void {
+    if (state.status !== "generating") return;
+
+    const epochAtRequest = generationEpoch;
+    const localModelId = state.modelId ? toLocalLogModelId(state.modelId) : undefined;
+
+    // Once the user asks to stop, "did a first token ever arrive" is no
+    // longer the relevant question — only "did the cancellation confirm".
+    clearStallTimeout();
+
+    setState({ status: "cancelling" });
+    logEvent(createLogEvent("inference.cancel.requested", "info", {}));
+    recordLocalLog({
+      event: "inference.cancel.requested",
+      severity: "info",
+      modelId: localModelId,
+      runtimeStatus: "cancelling",
+    });
+
     engine?.interruptGenerate();
+
+    cancelTimeoutHandle = setTimeout(() => {
+      cancelTimeoutHandle = null;
+      forceRecovery(
+        epochAtRequest,
+        {
+          code: "cancel_timeout",
+          message: "Cancellation is taking longer than expected. The local model may be unresponsive.",
+        },
+        "inference.cancel.timeout",
+        localModelId
+      );
+    }, CANCEL_TIMEOUT_MS);
   }
 
   async function dispose(): Promise<void> {
+    clearCancelTimeout();
+    clearStallTimeout();
+    generationEpoch += 1;
+
     try {
       await engine?.unload();
     } catch (rawError) {
