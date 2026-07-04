@@ -5,7 +5,7 @@ export interface InferenceChatWorker {
   onmessage: unknown;
 }
 
-export type RuntimeStatus = "idle" | "loading_model" | "ready" | "generating" | "error";
+export type RuntimeStatus = "idle" | "loading_model" | "ready" | "generating" | "cancelling" | "error";
 
 export type RuntimeErrorCode =
   | "webgpu_unavailable"
@@ -13,6 +13,8 @@ export type RuntimeErrorCode =
   | "model_unsupported"
   | "model_load_failed"
   | "generation_interrupted"
+  | "cancel_timeout"
+  | "generation_stalled"
   | "out_of_memory"
   | "unknown";
 

@@ -167,12 +167,221 @@ describe("createInferenceRuntime", () => {
     }
   });
 
-  it("stopGeneration calls interruptGenerate on the engine", async () => {
-    const runtime = createInferenceRuntime(fakeWorker());
-    await runtime.loadModel("test-model");
-    runtime.stopGeneration();
+  describe("stopGeneration", () => {
+    async function startHangingGeneration(runtime: ReturnType<typeof createInferenceRuntime>) {
+      mocks.mockEngine.chat.completions.create.mockResolvedValue(
+        (async function* () {
+          yield { choices: [{ delta: { content: "Par" }, finish_reason: null }] };
+          await new Promise(() => {}); // never resolves: simulates a stalled decode loop
+        })()
+      );
+      await runtime.loadModel("test-model");
+      const chunks: unknown[] = [];
+      const consume = (async () => {
+        for await (const chunk of runtime.generate({ conversationId: "c1", prompt: "hi" })) {
+          chunks.push(chunk);
+        }
+      })();
+      await Promise.resolve();
+      await Promise.resolve();
+      return { chunks, consume };
+    }
 
-    expect(mocks.mockEngine.interruptGenerate).toHaveBeenCalledTimes(1);
+    it("is a no-op when the runtime isn't generating", async () => {
+      const runtime = createInferenceRuntime(fakeWorker());
+      await runtime.loadModel("test-model");
+
+      runtime.stopGeneration();
+
+      expect(mocks.mockEngine.interruptGenerate).not.toHaveBeenCalled();
+      expect(runtime.getState().status).toBe("ready");
+    });
+
+    it("moves the runtime from generating to cancelling and requests a real interrupt", async () => {
+      const runtime = createInferenceRuntime(fakeWorker());
+      await startHangingGeneration(runtime);
+      expect(runtime.getState().status).toBe("generating");
+
+      runtime.stopGeneration();
+
+      expect(runtime.getState().status).toBe("cancelling");
+      expect(mocks.mockEngine.interruptGenerate).toHaveBeenCalledTimes(1);
+    });
+
+    it("logs inference.cancel.requested immediately, without any prompt content", async () => {
+      const runtime = createInferenceRuntime(fakeWorker());
+      await startHangingGeneration(runtime);
+
+      runtime.stopGeneration();
+
+      expect(mocks.addLocalLog).toHaveBeenCalledWith(
+        expect.objectContaining({ event: "inference.cancel.requested", runtimeStatus: "cancelling" })
+      );
+      for (const call of [...mocks.createLogEvent.mock.calls, ...mocks.addLocalLog.mock.calls]) {
+        expect(JSON.stringify(call)).not.toContain("hi");
+      }
+    });
+
+    it("blocks a new message while cancelling", async () => {
+      const runtime = createInferenceRuntime(fakeWorker());
+      await startHangingGeneration(runtime);
+      runtime.stopGeneration();
+      expect(runtime.getState().status).toBe("cancelling");
+
+      const chunks = await drain(runtime.generate({ conversationId: "c2", prompt: "another message" }));
+
+      expect(chunks).toEqual([
+        { type: "error", error: { code: "unknown", message: "Runtime is not ready to generate." } },
+      ]);
+    });
+
+    it("accepts a new message once cancellation is confirmed", async () => {
+      let resolveAbort: (() => void) | undefined;
+      mocks.mockEngine.chat.completions.create.mockResolvedValueOnce(
+        (async function* () {
+          yield { choices: [{ delta: { content: "Par" }, finish_reason: null }] };
+          await new Promise<void>((resolve) => {
+            resolveAbort = resolve;
+          });
+          yield { choices: [{ delta: {}, finish_reason: "abort" }] };
+        })()
+      );
+
+      const runtime = createInferenceRuntime(fakeWorker());
+      await runtime.loadModel("test-model");
+      const firstGeneration = drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+      // Wait for the stalled stream to actually reach its internal await
+      // point (a few chained async-generator hops past the first yielded
+      // token), rather than assuming a fixed number of microtask ticks.
+      while (!resolveAbort) {
+        await Promise.resolve();
+      }
+
+      runtime.stopGeneration();
+      expect(runtime.getState().status).toBe("cancelling");
+
+      resolveAbort();
+      await firstGeneration;
+      expect(runtime.getState().status).toBe("ready");
+      expect(mocks.addLocalLog).toHaveBeenCalledWith(expect.objectContaining({ event: "inference.cancelled" }));
+
+      mocks.mockEngine.chat.completions.create.mockResolvedValueOnce(
+        (async function* () {
+          yield { choices: [{ delta: { content: "Hello" }, finish_reason: "stop" }] };
+        })()
+      );
+      const secondGeneration = await drain(runtime.generate({ conversationId: "c3", prompt: "new message" }));
+
+      expect(secondGeneration).toEqual([{ type: "token", text: "Hello" }, { type: "done" }]);
+      expect(runtime.getState().status).toBe("ready");
+    });
+
+    it("recovers via a timeout when cancellation is never confirmed, without falsely logging inference.cancelled", async () => {
+      let releaseStalledChunk: (() => void) | undefined;
+      mocks.mockEngine.chat.completions.create.mockResolvedValueOnce(
+        (async function* () {
+          yield { choices: [{ delta: { content: "Par" }, finish_reason: null }] };
+          await new Promise<void>((resolve) => {
+            releaseStalledChunk = resolve;
+          });
+          yield { choices: [{ delta: {}, finish_reason: "abort" }] };
+        })()
+      );
+
+      const runtime = createInferenceRuntime(fakeWorker());
+      await runtime.loadModel("test-model");
+
+      vi.useFakeTimers();
+      try {
+        const consume = drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        await Promise.resolve();
+        await Promise.resolve();
+
+        runtime.stopGeneration();
+        expect(runtime.getState().status).toBe("cancelling");
+
+        await vi.advanceTimersByTimeAsync(15_000);
+
+        expect(runtime.getState().status).toBe("error");
+        expect(runtime.getState().error?.code).toBe("cancel_timeout");
+        expect(mocks.addLocalLog).not.toHaveBeenCalledWith(expect.objectContaining({ event: "inference.cancelled" }));
+        expect(mocks.addLocalLog).toHaveBeenCalledWith(
+          expect.objectContaining({ event: "inference.cancel.timeout", errorCode: "CANCEL_TIMEOUT" })
+        );
+
+        // The stalled stream now "arrives late" with its abort confirmation.
+        releaseStalledChunk?.();
+        await consume;
+
+        // The late confirmation must not overwrite the already-recovered state.
+        expect(runtime.getState().status).toBe("error");
+        expect(runtime.getState().error?.code).toBe("cancel_timeout");
+        expect(mocks.addLocalLog).not.toHaveBeenCalledWith(expect.objectContaining({ event: "inference.cancelled" }));
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe("generation stall recovery", () => {
+    it("recovers when a generation never produces a single token, without a Stop click", async () => {
+      mocks.mockEngine.chat.completions.create.mockResolvedValueOnce(new Promise(() => {})); // never resolves
+
+      const runtime = createInferenceRuntime(fakeWorker());
+      await runtime.loadModel("test-model");
+
+      vi.useFakeTimers();
+      try {
+        const consume = drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        await Promise.resolve();
+        expect(runtime.getState().status).toBe("generating");
+
+        await vi.advanceTimersByTimeAsync(45_000);
+
+        expect(runtime.getState().status).toBe("error");
+        expect(runtime.getState().error?.code).toBe("generation_stalled");
+        expect(mocks.addLocalLog).toHaveBeenCalledWith(
+          expect.objectContaining({ event: "inference.stall.timeout", errorCode: "GENERATION_STALLED" })
+        );
+
+        // create() itself never resolves in this scenario, so generate()
+        // stays permanently suspended there; matches production, where the
+        // abandoned call is simply left running and its outcome ignored.
+        void consume;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("does not fire once a first token has already streamed", async () => {
+      mocks.mockEngine.chat.completions.create.mockResolvedValueOnce(
+        (async function* () {
+          yield { choices: [{ delta: { content: "Hel" }, finish_reason: null }] };
+          await new Promise(() => {}); // stalls after the first token
+        })()
+      );
+
+      const runtime = createInferenceRuntime(fakeWorker());
+      await runtime.loadModel("test-model");
+
+      vi.useFakeTimers();
+      try {
+        const consume = drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        await vi.advanceTimersByTimeAsync(45_000);
+
+        // A token already arrived, so this is treated as slow-but-alive, not stalled.
+        expect(runtime.getState().status).toBe("generating");
+        expect(mocks.addLocalLog).not.toHaveBeenCalledWith(expect.objectContaining({ event: "inference.stall.timeout" }));
+
+        void consume;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 
   it("dispose unloads the engine and resets to idle", async () => {
