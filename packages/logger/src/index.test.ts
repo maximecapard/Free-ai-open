@@ -16,6 +16,36 @@ describe("createLogEvent", () => {
     expect(event.contentLogged).toBe(false);
     expect(event.data).toEqual({ task: "chat" });
   });
+
+  it("redacts runtime content fields before creating a log event", () => {
+    const event = createLogEvent("inference.completed", "info", {
+      prompt: "private prompt",
+      response: "private response",
+      messages: ["private message"],
+      conversation: "private conversation",
+      document: "private document",
+      userText: "private user text",
+      inputText: "private input text",
+      outputText: "private output text",
+      chatHistory: "private chat history",
+      modelId: "sample-general-light",
+    });
+
+    expect(event.contentLogged).toBe(false);
+    expect(event.data).toMatchObject({
+      prompt: "[FORBIDDEN_FIELD_REMOVED]",
+      response: "[FORBIDDEN_FIELD_REMOVED]",
+      messages: "[FORBIDDEN_FIELD_REMOVED]",
+      conversation: "[FORBIDDEN_FIELD_REMOVED]",
+      document: "[FORBIDDEN_FIELD_REMOVED]",
+      userText: "[FORBIDDEN_FIELD_REMOVED]",
+      inputText: "[FORBIDDEN_FIELD_REMOVED]",
+      outputText: "[FORBIDDEN_FIELD_REMOVED]",
+      chatHistory: "[FORBIDDEN_FIELD_REMOVED]",
+      modelId: "sample-general-light",
+    });
+    expect(JSON.stringify(event)).not.toContain("private");
+  });
 });
 
 describe("logEvent", () => {
@@ -56,5 +86,33 @@ describe("logEvent", () => {
     logEvent(createLogEvent("router_decision", "critical"));
 
     expect(error).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not print raw runtime content even when debug logging is enabled", () => {
+    process.env.NODE_ENV = "development";
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    logEvent(createLogEvent("inference.completed", "info", { userText: "private user text" }));
+
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(info.mock.calls)).not.toContain("private user text");
+    expect(JSON.stringify(info.mock.calls)).toContain("[FORBIDDEN_FIELD_REMOVED]");
+  });
+
+  it("redacts manually constructed log event data before console output", () => {
+    process.env.NODE_ENV = "development";
+    const info = vi.spyOn(console, "info").mockImplementation(() => {});
+
+    logEvent({
+      event: "inference.completed",
+      level: "info",
+      timestamp: new Date().toISOString(),
+      data: { outputText: "private generated response" },
+      contentLogged: false,
+    });
+
+    expect(info).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(info.mock.calls)).not.toContain("private generated response");
+    expect(JSON.stringify(info.mock.calls)).toContain("[FORBIDDEN_FIELD_REMOVED]");
   });
 });

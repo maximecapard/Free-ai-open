@@ -1,3 +1,5 @@
+import { redactTelemetryPayload } from "@free-ai-open/privacy-redactor";
+
 export type LogLevel = "debug" | "info" | "warn" | "error" | "critical";
 
 export interface LogEvent {
@@ -13,7 +15,7 @@ export function createLogEvent(event: string, level: LogLevel, data?: Record<str
     event,
     level,
     timestamp: new Date().toISOString(),
-    data,
+    data: data ? (redactTelemetryPayload(data) as Record<string, unknown>) : undefined,
     contentLogged: false,
   };
 }
@@ -38,5 +40,9 @@ function isConsoleLoggingEnabled(): boolean {
 export function logEvent(event: LogEvent): void {
   if (!isConsoleLoggingEnabled()) return;
   const method = CONSOLE_METHOD_BY_LEVEL[event.level];
-  console[method](`[${event.event}]`, event);
+  const safeEvent: LogEvent = event.data
+    ? { ...event, data: redactTelemetryPayload(event.data) as Record<string, unknown> }
+    : event;
+
+  console[method](`[${safeEvent.event}]`, safeEvent);
 }
