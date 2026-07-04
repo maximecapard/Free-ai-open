@@ -10,6 +10,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@free-ai-open/ai-runtime": "workspace:*",
     "@free-ai-open/model-registry": "workspace:*",
     "@free-ai-open/model-router": "workspace:*",
     "@free-ai-open/device-profiler": "workspace:*",
