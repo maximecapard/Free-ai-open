@@ -114,6 +114,34 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(@types/node@26.1.0)(vite@8.1.3(@types/node@26.1.0))
 
+  packages/diagnostic-report:
+    dependencies:
+      '@free-ai-open/device-profiler':
+        specifier: workspace:*
+        version: link:../device-profiler
+      '@free-ai-open/local-logs':
+        specifier: workspace:*
+        version: link:../local-logs
+      '@free-ai-open/model-registry':
+        specifier: workspace:*
+        version: link:../model-registry
+      '@free-ai-open/model-router':
+        specifier: workspace:*
+        version: link:../model-router
+      '@free-ai-open/privacy-redactor':
+        specifier: workspace:*
+        version: link:../privacy-redactor
+      '@free-ai-open/types':
+        specifier: workspace:*
+        version: link:../types
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+      vitest:
+        specifier: ^4.1.9
+        version: 4.1.9(@types/node@26.1.0)(vite@8.1.3(@types/node@26.1.0))
+
   packages/local-logs:
     dependencies:
       '@free-ai-open/privacy-redactor':

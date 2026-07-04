@@ -1,0 +1,24 @@
+{
+  "name": "@free-ai-open/diagnostic-report",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.9"
+  },
+  "dependencies": {
+    "@free-ai-open/device-profiler": "workspace:*",
+    "@free-ai-open/local-logs": "workspace:*",
+    "@free-ai-open/model-registry": "workspace:*",
+    "@free-ai-open/model-router": "workspace:*",
+    "@free-ai-open/privacy-redactor": "workspace:*",
+    "@free-ai-open/types": "workspace:*"
+  }
+}
