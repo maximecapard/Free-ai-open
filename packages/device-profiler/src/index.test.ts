@@ -6,6 +6,7 @@ import {
   estimateDeviceMemory,
   estimateStorageQuota,
   getDeviceTier,
+  getDeviceTierDisplayLabel,
   runLightweightBenchmark,
 } from "./index";
 import type { NavigatorLike } from "./index";
@@ -154,6 +155,20 @@ describe("getDeviceTier", () => {
   });
 });
 
+describe("getDeviceTierDisplayLabel", () => {
+  it("shows a WASM/CPU fallback label instead of the misleading cpu_only slug", () => {
+    expect(getDeviceTierDisplayLabel("cpu_only", "wasm")).toBe("WASM/CPU fallback");
+  });
+
+  it("passes through cpu_only unchanged when there is no WASM fallback either", () => {
+    expect(getDeviceTierDisplayLabel("cpu_only", "cpu")).toBe("cpu_only");
+  });
+
+  it("passes through WebGPU tier labels unchanged", () => {
+    expect(getDeviceTierDisplayLabel("webgpu_high", "webgpu")).toBe("webgpu_high");
+  });
+});
+
 describe("buildDeviceProfile", () => {
   it("builds a complete profile from mocked browser APIs", async () => {
     const result = await buildDeviceProfile({
@@ -202,5 +217,17 @@ describe("buildDeviceProfile", () => {
       deviceTier: 0,
       deviceTierLabel: "cpu_only",
     });
+  });
+
+  it("prefers wasm when WebGPU is unavailable but WebAssembly is, even though the tier is still cpu_only", async () => {
+    const result = await buildDeviceProfile({
+      webAssemblyAvailable: true,
+      navigator: buildNavigator(),
+    });
+
+    expect(result.preferredBackend).toBe("wasm");
+    expect(result.deviceTier).toBe(0);
+    expect(result.deviceTierLabel).toBe("cpu_only");
+    expect(getDeviceTierDisplayLabel(result.deviceTierLabel, result.preferredBackend)).toBe("WASM/CPU fallback");
   });
 });
