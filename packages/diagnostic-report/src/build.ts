@@ -10,6 +10,7 @@ import {
   asModelId,
   asNonNegativeNumber,
   asPerformanceMode,
+  asRuntimeStatus,
   asSeverity,
   asShortTechnicalText,
   asTask,
@@ -110,9 +111,8 @@ function sanitizeLog(value: unknown): DiagnosticLog | null {
   if (modelId) log.modelId = modelId;
   const backend = asBackend(value.backend);
   if (backend) log.backend = backend;
-  if (value.runtimeStatus === "idle" || value.runtimeStatus === "loading_model" || value.runtimeStatus === "ready" || value.runtimeStatus === "generating" || value.runtimeStatus === "error") {
-    log.runtimeStatus = value.runtimeStatus;
-  }
+  const runtimeStatus = asRuntimeStatus(value.runtimeStatus);
+  if (runtimeStatus) log.runtimeStatus = runtimeStatus;
   const errorCode = asErrorCode(value.errorCode);
   if (errorCode) log.errorCode = errorCode;
   const deviceTier = asDeviceTier(value.deviceTier);
@@ -152,9 +152,8 @@ export function buildDiagnosticReport(
   const appVersion = asShortTechnicalText(source.appVersion, 40);
   if (appVersion) report.appVersion = appVersion;
 
-  if (source.runtimeStatus === "idle" || source.runtimeStatus === "loading_model" || source.runtimeStatus === "ready" || source.runtimeStatus === "generating" || source.runtimeStatus === "error") {
-    report.runtimeStatus = source.runtimeStatus;
-  }
+  const runtimeStatus = asRuntimeStatus(source.runtimeStatus);
+  if (runtimeStatus) report.runtimeStatus = runtimeStatus;
 
   const backend = asBackend(source.backend) ?? asBackend(deviceProfile?.preferredBackend);
   if (backend) report.backend = backend;

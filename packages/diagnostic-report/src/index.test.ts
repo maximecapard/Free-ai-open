@@ -124,6 +124,38 @@ describe("diagnostic report", () => {
     });
   });
 
+  it("preserves the cancelling runtime status, at the top level and in local logs", () => {
+    const report = buildDiagnosticReport(
+      {
+        runtimeStatus: "cancelling",
+        localLogs: [
+          {
+            id: "log-1",
+            event: "inference.cancel.requested",
+            severity: "info",
+            timestamp: "2026-07-04T11:59:00.000Z",
+            modelId: "sample-general-light",
+            runtimeStatus: "cancelling",
+          },
+        ],
+      },
+      { now }
+    );
+
+    expect(report.runtimeStatus).toBe("cancelling");
+    expect(report.localLogs).toEqual([
+      {
+        event: "inference.cancel.requested",
+        severity: "info",
+        timestamp: "2026-07-04T11:59:00.000Z",
+        modelId: "sample-general-light",
+        runtimeStatus: "cancelling",
+      },
+    ]);
+    expect(report.contentLogged).toBe(false);
+    expect(validateDiagnosticReportPrivacy(report)).toEqual({ valid: true, violations: [] });
+  });
+
   it("derives technical fields from device profile and router result", () => {
     const report = buildDiagnosticReport(
       {

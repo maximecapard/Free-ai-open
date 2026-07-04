@@ -1,4 +1,5 @@
 import { taskCategories, type Backend, type DeviceTier, type PerformanceMode, type TaskCategory } from "@free-ai-open/types";
+import type { RuntimeStatus } from "@free-ai-open/local-logs";
 import type { DiagnosticSeverity } from "./types";
 
 const EVENT_PATTERN = /^[a-z0-9]+(?:[.-][a-z0-9]+){1,4}$/;
@@ -14,6 +15,17 @@ const PERFORMANCE_MODES = new Set<PerformanceMode>(["fast", "balanced", "perform
 const TASKS = new Set<TaskCategory>(taskCategories);
 const SEVERITIES = new Set<DiagnosticSeverity>(["debug", "info", "warn", "error", "critical"]);
 const ERROR_SEVERITIES = new Set<DiagnosticSeverity>(["warn", "error", "critical"]);
+// Single source of truth for this package: keeps the two runtimeStatus call
+// sites in build.ts from drifting out of sync with @free-ai-open/local-logs'
+// RuntimeStatus union the way they previously did when "cancelling" was added.
+const RUNTIME_STATUSES = new Set<RuntimeStatus>([
+  "idle",
+  "loading_model",
+  "ready",
+  "generating",
+  "cancelling",
+  "error",
+]);
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -64,6 +76,10 @@ export function asErrorSeverity(value: unknown): Exclude<DiagnosticSeverity, "de
   return typeof value === "string" && ERROR_SEVERITIES.has(value as DiagnosticSeverity)
     ? (value as Exclude<DiagnosticSeverity, "debug" | "info">)
     : undefined;
+}
+
+export function asRuntimeStatus(value: unknown): RuntimeStatus | undefined {
+  return typeof value === "string" && RUNTIME_STATUSES.has(value as RuntimeStatus) ? (value as RuntimeStatus) : undefined;
 }
 
 export function asNonNegativeNumber(value: unknown): number | undefined {
