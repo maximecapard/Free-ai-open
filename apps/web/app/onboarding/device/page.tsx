@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { detectDeviceProfile } from "@free-ai-open/device-profiler";
+import { detectDeviceProfile, getDeviceTierDisplayLabel } from "@free-ai-open/device-profiler";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import { findModeLabel } from "../../_lib/catalog";
 import { recommendPerformanceMode } from "../../_lib/deviceRecommendation";
@@ -52,7 +52,7 @@ export default function OnboardingDevicePage() {
             <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", marginTop: 12 }}>
               <dt>Device tier</dt>
               <dd>
-                {profile.deviceTier} ({profile.deviceTierLabel})
+                {profile.deviceTier} ({getDeviceTierDisplayLabel(profile.deviceTierLabel, profile.preferredBackend)})
               </dd>
               <dt>WASM available</dt>
               <dd>{profile.wasmAvailable ? "yes" : "no"}</dd>

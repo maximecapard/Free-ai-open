@@ -12,6 +12,7 @@ export {
   getDeviceTier,
   runLightweightBenchmark,
 } from "./profiler";
+export { getDeviceTierDisplayLabel } from "./labels";
 export type {
   BrowserInfo,
   DeviceProfile,

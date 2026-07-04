@@ -26,7 +26,17 @@ const CONSOLE_METHOD_BY_LEVEL: Record<LogLevel, "debug" | "info" | "warn" | "err
   critical: "error",
 };
 
+// Console output is a local development aid only. It must never receive
+// prompt, response, document, conversation, or other user content — callers
+// are responsible for passing technical data (see LogEvent.data).
+function isConsoleLoggingEnabled(): boolean {
+  const env = typeof process !== "undefined" ? process.env : undefined;
+  if (env?.NEXT_PUBLIC_DEBUG_LOGS === "true") return true;
+  return env?.NODE_ENV !== "production";
+}
+
 export function logEvent(event: LogEvent): void {
+  if (!isConsoleLoggingEnabled()) return;
   const method = CONSOLE_METHOD_BY_LEVEL[event.level];
   console[method](`[${event.event}]`, event);
 }
