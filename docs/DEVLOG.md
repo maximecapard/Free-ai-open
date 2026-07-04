@@ -12,7 +12,7 @@ FreeAI Open is an alpha-stage, local-first browser AI assistant. The current cod
 - privacy redaction, structured technical logging, and telemetry schema validation;
 - local technical logs in IndexedDB;
 - a debug dashboard and privacy-safe diagnostic report export;
-- a local-only conversation-store package, not yet wired into the chat UI.
+- a local-only conversation-store package wired into the `/chat` UI through a history sidebar (create, resume, rename, delete).
 
 ## Sprint 1 - App shell, model registry, privacy redactor, telemetry schema
 
@@ -104,6 +104,26 @@ FreeAI Open is an alpha-stage, local-first browser AI assistant. The current cod
 
 ### Remaining limits
 
-- The chat UI is not yet wired to the conversation store.
 - There is no encrypted sync, import/export UI, or multi-device persistence.
 - IndexedDB schema migration is intentionally simple and currently starts at schema version 1.
+
+## Chat history UI wiring
+
+### Built
+
+- Added a chat history sidebar (`ChatHistorySidebar`) to `/chat`: new chat, select-to-resume, inline rename, and delete with a confirm step.
+- Sending a message lazily creates a conversation (title derived from the first message) and persists the user message before generation starts.
+- The assistant reply is persisted once generation completes or is cancelled, including partial text from a stopped generation.
+- The last-viewed conversation resumes automatically after a refresh, tracked by a small local ID pointer (not conversation content) with a most-recent fallback.
+- Local storage failures (create/add/rename/delete) surface a small dismissable notice without blocking chatting; the chat still works in-memory if persistence fails.
+
+### Privacy notes
+
+- Conversation content is only ever passed to `@free-ai-open/conversation-store` calls, never to `logEvent`, local technical logs, or diagnostic reports.
+- The `conversationId` passed to `ai-runtime`'s `generate()` is only used for console log correlation (already redacted by the logger package) and is a plain ID, not content.
+
+### Remaining limits after this sprint
+
+- New chat / conversation switching is disabled while a reply is generating or cancelling, to avoid mixing streamed tokens across conversations.
+- The local model is single-turn: persisted conversation history is not replayed back into the model as context.
+- No import/export UI yet, and no cross-device sync.

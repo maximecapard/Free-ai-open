@@ -13,19 +13,27 @@ This project follows a format close to Keep a Changelog. Versions are alpha mile
 - Added strict TypeScript types for conversations, messages, metadata, IDs, and roles.
 - Added local limits for maximum conversations, messages per conversation, message size, and title size.
 - Added unit tests for create/list/get, adding messages, renaming, deleting, clearing, memory fallback, storage failures, and network isolation.
+- Wired the local conversation store into the `/chat` UI: a history sidebar lets users create, resume, rename, and delete conversations.
+- Sending a message now lazily creates a local conversation (titled from the first message) instead of sending anything to a server.
+- Assistant replies are saved locally once generation finishes or is cancelled, including partial replies from a stopped generation.
+- The active conversation resumes automatically after a page refresh, using a local, non-sensitive ID pointer.
+- Added "Stored locally" / "This conversation stays on your device" messaging and a note that clearing site data deletes local history.
+- Added non-blocking storage-error notices in the chat UI so a local persistence failure never blocks chatting.
 
 ### Security and Privacy
 
 - Conversation content remains local browser data.
 - Conversation storage does not use `fetch`, `sendBeacon`, Supabase, Google Drive, telemetry, local logs, or server endpoints.
 - Diagnostic reports continue to reject conversation content fields.
+- The chat UI never passes conversation content to `logEvent`, local technical logs, or diagnostic reports; only a non-content conversation ID is used for console log correlation.
 
 ### Known Limits
 
-- The conversation store is not yet wired into the chat UI.
 - Conversations are not synced across devices.
 - No import/export UX has been added.
 - Browser end-to-end tests for persisted chat sessions are still pending.
+- The local model only sees the current prompt; persisted history is not replayed back into the model as context yet.
+- Switching or starting a new conversation is disabled while a reply is generating or cancelling, to avoid mixing streamed tokens across conversations.
 
 ## [0.4.1-alpha] - 2026-07-04
 
