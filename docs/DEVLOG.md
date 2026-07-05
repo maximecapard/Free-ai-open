@@ -188,7 +188,7 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, impo
 - Cut the `v0.5.0-alpha` changelog entry.
 - Added `docs/RELEASE_CHECKLIST.md`.
 - Added a short near-term section to `docs/roadmap.md`.
-- Added an explicit documentation-sync rule to `AGENTS.md` and `CLAUDE.md`.
+- Added an explicit documentation-sync rule to the project's internal contributor/agent instructions (kept local-only, not part of the public repository).
 - Added a real IndexedDB unit test for `@free-ai-open/conversation-store` using `fake-indexeddb`.
 - Added memory fallback coverage for the no-IndexedDB path.
 - Added active conversation ID pointer tests for save/read/clear and localStorage failure handling.

@@ -17,7 +17,7 @@ None of the "Future" items above are implemented yet. See the detailed phases be
 - Next.js scaffold
 - TypeScript strict
 - Tailwind/shadcn setup
-- AGENTS.md and CLAUDE.md
+- Internal contributor/agent instructions (kept local-only)
 - docs baseline
 - package structure
 - CI baseline
