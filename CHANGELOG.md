@@ -9,6 +9,9 @@ Versions are alpha milestones while the MVP is still under active development.
 
 ### Added
 
+- Added `@free-ai-open/conversation-export` for versioned local JSON conversation export/import helpers.
+- Added strict import validation for format, version, structure, roles, ISO dates, unexpected fields, conversation/message limits, message length, and JSON size.
+- Added import preparation that assigns fresh conversation IDs by default, preserves valid titles/messages, and records local import metadata without overwriting existing conversations.
 - Added `CONTRIBUTING.md`, `SECURITY.md`, `docs/PROJECT_OVERVIEW.md`, and a "Privacy/security report" issue template for public repository readiness.
 - Expanded the pull request template with changes-made, local storage impact, and diagnostic/logging impact sections, plus an explicit no-content-logged/no-new-network-path/no-cloud-sync checklist.
 - Clarified `docs/privacy.md` to distinguish currently implemented user controls (erase conversations, erase/export local logs and diagnostic report) from planned ones (telemetry toggle, model cache erase, conversation export/import, encrypted Drive sync).
@@ -23,7 +26,7 @@ Versions are alpha milestones while the MVP is still under active development.
 - Supabase-backed persistence is not started.
 - Google Drive sync is not started.
 - The browser runtime still targets a small WebLLM test model before broader model support.
-- Import/export UX for local conversations is not added.
+- End-user import/export UI for local conversations is not added.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
 
 ## [0.5.0-alpha] - 2026-07-05
