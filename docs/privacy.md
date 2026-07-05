@@ -45,6 +45,8 @@ Users should be able to:
 - export/import local conversations;
 - enable encrypted Drive sync later.
 
+Implemented today: erase local conversations (delete from the `/chat` history sidebar), and erase/view/export local logs and the diagnostic report (`/debug`). A telemetry on/off toggle, erasing the model cache, export/import of local conversations, and encrypted Drive sync are not implemented yet — see [`docs/roadmap.md`](roadmap.md).
+
 ## Local conversations
 
 Conversation persistence is local-only. Stored conversations may contain user prompts and assistant responses, so they must not be sent to telemetry, diagnostic reports, Supabase, Google Drive, or any server endpoint by default.

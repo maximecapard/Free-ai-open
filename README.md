@@ -6,6 +6,8 @@ Local-first AI chat in the browser, powered by WebLLM.
 
 FreeAI Open is an open-source browser AI assistant focused on local inference, explicit privacy boundaries, and practical diagnostics. The current codebase is useful for development and testing, but it is not production-ready and should be expected to change between alpha releases.
 
+Inference runs entirely on the user's device. Response speed and quality depend on the browser, WebGPU/WASM support, the device's hardware, and the model selected — not on a fixed server-side model.
+
 ## Why FreeAI Open?
 
 Browser LLM runtimes make local AI possible without a native app, but the product layer around them is still immature. FreeAI Open explores that layer with a narrow set of goals:
@@ -105,6 +107,7 @@ pnpm build
 
 ## Documentation
 
+- [Project overview](docs/PROJECT_OVERVIEW.md)
 - [Project brief](PROJECT_BRIEF.md)
 - [Changelog](CHANGELOG.md)
 - [Development log](docs/DEVLOG.md)
@@ -116,6 +119,8 @@ pnpm build
 - [Model selection](docs/model-selection.md)
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
 - [Architecture decision records](docs/adr/README.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security policy](SECURITY.md)
 
 ## Roadmap
 
