@@ -183,6 +183,7 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, impo
 ### Built
 
 - Corrected the `conversationId` description in this log to state precisely what it is (a non-content technical identifier), where it can appear (structured console logs), and where it must not appear (local technical logs, diagnostic reports).
+- Rewrote `README.md` as a public alpha overview focused on current features, explicit non-implemented scope, privacy model, architecture, setup, checks, and documentation entry points.
 - Reviewed `README.md`, `CHANGELOG.md`, `docs/privacy.md`, `docs/security.md`, and `docs/architecture.md` for consistency with the actual Sprint 5 implementation.
 - Cut the `v0.5.0-alpha` changelog entry.
 - Added `docs/RELEASE_CHECKLIST.md`.
