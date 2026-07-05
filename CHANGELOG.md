@@ -7,6 +7,12 @@ Versions are alpha milestones while the MVP is still under active development.
 
 ## [Unreleased]
 
+### Added
+
+- Rewrote `README.md` as a project-facing alpha overview with implemented features, explicit non-implemented scope, privacy model, architecture summary, setup commands, and documentation links.
+- Added Sprint 5.1 robustness tests for local conversation persistence: real IndexedDB coverage via `fake-indexeddb`, no-IndexedDB memory fallback, active conversation ID pointer storage, local-log rejection of conversation content, and diagnostic-report privacy exclusion for conversation-shaped input.
+- Added a release checklist TODO for future browser-level coverage of persisted chat refresh and delete confirmation flows instead of adding a heavy E2E framework prematurely.
+
 ### Planned
 
 - The model catalog is intentionally small and still uses early compatibility metadata.
@@ -15,13 +21,6 @@ Versions are alpha milestones while the MVP is still under active development.
 - The browser runtime still targets a small WebLLM test model before broader model support.
 - Import/export UX for local conversations is not added.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
-
-## [0.5.0-alpha] - 2026-07-05
-
-### Added
-
-- Added Sprint 5.1 robustness tests for local conversation persistence: real IndexedDB coverage via `fake-indexeddb`, no-IndexedDB memory fallback, active conversation ID pointer storage, local-log rejection of conversation content, and diagnostic-report privacy exclusion for conversation-shaped input.
-- Added a release checklist TODO for future browser-level coverage of persisted chat refresh and delete confirmation flows instead of adding a heavy E2E framework prematurely.
 
 ## [0.5.0-alpha] - 2026-07-05
 
