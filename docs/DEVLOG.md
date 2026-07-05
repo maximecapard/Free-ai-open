@@ -206,6 +206,30 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, impo
 
 - Same as Sprint 5's planned work: local export/import (Sprint 6), then encrypted export, optional Google Drive sync, better model selection, and benchmarks.
 
+## Sprint 5.2 - Public repository readiness
+
+### Built
+
+- Added `CONTRIBUTING.md` (setup, required checks, privacy/security expectations, documentation-sync expectation, code style, PR guidance).
+- Added `SECURITY.md` (how to report a vulnerability without a dedicated security email yet, in-scope issue classes, current security posture).
+- Added a "Privacy/security report" issue template asking whether an issue involves prompts, responses, conversations, documents, local logs, diagnostic reports, or unexpected network traffic.
+- Expanded the pull request template with changes-made, local storage impact, and diagnostic/logging impact sections and a more explicit checklist.
+- Added `docs/PROJECT_OVERVIEW.md`: a public-facing explanation of what FreeAI Open is, why local-first browser AI is useful, current alpha status, what works today, what does not, the privacy model, and why the project is useful as open source.
+- Clarified `docs/privacy.md`'s user-controls list to separate what is implemented today from what is planned.
+- Added a performance-depends-on-browser/device/model note to `README.md` and linked the new docs from it.
+- Reviewed `docs/architecture.md`, `docs/privacy.md`, `docs/security.md`, `docs/roadmap.md`, `PROJECT_BRIEF.md`, ADRs, and package READMEs for any claim that Supabase, Google Drive sync, or encrypted export/import are active; all were already correctly framed as not implemented/future.
+- Re-verified no public, git-tracked file references `AGENTS.md`, `CLAUDE.md`, `USAGE_AFTER_DOWNLOAD.md`, `prompts/`, `tickets/`, or an internal Claude Code/Codex workflow.
+
+### Known limitations after Sprint 5.2
+
+- No application behavior changed; this sprint is documentation and repository-hygiene only.
+- `SECURITY.md` does not yet have a dedicated contact email/private reporting address beyond GitHub's own mechanisms.
+- The known limitations listed under prior sprints still apply unchanged.
+
+### Planned work (not implemented yet)
+
+- Same as prior sprints: local export/import (Sprint 6), then encrypted export, optional Google Drive sync, better model selection, and benchmarks.
+
 ## Cross-cutting remaining work
 
 - Expand and validate the model registry before adding more model records.
