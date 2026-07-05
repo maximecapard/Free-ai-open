@@ -15,7 +15,7 @@ Netlify /api/telemetry
        ↓
 Validation + redaction
        ↓
-Supabase technical events
+Technical telemetry persistence (planned)
 ```
 
 ## Data boundary
@@ -48,7 +48,7 @@ Server data is technical only:
 - `logger`: structured local logs.
 - `privacy-redactor`: removes sensitive data.
 - `telemetry`: event schemas and client/server helpers.
-- `server-data`: Supabase access wrapper.
+- `server-data`: placeholder for future server-side technical data persistence.
 
 ## Client/server rule
 
