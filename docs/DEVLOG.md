@@ -218,7 +218,7 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, impo
 - Clarified `docs/privacy.md`'s user-controls list to separate what is implemented today from what is planned.
 - Added a performance-depends-on-browser/device/model note to `README.md` and linked the new docs from it.
 - Reviewed `docs/architecture.md`, `docs/privacy.md`, `docs/security.md`, `docs/roadmap.md`, `PROJECT_BRIEF.md`, ADRs, and package READMEs for any claim that Supabase, Google Drive sync, or encrypted export/import are active; all were already correctly framed as not implemented/future.
-- Re-verified no public, git-tracked file references `AGENTS.md`, `CLAUDE.md`, `USAGE_AFTER_DOWNLOAD.md`, `prompts/`, `tickets/`, or an internal Claude Code/Codex workflow.
+- Re-verified internal workflow material remains local-only and is not part of the public repository.
 
 ### Known limitations after Sprint 5.2
 
