@@ -7,6 +7,7 @@ Browser
 ├─ Next.js client UI
 ├─ WebLLM/WebGPU runtime in Web Worker
 ├─ IndexedDB local conversations
+├─ Local JSON conversation export/import helpers
 ├─ Cache Storage / model cache
 ├─ Local logs
 └─ Redacted telemetry client
@@ -45,6 +46,7 @@ Server data is technical only:
 - `model-registry`: model metadata and validation.
 - `local-storage`: IndexedDB and local persistence.
 - `conversation-store`: local-only browser conversation persistence.
+- `conversation-export`: versioned local JSON conversation export/import helpers.
 - `logger`: structured local logs.
 - `privacy-redactor`: removes sensitive data.
 - `telemetry`: event schemas and client/server helpers.

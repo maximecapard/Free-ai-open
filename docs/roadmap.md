@@ -2,9 +2,9 @@
 
 ## Status after v0.5.0-alpha
 
-Local conversation history (store + `/chat` history sidebar) shipped in `v0.5.0-alpha`. Next up:
+Local conversation history (store + `/chat` history sidebar) shipped in `v0.5.0-alpha`. Core local JSON conversation export/import helpers are now implemented. Next up:
 
-- **Sprint 6 (next):** local export/import of conversations.
+- **Sprint 6 integration:** wire local export/import into the app UI.
 - **Future:** client-side encrypted export.
 - **Future:** optional Google Drive sync.
 - **Future:** better/more transparent model selection.
@@ -70,9 +70,10 @@ None of the "Future" items above are implemented yet. See the detailed phases be
 
 ## Phase 6 — Local backup
 
-- Export history
-- Import history
-- Encrypted `.freeai` format
+- Versioned local JSON export/import helpers
+- Export history UI
+- Import history UI
+- Future encrypted backup format
 - Schema migration tests
 
 ## Phase 7 — Benchmarks

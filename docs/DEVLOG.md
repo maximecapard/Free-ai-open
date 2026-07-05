@@ -12,9 +12,10 @@ FreeAI Open is an alpha-stage, local-first browser AI assistant. The current cod
 - privacy redaction, structured technical logging, and telemetry schema validation;
 - local technical logs in IndexedDB;
 - a debug dashboard and privacy-safe diagnostic report export;
-- a local-only conversation-store package wired into the `/chat` UI through a history sidebar for create, resume, rename, and delete.
+- a local-only conversation-store package wired into the `/chat` UI through a history sidebar for create, resume, rename, and delete;
+- core local JSON conversation export/import helpers.
 
-The product is not yet a complete MVP. Broad model support, encrypted sync, import/export UX, production-ready telemetry persistence, and browser end-to-end coverage remain future work.
+The product is not yet a complete MVP. Broad model support, encrypted sync, import/export UI, production-ready telemetry persistence, and browser end-to-end coverage remain future work.
 
 ## Sprint 1 - App shell, model registry, privacy redactor, telemetry schema
 
@@ -229,6 +230,37 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, impo
 ### Planned work (not implemented yet)
 
 - Same as prior sprints: local export/import (Sprint 6), then encrypted export, optional Google Drive sync, better model selection, and benchmarks.
+
+## Sprint 6 - Core local conversation export/import
+
+### Built
+
+- Added `@free-ai-open/conversation-export`, a pure TypeScript package for versioned local JSON conversation export/import helpers.
+- Defined export format `freeai-open-conversations` version `1` with `exportedAt`, `source`, and conversation payloads.
+- Added `buildConversationExport`, `validateConversationExport`, `serializeConversationExport`, `parseConversationImport`, and `prepareImportedConversations`.
+- Added strict import validation for format, version, conversation structure, message roles, canonical ISO dates, unexpected fields, conversation/message count limits, message length, title length, ID length, and JSON size.
+- Added default conflict behavior that assigns fresh conversation IDs on import and never reuses imported IDs silently.
+- Preserved valid titles, message roles, message content, and message timestamps in prepared imports.
+- Added local import metadata (`source`, original ID, imported timestamp) to prepared imported conversations.
+
+### Privacy and architecture notes
+
+- Exported JSON may contain prompts and model responses because it is a user-controlled local backup format.
+- The package does not call `fetch`, `sendBeacon`, server endpoints, Supabase, Google Drive, telemetry, local logs, or diagnostic reports.
+- Diagnostic-report tests continue to ensure conversation-shaped import/export data is not exported in diagnostic reports.
+- Exports are not encrypted; encrypted backup remains future work.
+
+### Known limitations after Sprint 6 core
+
+- No end-user import/export UI is wired yet.
+- Prepared imports are core data objects; app-level persistence and user confirmation flows remain future integration work.
+- Export/import browser E2E coverage is not added yet.
+
+### Planned work (not implemented yet)
+
+- Wire local export/import into the app UI with explicit user actions.
+- Add browser-level coverage for import/export flows once the UI exists.
+- Later: encrypted export and optional Google Drive sync.
 
 ## Cross-cutting remaining work
 
