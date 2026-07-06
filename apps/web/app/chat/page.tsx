@@ -17,18 +17,27 @@ import {
   listConversations,
   updateConversationTitle,
 } from "@free-ai-open/conversation-store";
-import type { ConversationId, ConversationMetadata } from "@free-ai-open/conversation-store";
+import type { Conversation, ConversationId, ConversationMetadata } from "@free-ai-open/conversation-store";
+import {
+  buildConversationExport,
+  ConversationExportError,
+  parseConversationImport,
+  prepareImportedConversations,
+  serializeConversationExport,
+} from "@free-ai-open/conversation-export";
 import { ModelStatusPill } from "../_components/ModelStatusPill";
 import { PrivacyNotice } from "../_components/PrivacyNotice";
 import { RuntimeStatusBadge } from "../_components/RuntimeStatusBadge";
 import { ChatTranscript } from "../_components/ChatTranscript";
 import type { ChatMessageItem } from "../_components/ChatTranscript";
 import { ChatHistorySidebar } from "../_components/ChatHistorySidebar";
+import type { ConversationImportSummary } from "../_components/ConversationExportImportControls";
 import { findModeLabel, findTaskLabel, isPerformanceMode, isTaskCategory } from "../_lib/catalog";
 import { rejectionReasonLabel } from "../_lib/routeExplanation";
 import { runtimeErrorLabel } from "../_lib/runtimeErrorLabel";
 import { terminateWorkerAfter } from "../_lib/workerTeardown";
 import { deriveConversationTitle, toChatMessageItems } from "../_lib/conversationMessages";
+import { downloadTextFile } from "../_lib/downloadTextFile";
 import {
   clearStoredActiveConversationId,
   getStoredActiveConversationId,
@@ -59,6 +68,7 @@ function ChatContent() {
   const [conversations, setConversations] = useState<ConversationMetadata[]>([]);
   const [activeConversationId, setActiveConversationId] = useState<ConversationId | null>(null);
   const [storageNotice, setStorageNotice] = useState<string | null>(null);
+  const [importSummary, setImportSummary] = useState<ConversationImportSummary | null>(null);
   const runtimeRef = useRef<InferenceRuntime | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
@@ -215,6 +225,116 @@ function ChatContent() {
     await refreshConversations();
   }
 
+  async function handleExportActiveConversation() {
+    setStorageNotice(null);
+    if (!activeConversationId) {
+      setStorageNotice("No active conversation to export.");
+      return;
+    }
+
+    const conversation = await getConversation(activeConversationId);
+    if (!conversation) {
+      setStorageNotice("Couldn't load this conversation locally to export it.");
+      return;
+    }
+
+    try {
+      const json = serializeConversationExport(buildConversationExport([conversation]));
+      downloadTextFile(`freeai-open-conversation-${Date.now()}.json`, json);
+    } catch {
+      setStorageNotice("Couldn't build the export file for this conversation.");
+    }
+  }
+
+  async function handleExportAllConversations() {
+    setStorageNotice(null);
+    const metadataList = await listConversations();
+    if (metadataList.length === 0) {
+      setStorageNotice("No conversations to export.");
+      return;
+    }
+
+    const fullConversations = (await Promise.all(metadataList.map((item) => getConversation(item.id)))).filter(
+      (conversation): conversation is Conversation => conversation !== null
+    );
+    if (fullConversations.length === 0) {
+      setStorageNotice("Couldn't load conversations locally to export them.");
+      return;
+    }
+
+    try {
+      const json = serializeConversationExport(buildConversationExport(fullConversations));
+      downloadTextFile(`freeai-open-conversations-${Date.now()}.json`, json);
+    } catch {
+      setStorageNotice("Couldn't build the export file.");
+    }
+  }
+
+  async function handleImportFile(file: File) {
+    setStorageNotice(null);
+    setImportSummary(null);
+
+    let text: string;
+    try {
+      text = await file.text();
+    } catch {
+      setImportSummary({ importedCount: 0, skippedCount: 0, errors: ["Couldn't read the selected file."] });
+      return;
+    }
+
+    let exportData;
+    try {
+      exportData = parseConversationImport(text);
+    } catch (error) {
+      const errors =
+        error instanceof ConversationExportError
+          ? error.errors
+          : ["This file isn't a valid FreeAI Open conversation export."];
+      setImportSummary({ importedCount: 0, skippedCount: 0, errors });
+      return;
+    }
+
+    const existingIds = (await listConversations()).map((item) => item.id);
+    const prepared = prepareImportedConversations(exportData, { existingIds });
+
+    let importedCount = 0;
+    let skippedCount = 0;
+    const errors: string[] = [];
+
+    for (const conversation of prepared) {
+      const created = await createConversation({
+        id: conversation.id,
+        title: conversation.title,
+        createdAt: conversation.createdAt,
+      });
+      if (!created) {
+        skippedCount += 1;
+        errors.push(`Couldn't import "${conversation.title}".`);
+        continue;
+      }
+
+      importedCount += 1;
+      for (const message of conversation.messages) {
+        const saved = await addMessage(created.id, {
+          id: message.id,
+          role: message.role,
+          content: message.content,
+          createdAt: message.createdAt,
+        });
+        if (!saved) {
+          errors.push(`"${conversation.title}": a message couldn't be saved.`);
+        }
+      }
+    }
+
+    setImportSummary({ importedCount, skippedCount, errors });
+    await refreshConversations();
+  }
+
+  function handleDismissImportSummary() {
+    setImportSummary(null);
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const runtime = runtimeRef.current;
@@ -275,6 +395,11 @@ function ChatContent() {
         onSelect={handleSelectConversation}
         onRename={handleRenameConversation}
         onDelete={handleDeleteConversation}
+        onExportActive={handleExportActiveConversation}
+        onExportAll={handleExportAllConversations}
+        onImportFile={handleImportFile}
+        importSummary={importSummary}
+        onDismissImportSummary={handleDismissImportSummary}
       />
 
       <main style={{ flex: 1, minWidth: 0 }}>

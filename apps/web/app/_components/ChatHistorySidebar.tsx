@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import type { ConversationMetadata } from "@free-ai-open/conversation-store";
+import { ConversationExportImportControls } from "./ConversationExportImportControls";
+import type { ConversationImportSummary } from "./ConversationExportImportControls";
 
 export interface ChatHistorySidebarProps {
   conversations: ConversationMetadata[];
@@ -11,6 +13,11 @@ export interface ChatHistorySidebarProps {
   onSelect: (id: string) => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onExportActive: () => void;
+  onExportAll: () => void;
+  onImportFile: (file: File) => void;
+  importSummary: ConversationImportSummary | null;
+  onDismissImportSummary: () => void;
 }
 
 export function ChatHistorySidebar({
@@ -21,6 +28,11 @@ export function ChatHistorySidebar({
   onSelect,
   onRename,
   onDelete,
+  onExportActive,
+  onExportAll,
+  onImportFile,
+  importSummary,
+  onDismissImportSummary,
 }: ChatHistorySidebarProps) {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -138,6 +150,15 @@ export function ChatHistorySidebar({
       <p style={{ fontSize: 11, opacity: 0.5, margin: 0 }}>
         Clearing your browser&apos;s site data for this app will delete this history.
       </p>
+
+      <ConversationExportImportControls
+        disabled={disabled}
+        onExportActive={onExportActive}
+        onExportAll={onExportAll}
+        onImportFile={onImportFile}
+        importSummary={importSummary}
+        onDismissImportSummary={onDismissImportSummary}
+      />
     </aside>
   );
 }

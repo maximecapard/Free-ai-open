@@ -32,6 +32,9 @@ importers:
       '@free-ai-open/ai-runtime':
         specifier: workspace:*
         version: link:../../packages/ai-runtime
+      '@free-ai-open/conversation-export':
+        specifier: workspace:*
+        version: link:../../packages/conversation-export
       '@free-ai-open/conversation-store':
         specifier: workspace:*
         version: link:../../packages/conversation-store

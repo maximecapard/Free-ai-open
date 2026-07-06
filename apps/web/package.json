@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@free-ai-open/ai-runtime": "workspace:*",
+    "@free-ai-open/conversation-export": "workspace:*",
     "@free-ai-open/conversation-store": "workspace:*",
     "@free-ai-open/diagnostic-report": "workspace:*",
     "@free-ai-open/local-logs": "workspace:*",

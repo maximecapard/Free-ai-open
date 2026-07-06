@@ -13,9 +13,9 @@ FreeAI Open is an alpha-stage, local-first browser AI assistant. The current cod
 - local technical logs in IndexedDB;
 - a debug dashboard and privacy-safe diagnostic report export;
 - a local-only conversation-store package wired into the `/chat` UI through a history sidebar for create, resume, rename, and delete;
-- core local JSON conversation export/import helpers.
+- local conversation export/import, wired into the `/chat` history sidebar (export current, export all, import with a result summary).
 
-The product is not yet a complete MVP. Broad model support, encrypted sync, import/export UI, production-ready telemetry persistence, and browser end-to-end coverage remain future work.
+The product is not yet a complete MVP. Broad model support, encrypted sync, production-ready telemetry persistence, and browser end-to-end coverage remain future work.
 
 ## Sprint 1 - App shell, model registry, privacy redactor, telemetry schema
 
@@ -261,6 +261,35 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, impo
 - Wire local export/import into the app UI with explicit user actions.
 - Add browser-level coverage for import/export flows once the UI exists.
 - Later: encrypted export and optional Google Drive sync.
+
+## Sprint 6.1 - Local conversation export/import UI
+
+### Built
+
+- Added "Export current", "Export all", and "Import" actions to the `/chat` history sidebar (`ChatHistorySidebar` delegates to a new `ConversationExportImportControls` component).
+- Export current builds a one-conversation export via `buildConversationExport`/`serializeConversationExport` and downloads it as a JSON file through a Blob/object URL; export all does the same for every locally stored conversation.
+- Import reads the selected file client-side (`File.text()`), parses and validates it with `parseConversationImport`, and prepares conversations with fresh IDs via `prepareImportedConversations` so an import can never silently overwrite an existing conversation.
+- Imported conversations are persisted using the existing `@free-ai-open/conversation-store` public API (`createConversation` with the prepared ID/title/`createdAt`, then `addMessage` per message) — no changes were made to `conversation-store` itself.
+- Import shows a summary: conversations imported, conversations skipped (with a reason), and any validation errors, rendered directly in the sidebar without a page refresh.
+- Added a persistent privacy note next to the export/import buttons: exported files contain conversation text, are not encrypted, and are never sent anywhere.
+- Export/import buttons are disabled while a reply is generating or cancelling, consistent with the existing new-chat/select/rename/delete guard.
+
+### Privacy and architecture notes
+
+- The export/import UI calls only `@free-ai-open/conversation-export` and `@free-ai-open/conversation-store` public functions; it does not call `fetch`, `sendBeacon`, Supabase, Google Drive, `logEvent`, local technical logs, or diagnostic reports.
+- No new dependency was added to `packages/conversation-store`; the app layer composes both packages' existing public APIs.
+
+### Known limitations after Sprint 6.1
+
+- Export/import has no dedicated browser end-to-end test yet; verified manually (export current, export all, import valid file, import invalid file, imported conversations appearing live, stop/reload still working).
+- Imported conversations get a fresh `updatedAt` as messages are added back one by one through the public store API, rather than exactly preserving the original export's `updatedAt` timestamp.
+- Bulk-importing near the existing conversation-store cap (100 conversations) can prune older conversations, the same as creating that many conversations any other way; import does not warn about this specifically.
+- No cloud sync, encrypted export, or Google Drive integration was added.
+
+### Planned work (not implemented yet)
+
+- Encrypted export and optional Google Drive sync (see `docs/roadmap.md`).
+- Browser-level end-to-end coverage for the export/import UI.
 
 ## Cross-cutting remaining work
 

@@ -27,7 +27,7 @@ Implemented in the current alpha:
 - Stop generation recovery, including cancelling state, timeout handling, stalled-generation recovery, and reload model support.
 - Local conversation history in the `/chat` UI.
 - IndexedDB conversation storage with an in-memory fallback when IndexedDB is unavailable.
-- Core local conversation export/import helpers for a versioned JSON file format.
+- Local conversation export/import in the `/chat` history sidebar: export the current conversation, export all conversations, or import a JSON export file, entirely on-device.
 - Local technical logs stored in the browser.
 - Privacy-safe diagnostic report generation and export.
 - `/debug` dashboard for runtime status, device information, technical logs, and diagnostics.
@@ -41,7 +41,7 @@ The following are not implemented in this alpha:
 - Google Drive sync.
 - Supabase or other cloud conversation storage.
 - Account system.
-- End-user export/import UI and encrypted conversation backups.
+- Encrypted conversation export/import backups (current exports are plain, unencrypted JSON).
 - Production-scale multi-model registry.
 - Desktop or mobile apps.
 - Broad browser end-to-end test coverage.
@@ -126,7 +126,7 @@ pnpm build
 
 ## Roadmap
 
-Near-term work is tracked in [docs/roadmap.md](docs/roadmap.md). Current priorities include wiring local export/import into the user-facing app, stronger browser-level testing, clearer model selection, and continued privacy/security hardening.
+Near-term work is tracked in [docs/roadmap.md](docs/roadmap.md). Current priorities include stronger browser-level testing, clearer model selection, and continued privacy/security hardening.
 
 Future ideas such as Google Drive sync, encrypted backup, model mirrors, desktop packaging, and broader model support are not part of the current alpha.
 

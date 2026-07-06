@@ -2,9 +2,8 @@
 
 ## Status after v0.5.0-alpha
 
-Local conversation history (store + `/chat` history sidebar) shipped in `v0.5.0-alpha`. Core local JSON conversation export/import helpers are now implemented. Next up:
+Local conversation history (store + `/chat` history sidebar) shipped in `v0.5.0-alpha`. Local conversation export/import is now implemented end-to-end, including the `/chat` UI (export current, export all, import with a result summary). Next up:
 
-- **Sprint 6 integration:** wire local export/import into the app UI.
 - **Future:** client-side encrypted export.
 - **Future:** optional Google Drive sync.
 - **Future:** better/more transparent model selection.
