@@ -17,7 +17,7 @@ Versions are alpha milestones while the MVP is still under active development.
 - Added import preparation that assigns fresh conversation IDs by default, preserves valid titles/messages, and records local import metadata without overwriting existing conversations.
 - Added `CONTRIBUTING.md`, `SECURITY.md`, `docs/PROJECT_OVERVIEW.md`, and a "Privacy/security report" issue template for public repository readiness.
 - Expanded the pull request template with changes-made, local storage impact, and diagnostic/logging impact sections, plus an explicit no-content-logged/no-new-network-path/no-cloud-sync checklist.
-- Clarified `docs/privacy.md` to distinguish currently implemented user controls (erase conversations, erase/export local logs and diagnostic report) from planned ones (telemetry toggle, model cache erase, conversation export/import, encrypted Drive sync).
+- Clarified `docs/privacy.md` to distinguish currently implemented user controls (erase conversations, export/import local conversations, erase/export local logs and diagnostic report) from planned ones (telemetry toggle, model cache erase, encrypted export, encrypted Drive sync).
 - Added a performance-depends-on-browser/device/model note and links to the new docs to `README.md`.
 - Rewrote `README.md` as a project-facing alpha overview with implemented features, explicit non-implemented scope, privacy model, architecture summary, setup commands, and documentation links.
 - Added Sprint 5.1 robustness tests for local conversation persistence: real IndexedDB coverage via `fake-indexeddb`, no-IndexedDB memory fallback, active conversation ID pointer storage, local-log rejection of conversation content, and diagnostic-report privacy exclusion for conversation-shaped input.

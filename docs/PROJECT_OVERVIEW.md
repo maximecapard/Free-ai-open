@@ -26,7 +26,7 @@ FreeAI Open is in **alpha / early development**. The current codebase is useful 
 - A browser-local WebLLM runtime, running in a Web Worker, with a streaming chat UI.
 - Stop generation recovery: a `cancelling` state, cancel/stall timeouts, and a "Reload model" recovery path for a stuck runtime.
 - Local conversation history in the `/chat` UI: create, resume, rename, and delete conversations, backed by IndexedDB with an in-memory fallback when IndexedDB is unavailable.
-- Core local conversation export/import helpers for a versioned JSON file format.
+- Local conversation export/import in the `/chat` UI, backed by a versioned JSON file format.
 - Local technical logs and a privacy-safe diagnostic report, both viewable and exportable from the `/debug` dashboard.
 - Device profiling and task/mode-based model routing groundwork, with a small, explicit model registry.
 - Strict schemas and redaction utilities that keep telemetry, logs, and diagnostics limited to technical metadata.
@@ -35,7 +35,7 @@ FreeAI Open is in **alpha / early development**. The current codebase is useful 
 
 - Cloud or cross-device sync of conversations (no Supabase-backed or other cloud conversation storage).
 - Google Drive sync.
-- End-user export/import UI and encrypted conversation backups.
+- Encrypted conversation export/import backups.
 - An account system.
 - A large or production-scale model catalog.
 - Desktop or mobile packaging.
