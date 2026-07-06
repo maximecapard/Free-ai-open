@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { ConversationMetadata } from "@free-ai-open/conversation-store";
 import { ConversationExportImportControls } from "./ConversationExportImportControls";
 import type { ConversationImportSummary } from "./ConversationExportImportControls";
+import { useTranslations } from "../_i18n/LocaleContext";
 
 export interface ChatHistorySidebarProps {
   conversations: ConversationMetadata[];
@@ -34,6 +35,7 @@ export function ChatHistorySidebar({
   importSummary,
   onDismissImportSummary,
 }: ChatHistorySidebarProps) {
+  const t = useTranslations();
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -51,15 +53,21 @@ export function ChatHistorySidebar({
   }
 
   return (
-    <aside style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}>
+    <aside
+      className="chat-sidebar"
+      aria-label={t("history.storedLocally")}
+      style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}
+    >
       <button type="button" onClick={onNewChat} disabled={disabled} style={{ padding: "10px 12px", borderRadius: 12 }}>
-        + New chat
+        {t("history.newChat")}
       </button>
 
-      <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>Stored locally. This conversation stays on your device.</p>
+      <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>{t("history.storedLocally")}</p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6, overflowY: "auto", maxHeight: 420 }}>
-        {conversations.length === 0 && <p style={{ fontSize: 13, opacity: 0.5, margin: 0 }}>No conversations yet.</p>}
+        {conversations.length === 0 && (
+          <p style={{ fontSize: 13, opacity: 0.5, margin: 0 }}>{t("history.noConversationsYet")}</p>
+        )}
 
         {conversations.map((conversation) => {
           const isActive = conversation.id === activeConversationId;
@@ -70,10 +78,10 @@ export function ChatHistorySidebar({
             <div
               key={conversation.id}
               style={{
-                border: "1px solid #333",
+                border: "1px solid var(--color-border)",
                 borderRadius: 10,
                 padding: 8,
-                background: isActive ? "#1c1c22" : "transparent",
+                background: isActive ? "var(--color-bg-elevated)" : "transparent",
               }}
             >
               {isRenaming ? (
@@ -85,6 +93,7 @@ export function ChatHistorySidebar({
                 >
                   <input
                     autoFocus
+                    aria-label={t("common.rename")}
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}
                     onBlur={() => commitRename(conversation.id)}
@@ -97,6 +106,7 @@ export function ChatHistorySidebar({
                   onClick={() => onSelect(conversation.id)}
                   disabled={disabled}
                   title={conversation.title}
+                  aria-current={isActive}
                   style={{
                     display: "block",
                     width: "100%",
@@ -118,26 +128,33 @@ export function ChatHistorySidebar({
               <div style={{ display: "flex", gap: 8, marginTop: 6, fontSize: 12 }}>
                 {isPendingDelete ? (
                   <>
-                    <span style={{ opacity: 0.7 }}>Delete?</span>
+                    <span style={{ opacity: 0.7 }}>{t("common.deleteConfirm")}</span>
                     <button type="button" onClick={() => onDelete(conversation.id)}>
-                      Yes
+                      {t("common.yes")}
                     </button>
                     <button type="button" onClick={() => setPendingDeleteId(null)}>
-                      Cancel
+                      {t("common.cancel")}
                     </button>
                   </>
                 ) : (
                   <>
-                    <button type="button" disabled={disabled} onClick={() => startRename(conversation)} style={{ opacity: 0.7 }}>
-                      Rename
+                    <button
+                      type="button"
+                      disabled={disabled}
+                      onClick={() => startRename(conversation)}
+                      aria-label={`${t("common.rename")}: ${conversation.title}`}
+                      style={{ opacity: 0.7 }}
+                    >
+                      {t("common.rename")}
                     </button>
                     <button
                       type="button"
                       disabled={disabled}
                       onClick={() => setPendingDeleteId(conversation.id)}
+                      aria-label={`${t("common.delete")}: ${conversation.title}`}
                       style={{ opacity: 0.7 }}
                     >
-                      Delete
+                      {t("common.delete")}
                     </button>
                   </>
                 )}
@@ -147,9 +164,7 @@ export function ChatHistorySidebar({
         })}
       </div>
 
-      <p style={{ fontSize: 11, opacity: 0.5, margin: 0 }}>
-        Clearing your browser&apos;s site data for this app will delete this history.
-      </p>
+      <p style={{ fontSize: 11, opacity: 0.5, margin: 0 }}>{t("history.clearingSiteData")}</p>
 
       <ConversationExportImportControls
         disabled={disabled}

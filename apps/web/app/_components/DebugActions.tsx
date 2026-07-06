@@ -1,7 +1,11 @@
+"use client";
+
+import { useTranslations } from "../_i18n/LocaleContext";
+
 const BUTTON_STYLE = {
   padding: "8px 14px",
   borderRadius: 10,
-  border: "1px solid #333",
+  border: "1px solid var(--color-border)",
   background: "transparent",
   color: "inherit",
   cursor: "pointer",
@@ -21,23 +25,29 @@ export function DebugActions({
   onClear: () => void;
   statusMessage: string | null;
 }) {
+  const t = useTranslations();
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button style={BUTTON_STYLE} onClick={onRefresh}>
-          Refresh diagnostics
+          {t("debug.refresh")}
         </button>
         <button style={BUTTON_STYLE} onClick={onCopy}>
-          Copy diagnostic report
+          {t("debug.copyReport")}
         </button>
         <button style={BUTTON_STYLE} onClick={onDownload}>
-          Download diagnostic report (JSON)
+          {t("debug.downloadReport")}
         </button>
         <button style={BUTTON_STYLE} onClick={onClear}>
-          Clear local logs
+          {t("debug.clearLogs")}
         </button>
       </div>
-      {statusMessage && <p style={{ fontSize: 13, opacity: 0.7, margin: 0 }}>{statusMessage}</p>}
+      {statusMessage && (
+        <p role="status" aria-live="polite" style={{ fontSize: 13, opacity: 0.7, margin: 0 }}>
+          {statusMessage}
+        </p>
+      )}
     </div>
   );
 }

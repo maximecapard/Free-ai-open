@@ -7,7 +7,7 @@ import { sampleModels } from "@free-ai-open/model-registry";
 import { selectRecommendedModel } from "@free-ai-open/model-router";
 import type { ModelRouterResult } from "@free-ai-open/model-router";
 import { createInferenceRuntime } from "@free-ai-open/ai-runtime";
-import type { InferenceRuntime, RuntimeState } from "@free-ai-open/ai-runtime";
+import type { GenerationStopReason, InferenceRuntime, RuntimeErrorCode, RuntimeState } from "@free-ai-open/ai-runtime";
 import { createLogEvent, logEvent } from "@free-ai-open/logger";
 import {
   addMessage,
@@ -34,7 +34,7 @@ import { ChatHistorySidebar } from "../_components/ChatHistorySidebar";
 import type { ConversationImportSummary } from "../_components/ConversationExportImportControls";
 import { findModeLabel, findTaskLabel, isPerformanceMode, isTaskCategory } from "../_lib/catalog";
 import { rejectionReasonLabel } from "../_lib/routeExplanation";
-import { runtimeErrorLabel } from "../_lib/runtimeErrorLabel";
+import { runtimeErrorKey } from "../_lib/runtimeErrorLabel";
 import { terminateWorkerAfter } from "../_lib/workerTeardown";
 import { deriveConversationTitle, toChatMessageItems } from "../_lib/conversationMessages";
 import { downloadTextFile } from "../_lib/downloadTextFile";
@@ -43,6 +43,12 @@ import {
   getStoredActiveConversationId,
   setStoredActiveConversationId,
 } from "../_lib/activeConversationStorage";
+import {
+  generationNoticeKey,
+  shouldDiscardPartialAssistantOutput,
+  shouldPersistAssistantOutput,
+} from "../_lib/generationPersistence";
+import { useTranslations } from "../_i18n/LocaleContext";
 
 const IDLE_RUNTIME_STATE: RuntimeState = { status: "idle", modelId: null, loadProgress: 0, error: null };
 
@@ -51,8 +57,15 @@ const IDLE_RUNTIME_STATE: RuntimeState = { status: "idle", modelId: null, loadPr
 // A wedged engine (e.g. after a cancel timeout) can leave dispose() pending
 // forever; the worker must never be leaked waiting on it.
 const TEARDOWN_GRACE_MS = 2_000;
+const RECOVERABLE_GENERATION_ERROR_CODES = new Set<RuntimeErrorCode>([
+  "cancel_timeout",
+  "generation_stalled",
+  "generation_timeout",
+  "degenerate_output",
+]);
 
 function ChatContent() {
+  const t = useTranslations();
   const searchParams = useSearchParams();
   const rawTask = searchParams.get("task");
   const rawMode = searchParams.get("mode");
@@ -72,6 +85,7 @@ function ChatContent() {
   const runtimeRef = useRef<InferenceRuntime | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
+  const pendingAssistantIdRef = useRef<string | null>(null);
 
   const refreshConversations = useCallback(async () => {
     setConversations(await listConversations());
@@ -180,6 +194,18 @@ function ChatContent() {
 
   const isConversationSwitchBlocked = runtimeState.status === "generating" || runtimeState.status === "cancelling";
 
+  useEffect(() => {
+    if (runtimeState.status !== "error" || !runtimeState.error || !pendingAssistantIdRef.current) return;
+
+    const noticeKey = generationNoticeKey(null, runtimeState.error.code);
+    if (!noticeKey) return;
+
+    const assistantId = pendingAssistantIdRef.current;
+    pendingAssistantIdRef.current = null;
+    setMessages((previous) => previous.filter((item) => item.id !== assistantId));
+    setStorageNotice(t(noticeKey));
+  }, [runtimeState.status, runtimeState.error, t]);
+
   function handleNewChat() {
     if (isConversationSwitchBlocked) return;
     setStorageNotice(null);
@@ -193,7 +219,7 @@ function ChatContent() {
     setStorageNotice(null);
     const conversation = await getConversation(id as ConversationId);
     if (!conversation) {
-      setStorageNotice("Couldn't load this conversation locally.");
+      setStorageNotice(t("storageNotice.couldNotLoadConversation"));
       return;
     }
     setActiveConversationId(conversation.id);
@@ -204,7 +230,7 @@ function ChatContent() {
   async function handleRenameConversation(id: string, title: string) {
     const updated = await updateConversationTitle(id as ConversationId, title);
     if (!updated) {
-      setStorageNotice("Couldn't rename this conversation locally.");
+      setStorageNotice(t("storageNotice.couldNotRename"));
       return;
     }
     await refreshConversations();
@@ -214,7 +240,7 @@ function ChatContent() {
     if (isConversationSwitchBlocked) return;
     const success = await deleteConversation(id as ConversationId);
     if (!success) {
-      setStorageNotice("Couldn't delete this conversation locally.");
+      setStorageNotice(t("storageNotice.couldNotDelete"));
       return;
     }
     if (activeConversationId === id) {
@@ -228,13 +254,13 @@ function ChatContent() {
   async function handleExportActiveConversation() {
     setStorageNotice(null);
     if (!activeConversationId) {
-      setStorageNotice("No active conversation to export.");
+      setStorageNotice(t("backup.noActiveConversation"));
       return;
     }
 
     const conversation = await getConversation(activeConversationId);
     if (!conversation) {
-      setStorageNotice("Couldn't load this conversation locally to export it.");
+      setStorageNotice(t("backup.couldNotLoadConversation"));
       return;
     }
 
@@ -242,7 +268,7 @@ function ChatContent() {
       const json = serializeConversationExport(buildConversationExport([conversation]));
       downloadTextFile(`freeai-open-conversation-${Date.now()}.json`, json);
     } catch {
-      setStorageNotice("Couldn't build the export file for this conversation.");
+      setStorageNotice(t("backup.couldNotBuildExportOne"));
     }
   }
 
@@ -250,7 +276,7 @@ function ChatContent() {
     setStorageNotice(null);
     const metadataList = await listConversations();
     if (metadataList.length === 0) {
-      setStorageNotice("No conversations to export.");
+      setStorageNotice(t("backup.noConversations"));
       return;
     }
 
@@ -258,7 +284,7 @@ function ChatContent() {
       (conversation): conversation is Conversation => conversation !== null
     );
     if (fullConversations.length === 0) {
-      setStorageNotice("Couldn't load conversations locally to export them.");
+      setStorageNotice(t("backup.couldNotLoadConversations"));
       return;
     }
 
@@ -266,7 +292,7 @@ function ChatContent() {
       const json = serializeConversationExport(buildConversationExport(fullConversations));
       downloadTextFile(`freeai-open-conversations-${Date.now()}.json`, json);
     } catch {
-      setStorageNotice("Couldn't build the export file.");
+      setStorageNotice(t("backup.couldNotBuildExportAll"));
     }
   }
 
@@ -278,7 +304,7 @@ function ChatContent() {
     try {
       text = await file.text();
     } catch {
-      setImportSummary({ importedCount: 0, skippedCount: 0, errors: ["Couldn't read the selected file."] });
+      setImportSummary({ importedCount: 0, skippedCount: 0, errors: [t("backup.couldNotReadFile")] });
       return;
     }
 
@@ -286,10 +312,7 @@ function ChatContent() {
     try {
       exportData = parseConversationImport(text);
     } catch (error) {
-      const errors =
-        error instanceof ConversationExportError
-          ? error.errors
-          : ["This file isn't a valid FreeAI Open conversation export."];
+      const errors = error instanceof ConversationExportError ? error.errors : [t("backup.invalidFile")];
       setImportSummary({ importedCount: 0, skippedCount: 0, errors });
       return;
     }
@@ -309,7 +332,7 @@ function ChatContent() {
       });
       if (!created) {
         skippedCount += 1;
-        errors.push(`Couldn't import "${conversation.title}".`);
+        errors.push(t("backup.couldNotImportConversation", { title: conversation.title }));
         continue;
       }
 
@@ -322,7 +345,7 @@ function ChatContent() {
           createdAt: message.createdAt,
         });
         if (!saved) {
-          errors.push(`"${conversation.title}": a message couldn't be saved.`);
+          errors.push(t("backup.messageNotSaved", { title: conversation.title }));
         }
       }
     }
@@ -346,7 +369,7 @@ function ChatContent() {
     if (!conversationId) {
       const created = await createConversation({ title: deriveConversationTitle(prompt) });
       if (!created) {
-        setStorageNotice("Couldn't start a local conversation. This chat will not be saved.");
+        setStorageNotice(t("storageNotice.couldNotStartConversation"));
       } else {
         conversationId = created.id;
         setActiveConversationId(created.id);
@@ -357,28 +380,49 @@ function ChatContent() {
 
     const userMessage: ChatMessageItem = { id: crypto.randomUUID(), role: "user", content: prompt };
     const assistantId = crypto.randomUUID();
+    pendingAssistantIdRef.current = assistantId;
     setMessages((previous) => [...previous, userMessage, { id: assistantId, role: "assistant", content: "" }]);
     setMessage("");
 
     if (conversationId && !(await addMessage(conversationId, { role: "user", content: prompt }))) {
-      setStorageNotice("Couldn't save your message locally.");
+      setStorageNotice(t("storageNotice.couldNotSaveMessage"));
     }
 
     let assistantText = "";
+    let stopReason: GenerationStopReason | null = null;
+    let runtimeErrorCode: RuntimeErrorCode | undefined;
+
     for await (const chunk of runtime.generate({ conversationId: conversationId ?? "local-chat", prompt })) {
       if (chunk.type === "token") {
         assistantText += chunk.text;
         setMessages((previous) =>
           previous.map((item) => (item.id === assistantId ? { ...item, content: item.content + chunk.text } : item))
         );
+      } else if (chunk.type === "done") {
+        stopReason = chunk.reason;
       } else if (chunk.type === "error") {
+        runtimeErrorCode = chunk.error.code;
         break;
       }
     }
 
-    if (conversationId && assistantText.length > 0) {
+    if (shouldDiscardPartialAssistantOutput(stopReason, runtimeErrorCode)) {
+      pendingAssistantIdRef.current = null;
+      setMessages((previous) => previous.filter((item) => item.id !== assistantId));
+      const noticeKey = generationNoticeKey(stopReason, runtimeErrorCode);
+      if (noticeKey) setStorageNotice(t(noticeKey));
+      return;
+    }
+
+    pendingAssistantIdRef.current = null;
+    if (stopReason === "completed" && assistantText.length === 0) {
+      setMessages((previous) => previous.filter((item) => item.id !== assistantId));
+      return;
+    }
+
+    if (conversationId && shouldPersistAssistantOutput(stopReason, assistantText)) {
       if (!(await addMessage(conversationId, { role: "assistant", content: assistantText }))) {
-        setStorageNotice("Couldn't save the reply locally.");
+        setStorageNotice(t("storageNotice.couldNotSaveReply"));
       } else {
         await refreshConversations();
       }
@@ -386,7 +430,10 @@ function ChatContent() {
   }
 
   return (
-    <div style={{ display: "flex", gap: 24, maxWidth: 1200, margin: "0 auto", padding: 24, alignItems: "flex-start" }}>
+    <div
+      className="chat-layout"
+      style={{ display: "flex", gap: 24, maxWidth: 1200, margin: "0 auto", padding: 24, alignItems: "flex-start" }}
+    >
       <ChatHistorySidebar
         conversations={conversations}
         activeConversationId={activeConversationId}
@@ -413,7 +460,7 @@ function ChatContent() {
           marginBottom: 16,
         }}
       >
-        <h1 style={{ margin: 0 }}>Chat</h1>
+        <h1 style={{ margin: 0 }}>{t("chat.heading")}</h1>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <ModelStatusPill taskLabel={taskLabel} modeLabel={modeLabel} modelName={routeResult?.selectedModel?.displayName} />
           {task && mode && <RuntimeStatusBadge state={runtimeState} />}
@@ -422,12 +469,14 @@ function ChatContent() {
 
       {storageNotice && (
         <section
+          role="status"
+          aria-live="polite"
           style={{
-            border: "1px solid #a1743d",
+            border: "1px solid var(--color-warning)",
             borderRadius: 16,
             padding: 12,
             marginBottom: 16,
-            background: "rgba(161, 116, 61, 0.1)",
+            background: "var(--color-warning-bg)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -437,24 +486,24 @@ function ChatContent() {
         >
           <span>{storageNotice}</span>
           <button type="button" onClick={() => setStorageNotice(null)}>
-            Dismiss
+            {t("common.dismiss")}
           </button>
         </section>
       )}
 
       {task && mode && routeResult && (
-        <section style={{ border: "1px solid #333", borderRadius: 16, padding: 16, marginBottom: 16 }}>
-          <strong>{routeResult.selectedModel ? "Recommended model" : "No model available yet"}</strong>
+        <section style={{ border: "1px solid var(--color-border)", borderRadius: 16, padding: 16, marginBottom: 16 }}>
+          <strong>{routeResult.selectedModel ? t("chat.recommendedModel") : t("chat.noModelAvailable")}</strong>
           <p style={{ margin: "8px 0 0", fontSize: 14, opacity: 0.85 }}>{routeResult.humanReadableReason}</p>
-          <p style={{ margin: "8px 0 0", fontSize: 13, opacity: 0.6 }}>
-            This first version runs a small placeholder model locally regardless of the recommendation above.
-          </p>
+          <p style={{ margin: "8px 0 0", fontSize: 13, opacity: 0.6 }}>{t("chat.placeholderModelNote")}</p>
 
           {routeResult.rejectedModels.length > 0 && (
             <details style={{ marginTop: 12, fontSize: 13, opacity: 0.75 }}>
               <summary style={{ cursor: "pointer" }}>
-                Advanced: {routeResult.rejectedModels.length} model
-                {routeResult.rejectedModels.length > 1 ? "s" : ""} not used
+                {t("chat.advancedNotUsed", {
+                  count: routeResult.rejectedModels.length,
+                  plural: routeResult.rejectedModels.length > 1 ? "s" : "",
+                })}
               </summary>
               <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
                 {routeResult.rejectedModels.map((rejected) => (
@@ -470,25 +519,26 @@ function ChatContent() {
 
       {runtimeState.status === "error" && runtimeState.error && (
         <section
+          role="alert"
           style={{
-            border: "1px solid #e5484d",
+            border: "1px solid var(--color-danger)",
             borderRadius: 16,
             padding: 16,
             marginBottom: 16,
-            background: "rgba(229, 72, 77, 0.08)",
+            background: "var(--color-danger-bg)",
           }}
         >
-          <strong>Local model unavailable</strong>
-          <p style={{ margin: "8px 0 0", fontSize: 14, opacity: 0.9 }}>{runtimeErrorLabel(runtimeState.error.code)}</p>
-          {(runtimeState.error.code === "cancel_timeout" || runtimeState.error.code === "generation_stalled") && (
+          <strong>{t("chat.localModelUnavailable")}</strong>
+          <p style={{ margin: "8px 0 0", fontSize: 14, opacity: 0.9 }}>{t(runtimeErrorKey(runtimeState.error.code))}</p>
+          {RECOVERABLE_GENERATION_ERROR_CODES.has(runtimeState.error.code) && (
             <button type="button" onClick={initializeRuntime} style={{ marginTop: 8 }}>
-              Reload model
+              {t("chat.reloadModel")}
             </button>
           )}
         </section>
       )}
 
-      <section style={{ border: "1px solid #333", borderRadius: 16, padding: 16, minHeight: 320 }}>
+      <section style={{ border: "1px solid var(--color-border)", borderRadius: 16, padding: 16, minHeight: 320 }}>
         <ChatTranscript messages={messages} />
       </section>
 
@@ -496,21 +546,22 @@ function ChatContent() {
         <input
           value={message}
           onChange={(event) => setMessage(event.target.value)}
-          placeholder="Ask locally..."
+          placeholder={t("chat.askPlaceholder")}
+          aria-label={t("chat.askPlaceholder")}
           disabled={runtimeState.status !== "ready"}
           style={{ flex: 1, padding: 12, borderRadius: 12 }}
         />
         {runtimeState.status === "generating" ? (
           <button type="button" onClick={() => runtimeRef.current?.stopGeneration()}>
-            Stop
+            {t("common.stop")}
           </button>
         ) : runtimeState.status === "cancelling" ? (
-          <button type="button" disabled>
-            Stopping…
+          <button type="button" disabled aria-busy="true">
+            {t("common.stopping")}
           </button>
         ) : (
           <button type="submit" disabled={runtimeState.status !== "ready" || !message.trim()}>
-            Send
+            {t("common.send")}
           </button>
         )}
       </form>

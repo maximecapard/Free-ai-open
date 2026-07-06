@@ -1,5 +1,72 @@
 :root {
   color-scheme: dark;
+  --color-bg: #0b0b0f;
+  --color-bg-elevated: #1c1c22;
+  --color-bg-elevated-2: #151519;
+  --color-text: #f7f7f7;
+  --color-border: #333333;
+  --color-border-subtle: #222222;
+  --color-danger: #e5484d;
+  --color-danger-bg: rgba(229, 72, 77, 0.08);
+  --color-warning: #e5a53e;
+  --color-warning-bg: rgba(229, 165, 62, 0.08);
+  --color-success: #3ecf8e;
+  --color-muted-dot: #888888;
+}
+
+/* Explicit dark override, so flipping data-theme back to "dark" always wins
+   over the system media query below regardless of OS preference. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #0b0b0f;
+  --color-bg-elevated: #1c1c22;
+  --color-bg-elevated-2: #151519;
+  --color-text: #f7f7f7;
+  --color-border: #333333;
+  --color-border-subtle: #222222;
+  --color-danger: #e5484d;
+  --color-danger-bg: rgba(229, 72, 77, 0.08);
+  --color-warning: #e5a53e;
+  --color-warning-bg: rgba(229, 165, 62, 0.08);
+  --color-success: #3ecf8e;
+  --color-muted-dot: #888888;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-bg: #ffffff;
+  --color-bg-elevated: #f4f4f6;
+  --color-bg-elevated-2: #eceef2;
+  --color-text: #14141a;
+  --color-border: #d8d8de;
+  --color-border-subtle: #e6e6ea;
+  --color-danger: #c8323a;
+  --color-danger-bg: rgba(200, 50, 58, 0.08);
+  --color-warning: #a1743d;
+  --color-warning-bg: rgba(161, 116, 61, 0.08);
+  --color-success: #1f9d68;
+  --color-muted-dot: #767680;
+}
+
+/* "System" preference: no data-theme attribute is set at all (see
+   themePreference.ts). Falls back to the dark defaults above unless the OS
+   reports a light preference. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    color-scheme: light;
+    --color-bg: #ffffff;
+    --color-bg-elevated: #f4f4f6;
+    --color-bg-elevated-2: #eceef2;
+    --color-text: #14141a;
+    --color-border: #d8d8de;
+    --color-border-subtle: #e6e6ea;
+    --color-danger: #c8323a;
+    --color-danger-bg: rgba(200, 50, 58, 0.08);
+    --color-warning: #a1743d;
+    --color-warning-bg: rgba(161, 116, 61, 0.08);
+    --color-success: #1f9d68;
+    --color-muted-dot: #767680;
+  }
 }
 
 * {
@@ -9,8 +76,8 @@
 body {
   margin: 0;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #0b0b0f;
-  color: #f7f7f7;
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 a {
@@ -19,4 +86,49 @@ a {
 
 button, input, textarea, select {
   font: inherit;
+}
+
+.chat-transcript {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.chat-message {
+  max-width: min(80%, 100%);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.chat-message pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.chat-message code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.chat-message pre code {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+/* The chat layout is a fixed-width sidebar + flexible main column; below
+   ~720px that leaves too little room for the conversation, so stack them
+   instead of keeping the sidebar's fixed width. */
+@media (max-width: 720px) {
+  .chat-layout {
+    flex-direction: column !important;
+  }
+
+  .chat-sidebar {
+    width: 100% !important;
+  }
+
+  .chat-message {
+    max-width: 100% !important;
+  }
 }

@@ -10,7 +10,7 @@
 
 ## Required protections
 
-- Strict CSP.
+- Strict CSP. Not yet enforced (see `netlify.toml`); when added, it must allow-list or hash the small inline theme-init script in the root layout (a static, non-user-controlled snippet that reads a `localStorage` preference and sets `<html data-theme>` before hydration to avoid a theme flash), rather than broadly allowing inline scripts.
 - No `eval`.
 - No unnecessary remote scripts.
 - Worker isolation for inference.
@@ -62,3 +62,15 @@ Conversation export files are sensitive local data because they can contain prom
 The current export format is unencrypted JSON. Users should treat exported files as private data until encrypted export is implemented.
 
 The `/chat` export/import UI enforces this at the app layer too: it calls only `conversation-export`/`conversation-store` public functions, never `fetch`, `sendBeacon`, a server endpoint, `logEvent`, local technical logs, or diagnostic reports, and it always imports conversations under fresh IDs rather than overwriting existing ones.
+
+## Generation safety
+
+The WebLLM runtime includes alpha safeguards for unstable model output:
+
+- bounded `max_tokens` for generation requests;
+- maximum generation duration;
+- output character limits;
+- detection for long unbroken sequences, repeated characters, and repeated punctuation/symbol blocks;
+- technical-only events such as `inference.degenerate-output` and `inference.generation-timeout`.
+
+When these safeguards fire, partial assistant output is not stored as a completed assistant message. Technical events, local logs, and diagnostic reports must contain only technical metadata such as error codes, runtime status, lengths where applicable, and timing metrics, never prompt or generated response text.

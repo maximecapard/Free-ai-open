@@ -1,13 +1,18 @@
+"use client";
+
 import type { ModelRecord } from "@free-ai-open/model-registry";
 import { DebugField, DebugSection } from "./DebugSection";
+import { useTranslations } from "../_i18n/LocaleContext";
 
 function ModelDetails({ model }: { model: ModelRecord }) {
+  const t = useTranslations();
+
   return (
     <>
-      <DebugField label="Source" value={model.source} />
-      <DebugField label="Status" value={model.status} />
-      <DebugField label="Estimated size" value={`${model.estimatedDownloadGb} GB`} />
-      <DebugField label="License" value={model.license} />
+      <DebugField label={t("debug.source")} value={model.source} />
+      <DebugField label={t("debug.status")} value={model.status} />
+      <DebugField label={t("debug.estimatedSize")} value={`${model.estimatedDownloadGb} GB`} />
+      <DebugField label={t("debug.license")} value={model.license} />
     </>
   );
 }
@@ -21,22 +26,24 @@ export function DebugModelSection({
   loadedModelId: string | null;
   loadedModel: ModelRecord | null;
 }) {
+  const t = useTranslations();
+
   return (
-    <DebugSection title="Model">
-      <DebugField label="Recommended model" value={recommendedModel ? recommendedModel.displayName : "None available"} />
+    <DebugSection title={t("debug.model")}>
+      <DebugField
+        label={t("debug.recommendedModelLabel")}
+        value={recommendedModel ? recommendedModel.displayName : t("debug.noneAvailable")}
+      />
       {recommendedModel && <ModelDetails model={recommendedModel} />}
 
       <div style={{ marginTop: 12 }}>
         <DebugField
-          label="Loaded model"
-          value={loadedModelId ? loadedModel?.displayName ?? loadedModelId : "No model loaded in this browser yet"}
+          label={t("debug.loadedModel")}
+          value={loadedModelId ? loadedModel?.displayName ?? loadedModelId : t("debug.noModelLoaded")}
         />
         {loadedModelId && loadedModel && <ModelDetails model={loadedModel} />}
         {loadedModelId && !loadedModel && (
-          <p style={{ fontSize: 13, opacity: 0.6, margin: "6px 0 0" }}>
-            Not in the local model registry yet — this is the WebLLM test model used by this early build, not one of the
-            catalogued recommendations above.
-          </p>
+          <p style={{ fontSize: 13, opacity: 0.6, margin: "6px 0 0" }}>{t("debug.notInRegistry")}</p>
         )}
       </div>
     </DebugSection>

@@ -1,28 +1,23 @@
+"use client";
+
 import type { RuntimeState } from "@free-ai-open/ai-runtime";
+import { useTranslations } from "../_i18n/LocaleContext";
+import type { TranslationKey } from "../_i18n/dictionary";
 
-const STATUS_LABEL: Record<RuntimeState["status"], string> = {
-  idle: "Not started",
-  loading_model: "Loading model",
-  ready: "Ready",
-  generating: "Generating",
-  cancelling: "Stopping",
-  error: "Error",
-};
-
-const STATUS_COLOR: Record<RuntimeState["status"], string> = {
-  idle: "#888",
-  loading_model: "#e5a53e",
-  ready: "#3ecf8e",
-  generating: "#3ecf8e",
-  cancelling: "#e5a53e",
-  error: "#e5484d",
+const STATUS_COLOR_VAR: Record<RuntimeState["status"], string> = {
+  idle: "var(--color-muted-dot)",
+  loading_model: "var(--color-warning)",
+  ready: "var(--color-success)",
+  generating: "var(--color-success)",
+  cancelling: "var(--color-warning)",
+  error: "var(--color-danger)",
 };
 
 export function RuntimeStatusBadge({ state }: { state: RuntimeState }) {
+  const t = useTranslations();
+  const statusKey = `runtimeStatus.${state.status}` as TranslationKey;
   const label =
-    state.status === "loading_model"
-      ? `${STATUS_LABEL.loading_model} ${Math.round(state.loadProgress * 100)}%`
-      : STATUS_LABEL[state.status];
+    state.status === "loading_model" ? `${t(statusKey)} ${Math.round(state.loadProgress * 100)}%` : t(statusKey);
 
   return (
     <span
@@ -33,11 +28,11 @@ export function RuntimeStatusBadge({ state }: { state: RuntimeState }) {
         fontSize: 13,
         padding: "6px 12px",
         borderRadius: 999,
-        border: "1px solid #333",
+        border: "1px solid var(--color-border)",
         opacity: 0.85,
       }}
     >
-      <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLOR[state.status] }} />
+      <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLOR_VAR[state.status] }} />
       {label}
     </span>
   );

@@ -1,17 +1,6 @@
 import type { RuntimeErrorCode } from "@free-ai-open/ai-runtime";
+import type { TranslationKey } from "../_i18n/dictionary";
 
-const RUNTIME_ERROR_LABELS: Record<RuntimeErrorCode, string> = {
-  webgpu_unavailable: "This browser doesn't support WebGPU, so the local model can't run here yet.",
-  gpu_feature_unsupported: "Your browser's WebGPU support is missing a feature this model needs.",
-  model_unsupported: "This model isn't supported by your browser or device.",
-  model_load_failed: "The model failed to load. Check your connection and try again.",
-  generation_interrupted: "Generation was stopped.",
-  cancel_timeout: "Cancellation is taking longer than expected. The local model may be unresponsive.",
-  generation_stalled: "The local model stopped responding while generating a reply.",
-  out_of_memory: "Your device ran out of memory running the model. Try closing other tabs.",
-  unknown: "Something went wrong with the local AI runtime.",
-};
-
-export function runtimeErrorLabel(code: RuntimeErrorCode): string {
-  return RUNTIME_ERROR_LABELS[code];
+export function runtimeErrorKey(code: RuntimeErrorCode): TranslationKey {
+  return `runtimeError.${code}` as TranslationKey;
 }

@@ -24,7 +24,7 @@ Implemented in the current alpha:
 
 - Browser-local WebLLM runtime through a Web Worker.
 - Streaming chat UI.
-- Stop generation recovery, including cancelling state, timeout handling, stalled-generation recovery, and reload model support.
+- Stop generation recovery, including cancelling state, timeout handling, stalled-generation recovery, unstable-output detection, and reload model support.
 - Local conversation history in the `/chat` UI.
 - IndexedDB conversation storage with an in-memory fallback when IndexedDB is unavailable.
 - Local conversation export/import in the `/chat` history sidebar: export the current conversation, export all conversations, or import a JSON export file, entirely on-device.
@@ -33,6 +33,8 @@ Implemented in the current alpha:
 - `/debug` dashboard for runtime status, device information, technical logs, and diagnostics.
 - Device profiling and model routing groundwork.
 - Strict schemas and redaction utilities for privacy-sensitive telemetry and logs.
+- English/French UI language toggle (defaults to the browser's language, persisted locally) for the app shell, chat, conversation history, export/import, debug dashboard, and runtime status/error text.
+- Light/dark/system theme toggle, persisted locally, with no flash of the wrong theme on reload.
 
 ## What is not implemented yet
 
@@ -45,6 +47,7 @@ The following are not implemented in this alpha:
 - Production-scale multi-model registry.
 - Desktop or mobile apps.
 - Broad browser end-to-end test coverage.
+- Full UI translation coverage: onboarding, settings, and the model/task catalog are still English-only.
 
 ## Privacy model
 

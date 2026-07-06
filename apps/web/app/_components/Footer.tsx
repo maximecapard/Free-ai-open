@@ -1,7 +1,13 @@
+"use client";
+
+import { useTranslations } from "../_i18n/LocaleContext";
+
 const sponsorsUrl = process.env.NEXT_PUBLIC_GITHUB_SPONSORS_URL;
 const coffeeUrl = process.env.NEXT_PUBLIC_BUY_ME_A_COFFEE_URL;
 
 export function Footer() {
+  const t = useTranslations();
+
   return (
     <footer
       style={{
@@ -16,11 +22,11 @@ export function Footer() {
         flexWrap: "wrap",
       }}
     >
-      <span>FreeAI Open — open-source, local-first AI.</span>
+      <span>{t("footer.tagline")}</span>
       {(sponsorsUrl || coffeeUrl) && (
         <span style={{ display: "flex", gap: 12 }}>
-          {sponsorsUrl && <a href={sponsorsUrl}>Support the project</a>}
-          {coffeeUrl && <a href={coffeeUrl}>Buy me a coffee</a>}
+          {sponsorsUrl && <a href={sponsorsUrl}>{t("footer.support")}</a>}
+          {coffeeUrl && <a href={coffeeUrl}>{t("footer.coffee")}</a>}
         </span>
       )}
     </footer>

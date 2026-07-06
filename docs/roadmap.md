@@ -2,8 +2,9 @@
 
 ## Status after v0.5.0-alpha
 
-Local conversation history (store + `/chat` history sidebar) shipped in `v0.5.0-alpha`. Local conversation export/import is now implemented end-to-end, including the `/chat` UI (export current, export all, import with a result summary). Next up:
+Local conversation history (store + `/chat` history sidebar) shipped in `v0.5.0-alpha`. Local conversation export/import is now implemented end-to-end, including the `/chat` UI (export current, export all, import with a result summary). A UX polish pass added an English/French language toggle, a light/dark/system theme toggle, color tokens for both themes, a mobile layout fix for the chat sidebar, accessibility labels, and alpha generation safety for unstable local model output. Next up:
 
+- **Future:** extend translation coverage to onboarding, settings, and the model/task catalog.
 - **Future:** client-side encrypted export.
 - **Future:** optional Google Drive sync.
 - **Future:** better/more transparent model selection.

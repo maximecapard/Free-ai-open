@@ -20,11 +20,11 @@ export function ModelStatusPill({ taskLabel, modeLabel, modelName }: ModelStatus
         fontSize: 13,
         padding: "6px 12px",
         borderRadius: 999,
-        border: "1px solid #333",
+        border: "1px solid var(--color-border)",
         opacity: 0.85,
       }}
     >
-      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#888" }} />
+      <span style={{ width: 8, height: 8, borderRadius: "50%", background: "var(--color-muted-dot)" }} />
       {label}
     </span>
   );
