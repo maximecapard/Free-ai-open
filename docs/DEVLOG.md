@@ -13,9 +13,10 @@ FreeAI Open is an alpha-stage, local-first browser AI assistant. The current cod
 - local technical logs in IndexedDB;
 - a debug dashboard and privacy-safe diagnostic report export;
 - a local-only conversation-store package wired into the `/chat` UI through a history sidebar for create, resume, rename, and delete;
-- local conversation export/import, wired into the `/chat` history sidebar (export current, export all, import with a result summary).
+- local conversation export/import, wired into the `/chat` history sidebar (export current, export all, import with a result summary);
+- English/French UI translation with browser-language detection and a visible toggle, and light/dark/system theme support with a visible toggle, both persisted locally.
 
-The product is not yet a complete MVP. Broad model support, encrypted sync, production-ready telemetry persistence, and browser end-to-end coverage remain future work.
+The product is not yet a complete MVP. Broad model support, encrypted sync, production-ready telemetry persistence, browser end-to-end coverage, and full UI translation coverage remain future work.
 
 ## Sprint 1 - App shell, model registry, privacy redactor, telemetry schema
 
@@ -291,11 +292,66 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - Encrypted export and optional Google Drive sync (see `docs/roadmap.md`).
 - Browser-level end-to-end coverage for the export/import UI.
 
+## Sprint 6.2 - UX polish, i18n, and theme
+
+### Built
+
+- Added a small English/French translation system for `apps/web`: per-locale dictionaries (`en.ts`, `fr.ts`) with a dot-path `t()` lookup and `{param}` interpolation, a `LocaleProvider`/`useTranslations()` React context, and a visible EN/FR toggle in the header. Detects `navigator.language` on first visit and persists the choice in `localStorage`; no server or API call is involved.
+- Translated the explicitly in-scope surfaces: home/app shell (header, footer, home page, privacy notice), `/chat` (heading, model/runtime status text, notices, transcript empty state, Stop/Send/Reload model), the conversation history sidebar (new chat, rename/delete, confirmation, empty states), export/import (buttons, privacy note, import result summary, errors), the `/debug` dashboard (all sections, actions, status messages), and runtime status/error labels.
+- Added light/dark/system theme support: CSS custom-property color tokens defined in `globals.css` for dark (default) and light, a `ThemeProvider`/`useTheme()` React context, a visible System/Light/Dark toggle in the header, and `localStorage` persistence. A blocking inline `<script>` in the root layout applies a stored light/dark choice to `<html data-theme>` before hydration to avoid a flash of the wrong theme; "system" intentionally leaves the attribute unset and lets a `prefers-color-scheme` media query decide. Added `suppressHydrationWarning` on `<html>` since this script deliberately changes an attribute before React hydrates.
+- Replaced hardcoded hex/rgba colors across `apps/web` (chat, history sidebar, export/import, debug dashboard, onboarding, home) with the new color tokens, so both themes render correctly instead of only the original dark palette.
+- Fixed a mobile layout issue: the `/chat` sidebar's fixed 240px width left very little room for the conversation on narrow viewports; added a `max-width: 720px` media query that stacks the sidebar above the chat instead.
+- Added accessible labels: `aria-label` on the message input and per-conversation rename/delete buttons (including the conversation title, since multiple conversations can share a title), `aria-pressed` on the language/theme toggle buttons, `aria-current` on the active conversation, and `aria-live`/`role="status"`/`role="alert"` on notice banners so dynamic updates are announced.
+- Clarified wording in both languages for import results, invalid files, storage-unavailable states, and runtime errors, without changing the underlying behavior.
+
+### Privacy and architecture notes
+
+- Translation dictionaries are plain data shipped in the client bundle; no text is sent to or fetched from a server, and no AI runtime call is involved in translation.
+- Theme and locale preferences are stored under two new `localStorage` keys (`free-ai-open:theme`, `free-ai-open:locale`) containing only the preference value, never conversation content.
+- No changes were made to `packages/conversation-store`, `packages/conversation-export`, `packages/diagnostic-report`, or any logging/telemetry path; diagnostic reports and local technical logs still exclude conversation content, verified manually via a diagnostic export during this sprint's smoke test.
+
+### Known limitations after Sprint 6.2
+
+- Translation coverage is intentionally scoped to the areas listed in "Built" above; onboarding (task/device/mode selection), `/settings`, the model catalog (`_lib/catalog.ts`), and model-router explanation text (`humanReadableReason`, rejection reasons) remain English-only. Onboarding and settings did get the same color-token treatment, so they still render correctly in light mode.
+- The language switch takes effect the render after mount (a brief flash from the default "en" to the detected/stored language is possible); the theme switch avoids this via the blocking inline script, since a full-page background/color flash is more visually jarring than a text-language flash.
+- No dedicated browser end-to-end test for language/theme persistence or the mobile layout fix yet; verified manually in this sprint (language switch + refresh, theme switch + refresh, mobile viewport check).
+
+### Planned work (not implemented yet)
+
+- Extend translation coverage to onboarding, settings, and model/task catalog text.
+- Encrypted export and optional Google Drive sync (see `docs/roadmap.md`).
+- Browser-level end-to-end coverage for import/export, language, and theme.
+
+## Sprint 6.3 - Generation safety and message containment
+
+### Built
+
+- Added alpha generation safety limits in `@free-ai-open/ai-runtime`: `max_tokens: 768`, maximum generation duration of 90 seconds, maximum output length of 12,000 characters, and lightweight checks for long unbroken sequences, repeated characters, and repeated punctuation/symbol blocks.
+- Added `degenerate_output` and `generation_timeout` runtime error codes, with technical-only local log events (`inference.degenerate-output`, `inference.generation-timeout`) and English/French user-facing messages.
+- Updated the chat persistence path to use the simpler Option A behavior: cancelled, stalled, timed-out, failed, or degenerate assistant partial output is discarded, the assistant bubble is removed, and the partial response is not saved as a completed assistant message. The user prompt remains saved locally when conversation storage is available.
+- Added message layout containment for chat bubbles: long strings wrap inside the bubble, and future `pre`/`code` blocks scroll horizontally instead of expanding the page width.
+
+### Privacy and architecture notes
+
+- No message status field was added to `conversation-store` or the export/import format, so existing conversation JSON remains valid.
+- Technical events, local logs, and diagnostic reports are limited to event names, runtime status, error codes, lengths where applicable, and timing metrics. They do not include prompt text, generated response text, documents, messages, or conversations.
+- No server endpoint, `fetch`, `sendBeacon`, Supabase, Google Drive, or cloud sync path was added.
+
+### Tests
+
+- Added unit coverage for degenerate output detection (long unbroken sequences, repeated characters, repeated symbol blocks, output length).
+- Added unit coverage proving cancelled, stalled/timed-out, failed, and degenerate assistant output is not considered persistable as a completed reply.
+- Added runtime tests for WebLLM `max_tokens`, `degenerate_output` recovery, `generation_timeout`, and technical-only logs.
+
+### Known limitations after Sprint 6.3
+
+- These are alpha safeguards, not a guarantee of model quality.
+- Browser-level layout and export smoke coverage is still manual; add dedicated browser/E2E coverage later.
+
 ## Cross-cutting remaining work
 
 - Expand and validate the model registry before adding more model records.
 - Add broader browser/E2E tests for chat, Stop, Reload model, persisted conversation history, and debug export.
-- Add conversation import/export UX if it remains in scope.
 - Keep Supabase usage limited to future technical metadata or optional features until schema and privacy boundaries are explicitly designed.
 - Keep Google Drive sync future-only and client-side encrypted if implemented later.
 - Document any new third-party service before integration.

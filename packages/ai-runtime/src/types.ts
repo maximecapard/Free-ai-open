@@ -15,6 +15,8 @@ export type RuntimeErrorCode =
   | "generation_interrupted"
   | "cancel_timeout"
   | "generation_stalled"
+  | "generation_timeout"
+  | "degenerate_output"
   | "out_of_memory"
   | "unknown";
 
@@ -35,7 +37,9 @@ export interface GenerateInput {
   prompt: string;
 }
 
+export type GenerationStopReason = "completed" | "cancelled" | "degenerate_output";
+
 export type GenerateChunk =
   | { type: "token"; text: string }
-  | { type: "done" }
+  | { type: "done"; reason: GenerationStopReason }
   | { type: "error"; error: RuntimeError };

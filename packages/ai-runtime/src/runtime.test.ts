@@ -38,6 +38,7 @@ vi.mock("@mlc-ai/web-llm", () => ({
 }));
 
 const { createInferenceRuntime } = await import("./runtime");
+const { GENERATION_SAFETY_LIMITS } = await import("./generation-safety");
 
 function fakeWorker(): InferenceChatWorker {
   return { postMessage: vi.fn(), onmessage: null };
@@ -129,9 +130,56 @@ describe("createInferenceRuntime", () => {
     expect(chunks).toEqual([
       { type: "token", text: "Hel" },
       { type: "token", text: "lo" },
-      { type: "done" },
+      { type: "done", reason: "completed" },
     ]);
     expect(runtime.getState().status).toBe("ready");
+  });
+
+  it("passes a bounded max token limit to WebLLM generation", async () => {
+    mocks.mockEngine.chat.completions.create.mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: "Hello" }, finish_reason: "stop" }] };
+      })()
+    );
+
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+    expect(mocks.mockEngine.chat.completions.create).toHaveBeenCalledWith(
+      expect.objectContaining({ max_tokens: GENERATION_SAFETY_LIMITS.maxTokens })
+    );
+  });
+
+  it("stops degenerate output without logging prompt or generated content", async () => {
+    const unstableOutput = "<>".repeat(GENERATION_SAFETY_LIMITS.maxRepeatedSymbolBlockRun + 1);
+    mocks.mockEngine.chat.completions.create.mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: unstableOutput }, finish_reason: null }] };
+      })()
+    );
+
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "super secret prompt" }));
+
+    expect(chunks).toEqual([{ type: "done", reason: "degenerate_output" }]);
+    expect(runtime.getState().status).toBe("error");
+    expect(runtime.getState().error?.code).toBe("degenerate_output");
+    expect(mocks.mockEngine.interruptGenerate).toHaveBeenCalledTimes(1);
+    expect(mocks.addLocalLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "inference.degenerate-output",
+        runtimeStatus: "error",
+        errorCode: "DEGENERATE_OUTPUT",
+      })
+    );
+
+    for (const call of [...mocks.createLogEvent.mock.calls, ...mocks.addLocalLog.mock.calls]) {
+      const serialized = JSON.stringify(call);
+      expect(serialized).not.toContain("super secret prompt");
+      expect(serialized).not.toContain(unstableOutput);
+    }
   });
 
   it("treats an aborted stream as a clean cancellation, not an error", async () => {
@@ -146,7 +194,7 @@ describe("createInferenceRuntime", () => {
     await runtime.loadModel("test-model");
     const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
 
-    expect(chunks).toEqual([{ type: "token", text: "Par" }, { type: "done" }]);
+    expect(chunks).toEqual([{ type: "token", text: "Par" }, { type: "done", reason: "cancelled" }]);
     expect(runtime.getState().status).toBe("ready");
     expect(runtime.getState().error).toBeNull();
   });
@@ -272,7 +320,7 @@ describe("createInferenceRuntime", () => {
       );
       const secondGeneration = await drain(runtime.generate({ conversationId: "c3", prompt: "new message" }));
 
-      expect(secondGeneration).toEqual([{ type: "token", text: "Hello" }, { type: "done" }]);
+      expect(secondGeneration).toEqual([{ type: "token", text: "Hello" }, { type: "done", reason: "completed" }]);
       expect(runtime.getState().status).toBe("ready");
     });
 
@@ -376,6 +424,38 @@ describe("createInferenceRuntime", () => {
         // A token already arrived, so this is treated as slow-but-alive, not stalled.
         expect(runtime.getState().status).toBe("generating");
         expect(mocks.addLocalLog).not.toHaveBeenCalledWith(expect.objectContaining({ event: "inference.stall.timeout" }));
+
+        void consume;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("recovers when overall generation duration exceeds the alpha limit", async () => {
+      mocks.mockEngine.chat.completions.create.mockResolvedValueOnce(
+        (async function* () {
+          yield { choices: [{ delta: { content: "Hel" }, finish_reason: null }] };
+          await new Promise(() => {}); // keeps producing no final completion
+        })()
+      );
+
+      const runtime = createInferenceRuntime(fakeWorker());
+      await runtime.loadModel("test-model");
+
+      vi.useFakeTimers();
+      try {
+        const consume = drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        await vi.advanceTimersByTimeAsync(GENERATION_SAFETY_LIMITS.maxDurationMs);
+
+        expect(runtime.getState().status).toBe("error");
+        expect(runtime.getState().error?.code).toBe("generation_timeout");
+        expect(mocks.addLocalLog).toHaveBeenCalledWith(
+          expect.objectContaining({ event: "inference.generation-timeout", errorCode: "GENERATION_TIMEOUT" })
+        );
 
         void consume;
       } finally {

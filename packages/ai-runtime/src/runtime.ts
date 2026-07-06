@@ -3,8 +3,10 @@ import type { InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import { detectWebGPUAvailability } from "@free-ai-open/device-profiler";
 import { createLogEvent, logEvent } from "@free-ai-open/logger";
 import { classifyRuntimeError } from "./errors";
+import { detectDegenerateOutput, GENERATION_SAFETY_LIMITS } from "./generation-safety";
 import { recordLocalLog, toLocalLogErrorCode, toLocalLogModelId } from "./local-log-bridge";
 import { DEFAULT_MODEL_ID } from "./model";
+import type { DegenerateOutputReason } from "./generation-safety";
 import type { GenerateChunk, GenerateInput, InferenceChatWorker, RuntimeError, RuntimeState } from "./types";
 
 export interface InferenceRuntime {
@@ -32,6 +34,7 @@ const CANCEL_TIMEOUT_MS = 15_000;
 // only fires if literally nothing has streamed back yet, so it never cuts
 // off a response that is merely slow but making progress.
 const STALL_TIMEOUT_MS = 45_000;
+const GENERATION_TIMEOUT_MS = GENERATION_SAFETY_LIMITS.maxDurationMs;
 
 // Must only be called from a Client Component, never from a Server Component.
 export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRuntime {
@@ -47,6 +50,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
   let generationEpoch = 0;
   let cancelTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
   let stallTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  let generationTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
 
   function setState(next: Partial<RuntimeState>): void {
     state = { ...state, ...next };
@@ -67,12 +71,23 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     }
   }
 
+  function clearGenerationTimeout(): void {
+    if (generationTimeoutHandle !== null) {
+      clearTimeout(generationTimeoutHandle);
+      generationTimeoutHandle = null;
+    }
+  }
+
   // Shared by the cancel-confirmation timeout and the stall timeout: forces
   // the runtime into a recoverable error state, but only if nothing has
   // resolved this same generation in the meantime.
   function forceRecovery(expectedEpoch: number, error: RuntimeError, event: string, localModelId: string | undefined): void {
     if (expectedEpoch !== generationEpoch) return;
     generationEpoch += 1;
+    clearCancelTimeout();
+    clearStallTimeout();
+    clearGenerationTimeout();
+    engine?.interruptGenerate();
     setState({ status: "error", error });
     logEvent(createLogEvent(event, "error", { errorCode: error.code }));
     recordLocalLog({
@@ -82,6 +97,58 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       runtimeStatus: "error",
       errorCode: toLocalLogErrorCode(error.code),
     });
+  }
+
+  function buildGenerationMetrics(generationStartedAt: number, firstTokenAt: number | null, tokenCount: number) {
+    const totalTimeMs = Date.now() - generationStartedAt;
+    const firstTokenMs = firstTokenAt !== null ? firstTokenAt - generationStartedAt : null;
+    const tokensPerSecond =
+      tokenCount > 0 && totalTimeMs > 0 ? Math.round((tokenCount / (totalTimeMs / 1000)) * 10) / 10 : undefined;
+
+    return { firstTokenMs, tokensPerSecond, totalTimeMs };
+  }
+
+  function recoverFromDegenerateOutput(
+    expectedEpoch: number,
+    reason: DegenerateOutputReason,
+    generationStartedAt: number,
+    firstTokenAt: number | null,
+    tokenCount: number,
+    responseLength: number,
+    localModelId: string | undefined,
+    conversationId: string
+  ): RuntimeError {
+    const error: RuntimeError = {
+      code: "degenerate_output",
+      message: "Generation stopped because the local model output became unstable.",
+    };
+
+    if (expectedEpoch !== generationEpoch) return error;
+    generationEpoch += 1;
+    clearCancelTimeout();
+    clearStallTimeout();
+    clearGenerationTimeout();
+    engine?.interruptGenerate();
+    setState({ status: "error", error });
+    logEvent(
+      createLogEvent("inference.degenerate-output", "warn", {
+        conversationId,
+        errorCode: error.code,
+        reason,
+        responseLength,
+      })
+    );
+    recordLocalLog({
+      event: "inference.degenerate-output",
+      severity: "warn",
+      modelId: localModelId,
+      backend: "webgpu",
+      runtimeStatus: "error",
+      errorCode: toLocalLogErrorCode(error.code),
+      performanceMetrics: buildGenerationMetrics(generationStartedAt, firstTokenAt, tokenCount),
+    });
+
+    return error;
   }
 
   async function loadModel(modelId: string = DEFAULT_MODEL_ID): Promise<void> {
@@ -174,14 +241,29 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       );
     }, STALL_TIMEOUT_MS);
 
+    generationTimeoutHandle = setTimeout(() => {
+      generationTimeoutHandle = null;
+      forceRecovery(
+        myEpoch,
+        {
+          code: "generation_timeout",
+          message: "Generation took too long and was stopped. Try reloading the model if this repeats.",
+        },
+        "inference.generation-timeout",
+        localModelId
+      );
+    }, GENERATION_TIMEOUT_MS);
+
     try {
       const stream = await engine.chat.completions.create({
         messages: [{ role: "user", content: input.prompt }],
         stream: true,
+        max_tokens: GENERATION_SAFETY_LIMITS.maxTokens,
       });
 
       let responseLength = 0;
       let cancelled = false;
+      let outputForSafety = "";
 
       for await (const chunk of stream) {
         const choice = chunk.choices[0];
@@ -192,7 +274,26 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
             clearStallTimeout();
           }
           tokenCount += 1;
-          responseLength += text.length;
+          const nextOutput = outputForSafety + text;
+          const degenerate = detectDegenerateOutput(nextOutput);
+          if (degenerate.detected && degenerate.reason) {
+            responseLength = nextOutput.length;
+            recoverFromDegenerateOutput(
+              myEpoch,
+              degenerate.reason,
+              generationStartedAt,
+              firstTokenAt,
+              tokenCount,
+              responseLength,
+              localModelId,
+              input.conversationId
+            );
+            yield { type: "done", reason: "degenerate_output" };
+            return;
+          }
+
+          outputForSafety = nextOutput;
+          responseLength = outputForSafety.length;
           yield { type: "token", text };
         }
         if (choice?.finish_reason === "abort") {
@@ -207,14 +308,12 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       if (myEpoch !== generationEpoch) return;
       clearCancelTimeout();
       clearStallTimeout();
+      clearGenerationTimeout();
 
-      const totalTimeMs = Date.now() - generationStartedAt;
-      const firstTokenMs = firstTokenAt !== null ? firstTokenAt - generationStartedAt : null;
-      const tokensPerSecond =
-        tokenCount > 0 && totalTimeMs > 0 ? Math.round((tokenCount / (totalTimeMs / 1000)) * 10) / 10 : undefined;
+      const { firstTokenMs, tokensPerSecond, totalTimeMs } = buildGenerationMetrics(generationStartedAt, firstTokenAt, tokenCount);
 
       setState({ status: "ready" });
-      yield { type: "done" };
+      yield { type: "done", reason: cancelled ? "cancelled" : "completed" };
       logEvent(
         createLogEvent(
           cancelled ? "inference.cancelled" : "inference.completed",
@@ -234,11 +333,12 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       if (myEpoch !== generationEpoch) return;
       clearCancelTimeout();
       clearStallTimeout();
+      clearGenerationTimeout();
 
       const error = classifyRuntimeError(rawError, "generate");
       const cancelled = error.code === "generation_interrupted";
       setState({ status: "ready", error: cancelled ? null : error });
-      yield cancelled ? { type: "done" } : { type: "error", error };
+      yield cancelled ? { type: "done", reason: "cancelled" } : { type: "error", error };
       logEvent(
         createLogEvent(
           cancelled ? "inference.cancelled" : "inference.failed",
@@ -265,6 +365,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     // Once the user asks to stop, "did a first token ever arrive" is no
     // longer the relevant question — only "did the cancellation confirm".
     clearStallTimeout();
+    clearGenerationTimeout();
 
     setState({ status: "cancelling" });
     logEvent(createLogEvent("inference.cancel.requested", "info", {}));
@@ -294,6 +395,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
   async function dispose(): Promise<void> {
     clearCancelTimeout();
     clearStallTimeout();
+    clearGenerationTimeout();
     generationEpoch += 1;
 
     try {

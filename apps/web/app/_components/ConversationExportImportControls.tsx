@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import { useTranslations } from "../_i18n/LocaleContext";
 
 export interface ConversationImportSummary {
   importedCount: number;
@@ -25,6 +26,7 @@ export function ConversationExportImportControls({
   importSummary,
   onDismissImportSummary,
 }: ConversationExportImportControlsProps) {
+  const t = useTranslations();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -33,38 +35,62 @@ export function ConversationExportImportControls({
     if (file) onImportFile(file);
   }
 
+  const summaryText =
+    importSummary && importSummary.importedCount === 0 && importSummary.skippedCount === 0
+      ? t("backup.nothingToImport")
+      : importSummary && importSummary.skippedCount > 0
+        ? t("backup.importSummaryWithSkipped", {
+            imported: importSummary.importedCount,
+            skipped: importSummary.skippedCount,
+          })
+        : importSummary
+          ? t("backup.importSummary", { imported: importSummary.importedCount })
+          : "";
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, borderTop: "1px solid #333", paddingTop: 12 }}>
-      <strong style={{ fontSize: 12, opacity: 0.75 }}>Backup</strong>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: 8,
+        borderTop: "1px solid var(--color-border)",
+        paddingTop: 12,
+      }}
+    >
+      <strong style={{ fontSize: 12, opacity: 0.75 }}>{t("backup.title")}</strong>
 
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button type="button" onClick={onExportActive} disabled={disabled} style={{ fontSize: 12 }}>
-          Export current
+          {t("backup.exportCurrent")}
         </button>
         <button type="button" onClick={onExportAll} disabled={disabled} style={{ fontSize: 12 }}>
-          Export all
+          {t("backup.exportAll")}
         </button>
-        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={disabled} style={{ fontSize: 12 }}>
-          Import
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={disabled}
+          style={{ fontSize: 12 }}
+        >
+          {t("backup.import")}
         </button>
         <input
           ref={fileInputRef}
           type="file"
           accept="application/json,.json"
+          aria-label={t("backup.import")}
           onChange={handleFileChange}
           style={{ display: "none" }}
         />
       </div>
 
-      <p style={{ fontSize: 11, opacity: 0.5, margin: 0 }}>
-        Exported files contain your conversation text — anyone with access to the file can read it. Exports are not
-        encrypted, and no cloud sync is used: files stay on your device unless you share them yourself.
-      </p>
+      <p style={{ fontSize: 11, opacity: 0.5, margin: 0 }}>{t("backup.privacyNote")}</p>
 
       {importSummary && (
         <div
+          role="status"
           style={{
-            border: "1px solid #333",
+            border: "1px solid var(--color-border)",
             borderRadius: 10,
             padding: 8,
             fontSize: 12,
@@ -74,15 +100,9 @@ export function ConversationExportImportControls({
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-            <span>
-              {importSummary.importedCount === 0 && importSummary.skippedCount === 0
-                ? "Nothing to import in this file."
-                : `Imported ${importSummary.importedCount}${
-                    importSummary.skippedCount > 0 ? `, skipped ${importSummary.skippedCount}` : ""
-                  }.`}
-            </span>
+            <span>{summaryText}</span>
             <button type="button" onClick={onDismissImportSummary} style={{ fontSize: 11 }}>
-              Dismiss
+              {t("common.dismiss")}
             </button>
           </div>
           {importSummary.errors.length > 0 && (

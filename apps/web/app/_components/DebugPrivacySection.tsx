@@ -1,14 +1,16 @@
+"use client";
+
 import { PrivacyNotice } from "./PrivacyNotice";
 import { DebugField, DebugSection } from "./DebugSection";
+import { useTranslations } from "../_i18n/LocaleContext";
 
 export function DebugPrivacySection({ contentLogged }: { contentLogged: boolean | null }) {
+  const t = useTranslations();
+
   return (
-    <DebugSection title="Privacy">
+    <DebugSection title={t("debug.privacyTitle")}>
       <PrivacyNotice />
-      <p style={{ fontSize: 13, opacity: 0.75, margin: "8px 0" }}>
-        Nothing on this page — including this diagnostic report — ever includes prompt text, model replies, or document
-        content. Only technical fields (timings, device info, error codes) are shown or exported.
-      </p>
+      <p style={{ fontSize: 13, opacity: 0.75, margin: "8px 0" }}>{t("debug.privacyBody")}</p>
       <DebugField label="contentLogged" value={contentLogged === null ? "—" : String(contentLogged)} />
     </DebugSection>
   );

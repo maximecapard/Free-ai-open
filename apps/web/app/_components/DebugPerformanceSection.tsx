@@ -1,5 +1,8 @@
+"use client";
+
 import type { GenerationMetrics } from "../_lib/debugDiagnostics";
 import { DebugField, DebugSection } from "./DebugSection";
+import { useTranslations } from "../_i18n/LocaleContext";
 
 export function DebugPerformanceSection({
   loadTimeMs,
@@ -10,22 +13,27 @@ export function DebugPerformanceSection({
   generationMetrics: GenerationMetrics | null;
   isGenerating: boolean;
 }) {
+  const t = useTranslations();
+
   return (
-    <DebugSection title="Performance">
-      <DebugField label="Model load time" value={loadTimeMs !== undefined ? `${loadTimeMs} ms` : "Not recorded yet"} />
+    <DebugSection title={t("debug.performance")}>
       <DebugField
-        label="First token"
+        label={t("debug.modelLoadTime")}
+        value={loadTimeMs !== undefined ? `${loadTimeMs} ms` : t("debug.notRecordedYet")}
+      />
+      <DebugField
+        label={t("debug.firstToken")}
         value={
           generationMetrics?.firstTokenMs !== undefined && generationMetrics.firstTokenMs !== null
             ? `${generationMetrics.firstTokenMs} ms`
-            : "Not recorded yet"
+            : t("debug.notRecordedYet")
         }
       />
       <DebugField
-        label="Tokens / sec"
-        value={generationMetrics?.tokensPerSecond !== undefined ? generationMetrics.tokensPerSecond : "Not recorded yet"}
+        label={t("debug.tokensPerSecond")}
+        value={generationMetrics?.tokensPerSecond !== undefined ? generationMetrics.tokensPerSecond : t("debug.notRecordedYet")}
       />
-      <DebugField label="Generation in progress" value={isGenerating ? "Yes" : "No"} />
+      <DebugField label={t("debug.generationInProgress")} value={isGenerating ? t("debug.yes") : t("debug.no")} />
     </DebugSection>
   );
 }

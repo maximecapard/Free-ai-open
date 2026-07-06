@@ -25,6 +25,7 @@ import { DebugPerformanceSection } from "../_components/DebugPerformanceSection"
 import { DebugRecentLogs } from "../_components/DebugRecentLogs";
 import { DebugPrivacySection } from "../_components/DebugPrivacySection";
 import { DebugActions } from "../_components/DebugActions";
+import { useTranslations } from "../_i18n/LocaleContext";
 
 const MAX_LOGS = 25;
 
@@ -43,6 +44,7 @@ function buildReportInput(deviceProfile: DeviceProfile | null, routeResult: Mode
 }
 
 export default function DebugPage() {
+  const t = useTranslations();
   const [deviceProfile, setDeviceProfile] = useState<DeviceProfile | null>(null);
   const [routeResult, setRouteResult] = useState<ModelRouterResult | null>(null);
   const [mode, setMode] = useState<PerformanceMode>("balanced");
@@ -83,9 +85,9 @@ export default function DebugPage() {
     try {
       const data = copyDiagnosticReportToClipboardData(buildReportInput(deviceProfile, routeResult, mode, logs));
       await navigator.clipboard.writeText(data["text/plain"]);
-      setStatusMessage("Diagnostic report copied to clipboard.");
+      setStatusMessage(t("debug.copiedToClipboard"));
     } catch {
-      setStatusMessage("Couldn't access the clipboard in this browser.");
+      setStatusMessage(t("debug.clipboardUnavailable"));
     }
   }
 
@@ -99,20 +101,20 @@ export default function DebugPage() {
       link.download = `freeai-open-diagnostic-${Date.now()}.json`;
       link.click();
       URL.revokeObjectURL(url);
-      setStatusMessage("Diagnostic report downloaded.");
+      setStatusMessage(t("debug.reportDownloaded"));
     } catch {
-      setStatusMessage("Couldn't build the diagnostic report.");
+      setStatusMessage(t("debug.reportBuildFailed"));
     }
   }
 
   async function handleClear() {
     if (!logsAvailable) {
-      setStatusMessage("No local logs to clear — IndexedDB isn't available in this browser.");
+      setStatusMessage(t("debug.noLogsToClear"));
       return;
     }
-    if (!window.confirm("Clear all local technical logs from this browser?")) return;
+    if (!window.confirm(t("debug.clearLogsConfirm"))) return;
     await clearLocalLogs();
-    setStatusMessage("Local logs cleared.");
+    setStatusMessage(t("debug.logsCleared"));
     await refresh();
   }
 
@@ -122,28 +124,24 @@ export default function DebugPage() {
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ fontSize: 24, marginBottom: 4 }}>Debug dashboard</h1>
-      <p style={{ fontSize: 14, opacity: 0.65, marginBottom: 20 }}>
-        Local, technical diagnostics for this browser. Nothing here is sent to a server.
-      </p>
+      <h1 style={{ fontSize: 24, marginBottom: 4 }}>{t("debug.title")}</h1>
+      <p style={{ fontSize: 14, opacity: 0.65, marginBottom: 20 }}>{t("debug.subtitle")}</p>
 
       <DebugActions onRefresh={refresh} onCopy={handleCopy} onDownload={handleDownload} onClear={handleClear} statusMessage={statusMessage} />
 
       {!logsAvailable && (
         <section
+          role="status"
           style={{
-            border: "1px solid #e5a53e",
+            border: "1px solid var(--color-warning)",
             borderRadius: 16,
             padding: 16,
             marginBottom: 16,
-            background: "rgba(229, 165, 62, 0.08)",
+            background: "var(--color-warning-bg)",
           }}
         >
-          <strong>Local storage unavailable</strong>
-          <p style={{ margin: "8px 0 0", fontSize: 14, opacity: 0.9 }}>
-            This browser doesn&apos;t expose IndexedDB, so technical logs can&apos;t be recorded or displayed here. Everything
-            else on this page still works from live device checks.
-          </p>
+          <strong>{t("debug.storageUnavailableTitle")}</strong>
+          <p style={{ margin: "8px 0 0", fontSize: 14, opacity: 0.9 }}>{t("debug.storageUnavailableBody")}</p>
         </section>
       )}
 

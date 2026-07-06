@@ -19,8 +19,8 @@ export default function OnboardingIntroPage() {
           marginTop: 32,
           padding: "12px 20px",
           borderRadius: 12,
-          background: "#f7f7f7",
-          color: "#0b0b0f",
+          background: "var(--color-text)",
+          color: "var(--color-bg)",
           fontWeight: 600,
           textDecoration: "none",
         }}

@@ -9,6 +9,14 @@ Versions are alpha milestones while the MVP is still under active development.
 
 ### Added
 
+- Added a lightweight English/French UI translation system for the web app (home/app shell, chat, conversation history, export/import, debug dashboard, privacy warnings, runtime status labels, common buttons and errors), with a visible language toggle, browser-language detection on first visit, and local persistence. No server or API call is involved; translation dictionaries ship in the client bundle.
+- Added light/dark/system theme support with a visible toggle, local persistence, and a blocking inline script that applies the stored theme before hydration to avoid a flash of the wrong theme. Introduced CSS custom-property color tokens (`--color-bg`, `--color-text`, `--color-border`, `--color-bg-elevated`, `--color-danger`, `--color-warning`, `--color-success`, etc.) and replaced hardcoded colors across the app with them.
+- Added a mobile layout fix: the `/chat` history sidebar now stacks above the conversation instead of keeping a fixed width that left too little room for the chat on narrow viewports.
+- Added chat message layout containment so long unbroken strings, repeated punctuation, and future `pre`/`code` blocks do not expand the page width on desktop or mobile.
+- Added alpha generation safety limits for the local WebLLM runtime: bounded `max_tokens`, a maximum generation duration, output character limits, and lightweight degenerate-output detection for repeated symbols/characters or long unbroken sequences.
+- Added English/French notices for stopped, timed-out, failed, or unstable generations, including a clear note that partial assistant output was not saved.
+- Added accessible labels for the message input, per-conversation rename/delete buttons, the language/theme toggles, and `aria-live`/`role="status"`/`role="alert"` on notice banners.
+- Clarified export/import and error wording in both languages (import result summary, invalid file, storage-unavailable, runtime errors).
 - Wired local conversation export/import into the `/chat` history sidebar: "Export current", "Export all", and "Import" actions, entirely client-side.
 - Export downloads a JSON file via a Blob/object URL; import reads a local file, validates it through `@free-ai-open/conversation-export`, and always creates new conversations (never silently overwrites existing ones).
 - Import shows a result summary (imported count, skipped count, readable errors) and a persistent privacy note that exports are unencrypted, contain conversation text, and are never sent anywhere.
@@ -23,8 +31,13 @@ Versions are alpha milestones while the MVP is still under active development.
 - Added Sprint 5.1 robustness tests for local conversation persistence: real IndexedDB coverage via `fake-indexeddb`, no-IndexedDB memory fallback, active conversation ID pointer storage, local-log rejection of conversation content, and diagnostic-report privacy exclusion for conversation-shaped input.
 - Added a release checklist TODO for future browser-level coverage of persisted chat refresh and delete confirmation flows instead of adding a heavy E2E framework prematurely.
 
+### Changed
+
+- Cancelled, stalled, timed-out, failed, or degenerate assistant partial output is no longer saved as a normal completed assistant message. The user prompt remains local conversation content, but the partial assistant bubble is removed and therefore not exported as a completed answer.
+
 ### Planned
 
+- Translation coverage does not yet include onboarding (task/mode selection), settings, the model catalog, or model-router explanation text; these remain English-only for now.
 - The model catalog is intentionally small and still uses early compatibility metadata.
 - Supabase-backed persistence is not started.
 - Google Drive sync is not started.

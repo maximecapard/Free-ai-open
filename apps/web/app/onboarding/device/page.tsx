@@ -32,13 +32,13 @@ export default function OnboardingDevicePage() {
       ) : (
         <>
           <div style={{ display: "grid", gap: 12 }}>
-            <div style={{ padding: 16, borderRadius: 12, border: "1px solid #333" }}>
+            <div style={{ padding: 16, borderRadius: 12, border: "1px solid var(--color-border)" }}>
               <strong>WebGPU</strong>
               <p style={{ margin: "6px 0 0", fontSize: 14, opacity: 0.8 }}>
                 {profile.webgpuAvailable ? "Available on this browser" : "Not available on this browser"}
               </p>
             </div>
-            <div style={{ padding: 16, borderRadius: 12, border: "1px solid #333" }}>
+            <div style={{ padding: 16, borderRadius: 12, border: "1px solid var(--color-border)" }}>
               <strong>Recommended mode</strong>
               <p style={{ margin: "6px 0 0", fontSize: 14, opacity: 0.8 }}>
                 {findModeLabel(recommendPerformanceMode(profile.deviceTier))} — you can change this on the next
@@ -76,8 +76,8 @@ export default function OnboardingDevicePage() {
               marginTop: 32,
               padding: "12px 20px",
               borderRadius: 12,
-              background: "#f7f7f7",
-              color: "#0b0b0f",
+              background: "var(--color-text)",
+              color: "var(--color-bg)",
               fontWeight: 600,
               textDecoration: "none",
             }}

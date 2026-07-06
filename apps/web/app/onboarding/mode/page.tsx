@@ -32,7 +32,7 @@ export default async function OnboardingModePage({ searchParams }: OnboardingMod
               display: "block",
               padding: 16,
               borderRadius: 12,
-              border: "1px solid #333",
+              border: "1px solid var(--color-border)",
               textDecoration: "none",
               color: "inherit",
             }}
