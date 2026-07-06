@@ -60,3 +60,5 @@ Conversation export files are sensitive local data because they can contain prom
 - keep exported/imported conversation content out of local technical logs and diagnostic reports.
 
 The current export format is unencrypted JSON. Users should treat exported files as private data until encrypted export is implemented.
+
+The `/chat` export/import UI enforces this at the app layer too: it calls only `conversation-export`/`conversation-store` public functions, never `fetch`, `sendBeacon`, a server endpoint, `logEvent`, local technical logs, or diagnostic reports, and it always imports conversations under fresh IDs rather than overwriting existing ones.

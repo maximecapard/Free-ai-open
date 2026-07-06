@@ -9,6 +9,9 @@ Versions are alpha milestones while the MVP is still under active development.
 
 ### Added
 
+- Wired local conversation export/import into the `/chat` history sidebar: "Export current", "Export all", and "Import" actions, entirely client-side.
+- Export downloads a JSON file via a Blob/object URL; import reads a local file, validates it through `@free-ai-open/conversation-export`, and always creates new conversations (never silently overwrites existing ones).
+- Import shows a result summary (imported count, skipped count, readable errors) and a persistent privacy note that exports are unencrypted, contain conversation text, and are never sent anywhere.
 - Added `@free-ai-open/conversation-export` for versioned local JSON conversation export/import helpers.
 - Added strict import validation for format, version, structure, roles, ISO dates, unexpected fields, conversation/message limits, message length, and JSON size.
 - Added import preparation that assigns fresh conversation IDs by default, preserves valid titles/messages, and records local import metadata without overwriting existing conversations.
@@ -26,7 +29,7 @@ Versions are alpha milestones while the MVP is still under active development.
 - Supabase-backed persistence is not started.
 - Google Drive sync is not started.
 - The browser runtime still targets a small WebLLM test model before broader model support.
-- End-user import/export UI for local conversations is not added.
+- Export/import has no browser end-to-end coverage yet (verified manually); encrypted export is not implemented.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
 
 ## [0.5.0-alpha] - 2026-07-05
