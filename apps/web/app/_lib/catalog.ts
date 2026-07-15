@@ -1,44 +1,45 @@
 import type { PerformanceMode, TaskCategory } from "@free-ai-open/types";
+import type { TranslationKey } from "../_i18n/dictionary";
 
 export interface TaskOption {
   id: TaskCategory;
-  label: string;
-  description: string;
+  labelKey: TranslationKey;
+  descriptionKey: TranslationKey;
 }
 
 export interface ModeOption {
   id: PerformanceMode;
-  label: string;
-  description: string;
+  labelKey: TranslationKey;
+  descriptionKey: TranslationKey;
 }
 
 export const taskCategories: TaskOption[] = [
-  { id: "chat", label: "Chat & assistant", description: "General conversation and quick questions." },
-  { id: "writing", label: "Writing help", description: "Draft new text from a prompt." },
-  { id: "rewrite", label: "Rewrite & improve", description: "Polish or restructure existing text." },
-  { id: "summarization", label: "Summarize", description: "Condense long text into key points." },
-  { id: "translation", label: "Translate", description: "Translate text between languages." },
-  { id: "coding", label: "Code helper", description: "Explain, write, or debug code." },
-  { id: "learning", label: "Learn something", description: "Study help and explanations." },
+  { id: "chat", labelKey: "tasks.chat.label", descriptionKey: "tasks.chat.description" },
+  { id: "writing", labelKey: "tasks.writing.label", descriptionKey: "tasks.writing.description" },
+  { id: "rewrite", labelKey: "tasks.rewrite.label", descriptionKey: "tasks.rewrite.description" },
+  { id: "summarization", labelKey: "tasks.summarization.label", descriptionKey: "tasks.summarization.description" },
+  { id: "translation", labelKey: "tasks.translation.label", descriptionKey: "tasks.translation.description" },
+  { id: "coding", labelKey: "tasks.coding.label", descriptionKey: "tasks.coding.description" },
+  { id: "learning", labelKey: "tasks.learning.label", descriptionKey: "tasks.learning.description" },
   {
     id: "document_analysis",
-    label: "Analyze a document",
-    description: "Ask questions about a document you provide.",
+    labelKey: "tasks.document_analysis.label",
+    descriptionKey: "tasks.document_analysis.description",
   },
 ];
 
 export const performanceModes: ModeOption[] = [
-  { id: "fast", label: "Fast", description: "Lighter model, quicker replies." },
-  { id: "balanced", label: "Balanced", description: "Good quality and speed. Recommended for most devices." },
-  { id: "performance", label: "Performance", description: "Best quality. May be slower on your device." },
+  { id: "fast", labelKey: "modes.fast.label", descriptionKey: "modes.fast.description" },
+  { id: "balanced", labelKey: "modes.balanced.label", descriptionKey: "modes.balanced.description" },
+  { id: "performance", labelKey: "modes.performance.label", descriptionKey: "modes.performance.description" },
 ];
 
-export function findTaskLabel(id: string | null | undefined): string | null {
-  return taskCategories.find((task) => task.id === id)?.label ?? null;
+export function findTaskLabelKey(id: string | null | undefined): TranslationKey | null {
+  return taskCategories.find((task) => task.id === id)?.labelKey ?? null;
 }
 
-export function findModeLabel(id: string | null | undefined): string | null {
-  return performanceModes.find((mode) => mode.id === id)?.label ?? null;
+export function findModeLabelKey(id: string | null | undefined): TranslationKey | null {
+  return performanceModes.find((mode) => mode.id === id)?.labelKey ?? null;
 }
 
 export function isTaskCategory(value: string | null | undefined): value is TaskCategory {

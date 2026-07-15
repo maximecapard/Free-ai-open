@@ -5,7 +5,7 @@ export interface InferenceChatWorker {
   onmessage: unknown;
 }
 
-export type RuntimeStatus = "idle" | "loading_model" | "ready" | "generating" | "cancelling" | "error";
+export type RuntimeStatus = "idle" | "loading_model" | "ready" | "generating" | "cancelling" | "recovering" | "error";
 
 export type RuntimeErrorCode =
   | "webgpu_unavailable"
@@ -32,9 +32,12 @@ export interface RuntimeState {
   error: RuntimeError | null;
 }
 
+export type RuntimeLocale = "en" | "fr";
+
 export interface GenerateInput {
   conversationId: string;
   prompt: string;
+  responseLocale?: RuntimeLocale;
 }
 
 export type GenerationStopReason = "completed" | "cancelled" | "degenerate_output";

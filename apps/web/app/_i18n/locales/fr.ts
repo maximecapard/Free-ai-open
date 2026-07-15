@@ -8,6 +8,10 @@ export const fr: Dictionary = {
     cancel: "Annuler",
     dismiss: "Fermer",
     yes: "Oui",
+    no: "Non",
+    continue: "Continuer",
+    back: "Retour",
+    unknown: "inconnu",
     rename: "Renommer",
     delete: "Supprimer",
     deleteConfirm: "Supprimer ?",
@@ -35,6 +39,106 @@ export const fr: Dictionary = {
     lead: "Choisissez ce que vous voulez faire, la rapidité ou la qualité souhaitée, et FreeAI Open recommande un modèle qui s'exécute entièrement sur votre appareil.",
     getStarted: "Commencer",
     skipToChat: "Aller directement au chat",
+  },
+  settings: {
+    title: "Paramètres",
+    body:
+      "La sélection manuelle du modèle, la gestion du stockage et les contrôles de confidentialité seront disponibles ici. Cette page est un placeholder pour le moment — FreeAI Open choisit automatiquement un modèle adapté.",
+  },
+  onboarding: {
+    introTitle: "Configurons l'application",
+    introBody:
+      "FreeAI Open exécute le modèle d'IA directement dans votre navigateur — rien de ce que vous écrivez n'est envoyé ailleurs. En quelques étapes, nous vérifions ce que votre appareil peut exécuter, puis nous vous demandons ce que vous voulez faire et le niveau de performance souhaité, afin de suggérer un modèle adapté.",
+    step1: "Étape 1 sur 3",
+    step2: "Étape 2 sur 3",
+    step3WithTask: "Étape 3 sur 3 · {task}",
+    deviceTitle: "Vérification de votre appareil",
+    runningDeviceCheck: "Vérification rapide et locale en cours…",
+    webgpuAvailable: "Disponible dans ce navigateur",
+    webgpuUnavailable: "Non disponible dans ce navigateur",
+    recommendedMode: "Mode recommandé",
+    recommendedModeBody: "{mode} — vous pourrez le changer à l'étape suivante.",
+    advancedDetails: "Détails techniques avancés",
+    deviceTier: "Niveau de l'appareil",
+    wasmAvailable: "WASM disponible",
+    preferredBackend: "Moteur préféré",
+    estimatedMemory: "Mémoire estimée",
+    estimatedStorageQuota: "Quota de stockage estimé",
+    browser: "Navigateur",
+    os: "OS",
+    devicePrivacy:
+      "Cette vérification s'exécute entièrement dans votre navigateur. Aucune information sur votre appareil n'est envoyée à un serveur.",
+    taskTitle: "Que voulez-vous faire ?",
+    chooseTaskFirst: "Veuillez d'abord choisir une tâche.",
+    backToTaskSelection: "Retour au choix de tâche",
+    modeTitle: "Quel comportement souhaitez-vous ?",
+    modeFooter:
+      "Vous pourrez modifier ce choix plus tard. La sélection manuelle du modèle sera aussi disponible pour les utilisateurs avancés.",
+  },
+  tasks: {
+    chat: {
+      label: "Chat et assistant",
+      description: "Conversation générale et questions rapides.",
+    },
+    writing: {
+      label: "Aide à la rédaction",
+      description: "Rédiger un nouveau texte à partir d'une demande.",
+    },
+    rewrite: {
+      label: "Réécrire et améliorer",
+      description: "Améliorer ou restructurer un texte existant.",
+    },
+    summarization: {
+      label: "Résumer",
+      description: "Condenser un texte long en points clés.",
+    },
+    translation: {
+      label: "Traduire",
+      description: "Traduire du texte entre plusieurs langues.",
+    },
+    coding: {
+      label: "Aide au code",
+      description: "Expliquer, écrire ou déboguer du code.",
+    },
+    learning: {
+      label: "Apprendre",
+      description: "Aide à l'étude et explications.",
+    },
+    document_analysis: {
+      label: "Analyser un document",
+      description: "Poser des questions sur un document fourni.",
+    },
+  },
+  modes: {
+    fast: {
+      label: "Rapide",
+      description: "Modèle plus léger, réponses plus rapides.",
+    },
+    balanced: {
+      label: "Équilibré",
+      description: "Bon compromis qualité/vitesse. Recommandé pour la plupart des appareils.",
+    },
+    performance: {
+      label: "Performance",
+      description: "Meilleure qualité. Peut être plus lent sur votre appareil.",
+    },
+  },
+  modelStatus: {
+    noTaskSelected: "Aucune tâche sélectionnée",
+    modelNotLoaded: "{task} · {mode} · {model} (non chargé)",
+    noCompatibleModel: "{task} · {mode} · aucun modèle compatible trouvé",
+  },
+  router: {
+    noCompatible:
+      "Aucun modèle compatible n'est disponible pour {task}. {count} modèle(s) ont été rejeté(s) par les vérifications de compatibilité.",
+    selectedNoFallback: "{model} sélectionné pour {task} en mode {mode}. Aucun modèle de secours n'est disponible pour le moment.",
+    selectedWithFallback: "{model} sélectionné pour {task} en mode {mode}. Modèle de secours : {fallback}.",
+    rejection: {
+      model_blocked: "Actuellement bloqué par les mainteneurs",
+      task_not_supported: "Ne prend pas en charge cette tâche",
+      device_tier_too_low: "Nécessite un appareil plus performant",
+      backend_not_available: "Nécessite un moteur d'exécution indisponible dans ce navigateur",
+    },
   },
   chat: {
     heading: "Chat",
@@ -82,6 +186,7 @@ export const fr: Dictionary = {
     ready: "Prêt",
     generating: "Génération en cours",
     cancelling: "Arrêt en cours",
+    recovering: "Récupération",
     error: "Erreur",
   },
   runtimeError: {
@@ -107,6 +212,8 @@ export const fr: Dictionary = {
     couldNotRename: "Impossible de renommer cette conversation localement.",
     couldNotDelete: "Impossible de supprimer cette conversation localement.",
     generationStopped: "Génération arrêtée. La réponse partielle n'a pas été enregistrée.",
+    generationStoppedRecovering:
+      "Génération arrêtée. La réponse partielle n'a pas été enregistrée, et le modèle local est recyclé avant le message suivant.",
     generationUnstable:
       "Génération arrêtée car la sortie du modèle est devenue instable. La réponse partielle n'a pas été enregistrée.",
     generationTimedOut:

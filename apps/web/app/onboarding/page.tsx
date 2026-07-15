@@ -1,16 +1,16 @@
+"use client";
+
 import Link from "next/link";
 import { PrivacyNotice } from "../_components/PrivacyNotice";
+import { useTranslations } from "../_i18n/LocaleContext";
 
 export default function OnboardingIntroPage() {
+  const t = useTranslations();
+
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: "48px 24px" }}>
-      <h1 style={{ fontSize: 32, marginBottom: 16 }}>Let&apos;s set things up</h1>
-      <p style={{ fontSize: 17, lineHeight: 1.6, opacity: 0.85 }}>
-        FreeAI Open runs the AI model directly in your browser — nothing you
-        type is sent anywhere. In a few short steps, we&apos;ll check what
-        your device can run, then ask what you want to do and how you want it
-        to feel, and suggest a model that fits.
-      </p>
+      <h1 style={{ fontSize: 32, marginBottom: 16 }}>{t("onboarding.introTitle")}</h1>
+      <p style={{ fontSize: 17, lineHeight: 1.6, opacity: 0.85 }}>{t("onboarding.introBody")}</p>
 
       <Link
         href="/onboarding/device"
@@ -25,7 +25,7 @@ export default function OnboardingIntroPage() {
           textDecoration: "none",
         }}
       >
-        Continue
+        {t("common.continue")}
       </Link>
 
       <div style={{ marginTop: 40 }}>

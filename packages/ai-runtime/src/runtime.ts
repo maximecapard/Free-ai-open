@@ -4,15 +4,20 @@ import { detectWebGPUAvailability } from "@free-ai-open/device-profiler";
 import { createLogEvent, logEvent } from "@free-ai-open/logger";
 import { classifyRuntimeError } from "./errors";
 import { detectDegenerateOutput, GENERATION_SAFETY_LIMITS } from "./generation-safety";
+import { getRuntimeLanguageInstruction } from "./language-instruction";
 import { recordLocalLog, toLocalLogErrorCode, toLocalLogModelId } from "./local-log-bridge";
 import { DEFAULT_MODEL_ID } from "./model";
 import type { DegenerateOutputReason } from "./generation-safety";
-import type { GenerateChunk, GenerateInput, InferenceChatWorker, RuntimeError, RuntimeState } from "./types";
+import type { GenerateChunk, GenerateInput, InferenceChatWorker, RuntimeError, RuntimeState, RuntimeStatus } from "./types";
+
+export interface LoadModelOptions {
+  initialStatus?: Extract<RuntimeStatus, "loading_model" | "recovering">;
+}
 
 export interface InferenceRuntime {
   getState(): RuntimeState;
   subscribe(listener: (state: RuntimeState) => void): () => void;
-  loadModel(modelId?: string): Promise<void>;
+  loadModel(modelId?: string, options?: LoadModelOptions): Promise<void>;
   generate(input: GenerateInput): AsyncGenerator<GenerateChunk>;
   stopGeneration(): void;
   dispose(): Promise<void>;
@@ -151,13 +156,14 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     return error;
   }
 
-  async function loadModel(modelId: string = DEFAULT_MODEL_ID): Promise<void> {
+  async function loadModel(modelId: string = DEFAULT_MODEL_ID, options: LoadModelOptions = {}): Promise<void> {
     const loadStartedAt = Date.now();
     const localModelId = toLocalLogModelId(modelId);
+    const initialStatus = options.initialStatus ?? "loading_model";
 
-    setState({ status: "loading_model", modelId, loadProgress: 0, error: null });
+    setState({ status: initialStatus, modelId, loadProgress: 0, error: null });
     logEvent(createLogEvent("model.load.started", "info", { modelId }));
-    recordLocalLog({ event: "model.load.started", severity: "info", modelId: localModelId, runtimeStatus: "loading_model" });
+    recordLocalLog({ event: "model.load.started", severity: "info", modelId: localModelId, runtimeStatus: initialStatus });
 
     const webgpuAvailable = await detectWebGPUAvailability();
     if (!webgpuAvailable) {
@@ -256,7 +262,10 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
 
     try {
       const stream = await engine.chat.completions.create({
-        messages: [{ role: "user", content: input.prompt }],
+        messages: [
+          { role: "system", content: getRuntimeLanguageInstruction(input.responseLocale) },
+          { role: "user", content: input.prompt },
+        ],
         stream: true,
         max_tokens: GENERATION_SAFETY_LIMITS.maxTokens,
       });
@@ -312,7 +321,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
 
       const { firstTokenMs, tokensPerSecond, totalTimeMs } = buildGenerationMetrics(generationStartedAt, firstTokenAt, tokenCount);
 
-      setState({ status: "ready" });
+      setState({ status: cancelled ? "cancelling" : "ready" });
       yield { type: "done", reason: cancelled ? "cancelled" : "completed" };
       logEvent(
         createLogEvent(
@@ -326,7 +335,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         severity: "info",
         modelId: localModelId,
         backend: "webgpu",
-        runtimeStatus: "ready",
+        runtimeStatus: cancelled ? "cancelling" : "ready",
         performanceMetrics: { firstTokenMs, tokensPerSecond, totalTimeMs },
       });
     } catch (rawError) {
@@ -337,7 +346,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
 
       const error = classifyRuntimeError(rawError, "generate");
       const cancelled = error.code === "generation_interrupted";
-      setState({ status: "ready", error: cancelled ? null : error });
+      setState({ status: cancelled ? "cancelling" : "ready", error: cancelled ? null : error });
       yield cancelled ? { type: "done", reason: "cancelled" } : { type: "error", error };
       logEvent(
         createLogEvent(
@@ -350,7 +359,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         event: cancelled ? "inference.cancelled" : "inference.failed",
         severity: cancelled ? "info" : "error",
         modelId: localModelId,
-        runtimeStatus: "ready",
+        runtimeStatus: cancelled ? "cancelling" : "ready",
         errorCode: cancelled ? undefined : toLocalLogErrorCode(error.code),
       });
     }

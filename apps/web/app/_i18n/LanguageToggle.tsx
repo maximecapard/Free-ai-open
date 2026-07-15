@@ -1,6 +1,7 @@
 "use client";
 
 import { useLocale } from "./LocaleContext";
+import { useTranslations } from "./LocaleContext";
 import type { Locale } from "../_lib/localePreference";
 
 const OPTIONS: { value: Locale; label: string }[] = [
@@ -10,9 +11,10 @@ const OPTIONS: { value: Locale; label: string }[] = [
 
 export function LanguageToggle() {
   const { locale, setLocale } = useLocale();
+  const t = useTranslations();
 
   return (
-    <div role="group" aria-label="Language" style={{ display: "flex", gap: 4 }}>
+    <div role="group" aria-label={t("header.language")} style={{ display: "flex", gap: 4 }}>
       {OPTIONS.map((option) => (
         <button
           key={option.value}

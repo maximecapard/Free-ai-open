@@ -6,6 +6,10 @@ export const en = {
     cancel: "Cancel",
     dismiss: "Dismiss",
     yes: "Yes",
+    no: "No",
+    continue: "Continue",
+    back: "Back",
+    unknown: "unknown",
     rename: "Rename",
     delete: "Delete",
     deleteConfirm: "Delete?",
@@ -33,6 +37,106 @@ export const en = {
     lead: "Pick what you want to do, choose how fast or how capable you want it to be, and FreeAI Open recommends a model that runs entirely on your device.",
     getStarted: "Get started",
     skipToChat: "Skip to chat",
+  },
+  settings: {
+    title: "Settings",
+    body:
+      "Manual model selection, storage management, and privacy controls will live here. This page is a placeholder for now — FreeAI Open picks a sensible model for you automatically.",
+  },
+  onboarding: {
+    introTitle: "Let's set things up",
+    introBody:
+      "FreeAI Open runs the AI model directly in your browser — nothing you type is sent anywhere. In a few short steps, we'll check what your device can run, then ask what you want to do and how you want it to feel, and suggest a model that fits.",
+    step1: "Step 1 of 3",
+    step2: "Step 2 of 3",
+    step3WithTask: "Step 3 of 3 · {task}",
+    deviceTitle: "Checking your device",
+    runningDeviceCheck: "Running a quick, local-only check…",
+    webgpuAvailable: "Available on this browser",
+    webgpuUnavailable: "Not available on this browser",
+    recommendedMode: "Recommended mode",
+    recommendedModeBody: "{mode} — you can change this on the next step.",
+    advancedDetails: "Advanced technical details",
+    deviceTier: "Device tier",
+    wasmAvailable: "WASM available",
+    preferredBackend: "Preferred backend",
+    estimatedMemory: "Estimated memory",
+    estimatedStorageQuota: "Estimated storage quota",
+    browser: "Browser",
+    os: "OS",
+    devicePrivacy:
+      "This check runs entirely in your browser. Nothing about your device is sent to a server.",
+    taskTitle: "What do you want to do?",
+    chooseTaskFirst: "Please choose a task first.",
+    backToTaskSelection: "Back to task selection",
+    modeTitle: "How should it feel?",
+    modeFooter:
+      "You can change this later. Manual model selection will also be available for advanced users.",
+  },
+  tasks: {
+    chat: {
+      label: "Chat & assistant",
+      description: "General conversation and quick questions.",
+    },
+    writing: {
+      label: "Writing help",
+      description: "Draft new text from a prompt.",
+    },
+    rewrite: {
+      label: "Rewrite & improve",
+      description: "Polish or restructure existing text.",
+    },
+    summarization: {
+      label: "Summarize",
+      description: "Condense long text into key points.",
+    },
+    translation: {
+      label: "Translate",
+      description: "Translate text between languages.",
+    },
+    coding: {
+      label: "Code helper",
+      description: "Explain, write, or debug code.",
+    },
+    learning: {
+      label: "Learn something",
+      description: "Study help and explanations.",
+    },
+    document_analysis: {
+      label: "Analyze a document",
+      description: "Ask questions about a document you provide.",
+    },
+  },
+  modes: {
+    fast: {
+      label: "Fast",
+      description: "Lighter model, quicker replies.",
+    },
+    balanced: {
+      label: "Balanced",
+      description: "Good quality and speed. Recommended for most devices.",
+    },
+    performance: {
+      label: "Performance",
+      description: "Best quality. May be slower on your device.",
+    },
+  },
+  modelStatus: {
+    noTaskSelected: "No task selected",
+    modelNotLoaded: "{task} · {mode} · {model} (not loaded)",
+    noCompatibleModel: "{task} · {mode} · no compatible model found",
+  },
+  router: {
+    noCompatible:
+      "No compatible model is available for {task}. {count} model(s) were rejected by compatibility checks.",
+    selectedNoFallback: "Selected {model} for {task} in {mode} mode. No fallback model is currently available.",
+    selectedWithFallback: "Selected {model} for {task} in {mode} mode. Fallback model: {fallback}.",
+    rejection: {
+      model_blocked: "Currently blocked by the maintainers",
+      task_not_supported: "Doesn't support this task",
+      device_tier_too_low: "Needs a more capable device",
+      backend_not_available: "Requires a runtime backend this browser doesn't have",
+    },
   },
   chat: {
     heading: "Chat",
@@ -80,6 +184,7 @@ export const en = {
     ready: "Ready",
     generating: "Generating",
     cancelling: "Stopping",
+    recovering: "Recovering",
     error: "Error",
   },
   runtimeError: {
@@ -103,6 +208,8 @@ export const en = {
     couldNotRename: "Couldn't rename this conversation locally.",
     couldNotDelete: "Couldn't delete this conversation locally.",
     generationStopped: "Generation stopped. The partial response was not saved.",
+    generationStoppedRecovering:
+      "Generation stopped. The partial response was not saved, and the local model is being recycled before the next message.",
     generationUnstable: "Generation stopped because the model output became unstable. The partial response was not saved.",
     generationTimedOut: "Generation stopped because the local model stopped responding. The partial response was not saved.",
     generationFailed: "Generation failed. The partial response was not saved.",

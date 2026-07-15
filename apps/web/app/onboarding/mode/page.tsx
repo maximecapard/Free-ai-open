@@ -1,27 +1,31 @@
+"use client";
+
 import Link from "next/link";
-import { findTaskLabel, performanceModes } from "../../_lib/catalog";
+import { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { findTaskLabelKey, performanceModes } from "../../_lib/catalog";
+import { useTranslations } from "../../_i18n/LocaleContext";
 
-interface OnboardingModePageProps {
-  searchParams: Promise<{ task?: string }>;
-}
-
-export default async function OnboardingModePage({ searchParams }: OnboardingModePageProps) {
-  const { task } = await searchParams;
-  const taskLabel = findTaskLabel(task);
+function OnboardingModeContent() {
+  const t = useTranslations();
+  const searchParams = useSearchParams();
+  const task = searchParams.get("task") ?? undefined;
+  const taskLabelKey = findTaskLabelKey(task);
+  const taskLabel = taskLabelKey ? t(taskLabelKey) : null;
 
   if (!task || !taskLabel) {
     return (
       <main style={{ maxWidth: 720, margin: "0 auto", padding: "48px 24px" }}>
-        <p>Please choose a task first.</p>
-        <Link href="/onboarding/task">Back to task selection</Link>
+        <p>{t("onboarding.chooseTaskFirst")}</p>
+        <Link href="/onboarding/task">{t("onboarding.backToTaskSelection")}</Link>
       </main>
     );
   }
 
   return (
     <main style={{ maxWidth: 720, margin: "0 auto", padding: "48px 24px" }}>
-      <p style={{ opacity: 0.6, fontSize: 14 }}>Step 3 of 3 · {taskLabel}</p>
-      <h1 style={{ fontSize: 28, margin: "8px 0 24px" }}>How should it feel?</h1>
+      <p style={{ opacity: 0.6, fontSize: 14 }}>{t("onboarding.step3WithTask", { task: taskLabel })}</p>
+      <h1 style={{ fontSize: 28, margin: "8px 0 24px" }}>{t("onboarding.modeTitle")}</h1>
 
       <div style={{ display: "grid", gap: 12 }}>
         {performanceModes.map((mode) => (
@@ -37,16 +41,21 @@ export default async function OnboardingModePage({ searchParams }: OnboardingMod
               color: "inherit",
             }}
           >
-            <strong>{mode.label}</strong>
-            <p style={{ margin: "6px 0 0", fontSize: 13, opacity: 0.7 }}>{mode.description}</p>
+            <strong>{t(mode.labelKey)}</strong>
+            <p style={{ margin: "6px 0 0", fontSize: 13, opacity: 0.7 }}>{t(mode.descriptionKey)}</p>
           </Link>
         ))}
       </div>
 
-      <p style={{ marginTop: 24, fontSize: 13, opacity: 0.6 }}>
-        You can change this later. Manual model selection will also be
-        available for advanced users.
-      </p>
+      <p style={{ marginTop: 24, fontSize: 13, opacity: 0.6 }}>{t("onboarding.modeFooter")}</p>
     </main>
+  );
+}
+
+export default function OnboardingModePage() {
+  return (
+    <Suspense fallback={null}>
+      <OnboardingModeContent />
+    </Suspense>
   );
 }

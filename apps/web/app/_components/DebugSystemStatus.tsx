@@ -3,7 +3,7 @@
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import { getDeviceTierDisplayLabel } from "@free-ai-open/device-profiler";
 import type { PerformanceMode } from "@free-ai-open/types";
-import { findModeLabel } from "../_lib/catalog";
+import { findModeLabelKey } from "../_lib/catalog";
 import type { LastRuntimeStatus } from "../_lib/debugDiagnostics";
 import { DebugField, DebugSection } from "./DebugSection";
 import { useTranslations } from "../_i18n/LocaleContext";
@@ -37,7 +37,10 @@ export function DebugSystemStatus({
           />
         </>
       )}
-      <DebugField label={t("debug.performanceModePreview")} value={findModeLabel(performanceMode) ?? performanceMode} />
+      <DebugField
+        label={t("debug.performanceModePreview")}
+        value={t(findModeLabelKey(performanceMode) ?? "modes.balanced.label")}
+      />
       <DebugField
         label={t("debug.runtimeStatusLabel")}
         value={

@@ -156,6 +156,38 @@ describe("diagnostic report", () => {
     expect(validateDiagnosticReportPrivacy(report)).toEqual({ valid: true, violations: [] });
   });
 
+  it("preserves the recovering runtime status, at the top level and in local logs", () => {
+    const report = buildDiagnosticReport(
+      {
+        runtimeStatus: "recovering",
+        localLogs: [
+          {
+            id: "log-1",
+            event: "runtime.recovery.started",
+            severity: "info",
+            timestamp: "2026-07-04T11:59:00.000Z",
+            modelId: "sample-general-light",
+            runtimeStatus: "recovering",
+          },
+        ],
+      },
+      { now }
+    );
+
+    expect(report.runtimeStatus).toBe("recovering");
+    expect(report.localLogs).toEqual([
+      {
+        event: "runtime.recovery.started",
+        severity: "info",
+        timestamp: "2026-07-04T11:59:00.000Z",
+        modelId: "sample-general-light",
+        runtimeStatus: "recovering",
+      },
+    ]);
+    expect(report.contentLogged).toBe(false);
+    expect(validateDiagnosticReportPrivacy(report)).toEqual({ valid: true, violations: [] });
+  });
+
   it("derives technical fields from device profile and router result", () => {
     const report = buildDiagnosticReport(
       {

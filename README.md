@@ -24,7 +24,7 @@ Implemented in the current alpha:
 
 - Browser-local WebLLM runtime through a Web Worker.
 - Streaming chat UI.
-- Stop generation recovery, including cancelling state, timeout handling, stalled-generation recovery, unstable-output detection, and reload model support.
+- Stop generation recovery, including cancelling/recovering states, timeout handling, stalled-generation recovery, automatic runtime recycling, unstable-output detection, and reload model support.
 - Local conversation history in the `/chat` UI.
 - IndexedDB conversation storage with an in-memory fallback when IndexedDB is unavailable.
 - Local conversation export/import in the `/chat` history sidebar: export the current conversation, export all conversations, or import a JSON export file, entirely on-device.
@@ -33,7 +33,8 @@ Implemented in the current alpha:
 - `/debug` dashboard for runtime status, device information, technical logs, and diagnostics.
 - Device profiling and model routing groundwork.
 - Strict schemas and redaction utilities for privacy-sensitive telemetry and logs.
-- English/French UI language toggle (defaults to the browser's language, persisted locally) for the app shell, chat, conversation history, export/import, debug dashboard, and runtime status/error text.
+- English/French UI language toggle (defaults to the browser's language, persisted locally) across the public app surfaces.
+- Best-effort local model response language based on the selected UI locale through a hidden runtime-only instruction. Actual language quality depends on the selected model.
 - Light/dark/system theme toggle, persisted locally, with no flash of the wrong theme on reload.
 
 ## What is not implemented yet
@@ -47,7 +48,7 @@ The following are not implemented in this alpha:
 - Production-scale multi-model registry.
 - Desktop or mobile apps.
 - Broad browser end-to-end test coverage.
-- Full UI translation coverage: onboarding, settings, and the model/task catalog are still English-only.
+- Guaranteed multilingual model quality across every model.
 
 ## Privacy model
 
@@ -56,6 +57,8 @@ For normal chat usage, FreeAI Open does not send prompts, model responses, conve
 Conversation history is stored locally in the browser using IndexedDB. If IndexedDB is unavailable, the app can fall back to temporary in-memory storage for the session.
 
 Diagnostics and local technical logs are built from allowlisted metadata such as event names, runtime status, backend, device tier, model ID, error code, and coarse performance metrics. They are passed through privacy redaction and must not include prompt text, response text, documents, messages, or conversation content.
+
+The hidden language instruction used to guide local model replies is runtime-only. It is not stored in conversation history, exported with conversation backups, included in diagnostic reports, or written to local technical logs.
 
 Local storage is not the same as encryption. Clearing browser site data can remove local conversations, logs, and model cache data. Encrypted backup and sync are future work.
 

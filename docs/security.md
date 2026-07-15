@@ -74,3 +74,19 @@ The WebLLM runtime includes alpha safeguards for unstable model output:
 - technical-only events such as `inference.degenerate-output` and `inference.generation-timeout`.
 
 When these safeguards fire, partial assistant output is not stored as a completed assistant message. Technical events, local logs, and diagnostic reports must contain only technical metadata such as error codes, runtime status, lengths where applicable, and timing metrics, never prompt or generated response text.
+
+## Cancellation recovery
+
+After a Stop request, the interrupted runtime must not be trusted as ready for the next generation merely because the stream returned an abort confirmation. The app now treats the old worker as unsafe after cancellation, enters `recovering`, tears down the old worker using bounded termination, creates a replacement runtime, and returns to `ready` only after the model reload succeeds.
+
+Recovery events are allowlisted technical events only:
+
+- `runtime.recovery.started`
+- `runtime.recovery.completed`
+- `runtime.recovery.failed`
+
+These events may include runtime status and technical error codes, but must not include prompts, responses, documents, conversations, message arrays, hidden language instructions, local file paths, API keys, or tokens.
+
+## Runtime language instruction
+
+The selected UI locale is converted to a hidden runtime-only system instruction before local inference. This instruction is allowed to enter the local WebLLM message list, but it must not be persisted in conversation history, exported in conversation backups, included in diagnostics, or written to local technical logs. Language adherence remains best effort and depends on the selected model.

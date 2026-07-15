@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import type { ReactNode } from "react";
 import { en } from "./locales/en";
 import { fr } from "./locales/fr";
-import { getByPath } from "./dictionary";
+import { translateFromDictionary } from "./dictionary";
 import type { Dictionary, TranslationKey } from "./dictionary";
 import { detectBrowserLocale, getStoredLocale, setStoredLocale } from "../_lib/localePreference";
 import type { Locale } from "../_lib/localePreference";
@@ -53,9 +53,7 @@ export function useTranslations() {
   return useCallback(
     (key: TranslationKey, params?: Record<string, string | number>) => {
       const dictionary = DICTIONARIES[locale];
-      const raw = getByPath(dictionary, key) ?? getByPath(en, key) ?? key;
-      if (!params) return raw;
-      return Object.entries(params).reduce((text, [name, value]) => text.replaceAll(`{${name}}`, String(value)), raw);
+      return translateFromDictionary(dictionary, en, key, params, { throwOnMissing: process.env.NODE_ENV !== "production" });
     },
     [locale]
   );

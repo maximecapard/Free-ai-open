@@ -10,6 +10,7 @@ const STATUS_COLOR_VAR: Record<RuntimeState["status"], string> = {
   ready: "var(--color-success)",
   generating: "var(--color-success)",
   cancelling: "var(--color-warning)",
+  recovering: "var(--color-warning)",
   error: "var(--color-danger)",
 };
 
