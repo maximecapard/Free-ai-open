@@ -156,7 +156,11 @@ export default function DebugPage() {
       <DebugPerformanceSection
         loadTimeMs={findLoadTimeMs(logs)}
         generationMetrics={findGenerationMetrics(logs)}
-        isGenerating={lastRuntimeStatus?.status === "generating" || lastRuntimeStatus?.status === "cancelling"}
+        isGenerating={
+          lastRuntimeStatus?.status === "generating" ||
+          lastRuntimeStatus?.status === "cancelling" ||
+          lastRuntimeStatus?.status === "recovering"
+        }
       />
 
       <DebugRecentLogs logs={logs} logsAvailable={logsAvailable} />

@@ -20,7 +20,6 @@ import {
 import type { Conversation, ConversationId, ConversationMetadata } from "@free-ai-open/conversation-store";
 import {
   buildConversationExport,
-  ConversationExportError,
   parseConversationImport,
   prepareImportedConversations,
   serializeConversationExport,
@@ -32,8 +31,8 @@ import { ChatTranscript } from "../_components/ChatTranscript";
 import type { ChatMessageItem } from "../_components/ChatTranscript";
 import { ChatHistorySidebar } from "../_components/ChatHistorySidebar";
 import type { ConversationImportSummary } from "../_components/ConversationExportImportControls";
-import { findModeLabel, findTaskLabel, isPerformanceMode, isTaskCategory } from "../_lib/catalog";
-import { rejectionReasonLabel } from "../_lib/routeExplanation";
+import { findModeLabelKey, findTaskLabelKey, isPerformanceMode, isTaskCategory } from "../_lib/catalog";
+import { rejectionReasonKey, routeDecisionKey } from "../_lib/routeExplanation";
 import { runtimeErrorKey } from "../_lib/runtimeErrorLabel";
 import { terminateWorkerAfter } from "../_lib/workerTeardown";
 import { deriveConversationTitle, toChatMessageItems } from "../_lib/conversationMessages";
@@ -48,7 +47,9 @@ import {
   shouldDiscardPartialAssistantOutput,
   shouldPersistAssistantOutput,
 } from "../_lib/generationPersistence";
-import { useTranslations } from "../_i18n/LocaleContext";
+import { recordRuntimeRecoveryEvent } from "../_lib/runtimeRecovery";
+import { canSendChatMessage, isConversationSwitchBlockedStatus } from "../_lib/runtimeUiState";
+import { useLocale, useTranslations } from "../_i18n/LocaleContext";
 
 const IDLE_RUNTIME_STATE: RuntimeState = { status: "idle", modelId: null, loadProgress: 0, error: null };
 
@@ -57,22 +58,18 @@ const IDLE_RUNTIME_STATE: RuntimeState = { status: "idle", modelId: null, loadPr
 // A wedged engine (e.g. after a cancel timeout) can leave dispose() pending
 // forever; the worker must never be leaked waiting on it.
 const TEARDOWN_GRACE_MS = 2_000;
-const RECOVERABLE_GENERATION_ERROR_CODES = new Set<RuntimeErrorCode>([
-  "cancel_timeout",
-  "generation_stalled",
-  "generation_timeout",
-  "degenerate_output",
-]);
-
 function ChatContent() {
   const t = useTranslations();
+  const { locale } = useLocale();
   const searchParams = useSearchParams();
   const rawTask = searchParams.get("task");
   const rawMode = searchParams.get("mode");
   const task = isTaskCategory(rawTask) ? rawTask : null;
   const mode = isPerformanceMode(rawMode) ? rawMode : null;
-  const taskLabel = findTaskLabel(task);
-  const modeLabel = findModeLabel(mode);
+  const taskLabelKey = findTaskLabelKey(task);
+  const modeLabelKey = findModeLabelKey(mode);
+  const taskLabel = taskLabelKey ? t(taskLabelKey) : null;
+  const modeLabel = modeLabelKey ? t(modeLabelKey) : null;
 
   const [message, setMessage] = useState("");
   const [routeResult, setRouteResult] = useState<ModelRouterResult | null>(null);
@@ -86,6 +83,8 @@ function ChatContent() {
   const workerRef = useRef<Worker | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const pendingAssistantIdRef = useRef<string | null>(null);
+  const recoveryEpochRef = useRef(0);
+  const recoveryInProgressRef = useRef(false);
 
   const refreshConversations = useCallback(async () => {
     setConversations(await listConversations());
@@ -174,7 +173,13 @@ function ChatContent() {
 
   // Also used by the "Reload model" recovery button, so a stuck runtime
   // (e.g. after a cancel timeout) can be replaced without a page refresh.
-  const initializeRuntime = useCallback(() => {
+  const initializeRuntime = useCallback(async (options: { recovery?: boolean } = {}) => {
+    const isRecovery = options.recovery === true;
+    const recoveryEpoch = ++recoveryEpochRef.current;
+    if (isRecovery) {
+      recordRuntimeRecoveryEvent("runtime.recovery.started", "info", "recovering");
+    }
+
     teardownRuntime();
 
     const worker = new Worker(new URL("../../workers/inference.worker.ts", import.meta.url), { type: "module" });
@@ -182,17 +187,57 @@ function ChatContent() {
     workerRef.current = worker;
     runtimeRef.current = runtime;
     unsubscribeRef.current = runtime.subscribe(setRuntimeState);
-    setRuntimeState(runtime.getState());
-    runtime.loadModel();
+    setRuntimeState(isRecovery ? { status: "recovering", modelId: null, loadProgress: 0, error: null } : runtime.getState());
+    try {
+      await runtime.loadModel(undefined, { initialStatus: isRecovery ? "recovering" : "loading_model" });
+    } catch {
+      if (recoveryEpoch === recoveryEpochRef.current && runtimeRef.current === runtime) {
+        setRuntimeState({
+          status: "error",
+          modelId: runtime.getState().modelId,
+          loadProgress: runtime.getState().loadProgress,
+          error: { code: "unknown", message: "Runtime recovery failed." },
+        });
+        if (isRecovery) {
+          recordRuntimeRecoveryEvent("runtime.recovery.failed", "error", "error", "RUNTIME_RECOVERY_FAILED");
+        }
+      }
+      return;
+    }
+
+    if (recoveryEpoch !== recoveryEpochRef.current || runtimeRef.current !== runtime) return;
+    const nextState = runtime.getState();
+    if (isRecovery) {
+      if (nextState.status === "ready") {
+        recordRuntimeRecoveryEvent("runtime.recovery.completed", "info", "ready");
+      } else {
+        recordRuntimeRecoveryEvent(
+          "runtime.recovery.failed",
+          "error",
+          "error",
+          nextState.error?.code ? nextState.error.code.toUpperCase() : "RUNTIME_RECOVERY_FAILED"
+        );
+      }
+    }
   }, [teardownRuntime]);
+
+  const recoverRuntime = useCallback(async () => {
+    if (recoveryInProgressRef.current) return;
+    recoveryInProgressRef.current = true;
+    try {
+      await initializeRuntime({ recovery: true });
+    } finally {
+      recoveryInProgressRef.current = false;
+    }
+  }, [initializeRuntime]);
 
   useEffect(() => {
     if (!task || !mode) return;
-    initializeRuntime();
+    void initializeRuntime();
     return () => teardownRuntime();
   }, [task, mode, initializeRuntime, teardownRuntime]);
 
-  const isConversationSwitchBlocked = runtimeState.status === "generating" || runtimeState.status === "cancelling";
+  const isConversationSwitchBlocked = isConversationSwitchBlockedStatus(runtimeState.status);
 
   useEffect(() => {
     if (runtimeState.status !== "error" || !runtimeState.error || !pendingAssistantIdRef.current) return;
@@ -204,7 +249,10 @@ function ChatContent() {
     pendingAssistantIdRef.current = null;
     setMessages((previous) => previous.filter((item) => item.id !== assistantId));
     setStorageNotice(t(noticeKey));
-  }, [runtimeState.status, runtimeState.error, t]);
+    if (runtimeState.error.code === "cancel_timeout") {
+      void recoverRuntime();
+    }
+  }, [recoverRuntime, runtimeState.status, runtimeState.error, t]);
 
   function handleNewChat() {
     if (isConversationSwitchBlocked) return;
@@ -311,9 +359,8 @@ function ChatContent() {
     let exportData;
     try {
       exportData = parseConversationImport(text);
-    } catch (error) {
-      const errors = error instanceof ConversationExportError ? error.errors : [t("backup.invalidFile")];
-      setImportSummary({ importedCount: 0, skippedCount: 0, errors });
+    } catch {
+      setImportSummary({ importedCount: 0, skippedCount: 0, errors: [t("backup.invalidFile")] });
       return;
     }
 
@@ -362,7 +409,7 @@ function ChatContent() {
     event.preventDefault();
     const runtime = runtimeRef.current;
     const prompt = message.trim();
-    if (!runtime || !prompt || runtimeState.status !== "ready") return;
+    if (!runtime || !canSendChatMessage(runtimeState.status, prompt)) return;
 
     setStorageNotice(null);
     let conversationId = activeConversationId;
@@ -392,7 +439,7 @@ function ChatContent() {
     let stopReason: GenerationStopReason | null = null;
     let runtimeErrorCode: RuntimeErrorCode | undefined;
 
-    for await (const chunk of runtime.generate({ conversationId: conversationId ?? "local-chat", prompt })) {
+    for await (const chunk of runtime.generate({ conversationId: conversationId ?? "local-chat", prompt, responseLocale: locale })) {
       if (chunk.type === "token") {
         assistantText += chunk.text;
         setMessages((previous) =>
@@ -409,8 +456,11 @@ function ChatContent() {
     if (shouldDiscardPartialAssistantOutput(stopReason, runtimeErrorCode)) {
       pendingAssistantIdRef.current = null;
       setMessages((previous) => previous.filter((item) => item.id !== assistantId));
-      const noticeKey = generationNoticeKey(stopReason, runtimeErrorCode);
+      const noticeKey = stopReason === "cancelled" ? "storageNotice.generationStoppedRecovering" : generationNoticeKey(stopReason, runtimeErrorCode);
       if (noticeKey) setStorageNotice(t(noticeKey));
+      if (stopReason === "cancelled") {
+        await recoverRuntime();
+      }
       return;
     }
 
@@ -494,7 +544,15 @@ function ChatContent() {
       {task && mode && routeResult && (
         <section style={{ border: "1px solid var(--color-border)", borderRadius: 16, padding: 16, marginBottom: 16 }}>
           <strong>{routeResult.selectedModel ? t("chat.recommendedModel") : t("chat.noModelAvailable")}</strong>
-          <p style={{ margin: "8px 0 0", fontSize: 14, opacity: 0.85 }}>{routeResult.humanReadableReason}</p>
+          <p style={{ margin: "8px 0 0", fontSize: 14, opacity: 0.85 }}>
+            {t(routeDecisionKey(routeResult), {
+              task: taskLabel ?? task ?? t("chat.noTaskSelected"),
+              mode: modeLabel ?? mode ?? "",
+              model: routeResult.selectedModel?.displayName ?? "",
+              fallback: routeResult.fallbackModel?.displayName ?? "",
+              count: routeResult.rejectedModels.length,
+            })}
+          </p>
           <p style={{ margin: "8px 0 0", fontSize: 13, opacity: 0.6 }}>{t("chat.placeholderModelNote")}</p>
 
           {routeResult.rejectedModels.length > 0 && (
@@ -508,7 +566,7 @@ function ChatContent() {
               <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
                 {routeResult.rejectedModels.map((rejected) => (
                   <li key={rejected.modelId}>
-                    {rejected.modelId} — {rejectionReasonLabel(rejected.reason)}
+                    {rejected.modelId} — {t(rejectionReasonKey(rejected.reason))}
                   </li>
                 ))}
               </ul>
@@ -530,11 +588,9 @@ function ChatContent() {
         >
           <strong>{t("chat.localModelUnavailable")}</strong>
           <p style={{ margin: "8px 0 0", fontSize: 14, opacity: 0.9 }}>{t(runtimeErrorKey(runtimeState.error.code))}</p>
-          {RECOVERABLE_GENERATION_ERROR_CODES.has(runtimeState.error.code) && (
-            <button type="button" onClick={initializeRuntime} style={{ marginTop: 8 }}>
-              {t("chat.reloadModel")}
-            </button>
-          )}
+          <button type="button" onClick={() => void initializeRuntime()} style={{ marginTop: 8 }}>
+            {t("chat.reloadModel")}
+          </button>
         </section>
       )}
 
@@ -560,7 +616,7 @@ function ChatContent() {
             {t("common.stopping")}
           </button>
         ) : (
-          <button type="submit" disabled={runtimeState.status !== "ready" || !message.trim()}>
+          <button type="submit" disabled={!canSendChatMessage(runtimeState.status, message)}>
             {t("common.send")}
           </button>
         )}

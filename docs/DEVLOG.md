@@ -14,9 +14,10 @@ FreeAI Open is an alpha-stage, local-first browser AI assistant. The current cod
 - a debug dashboard and privacy-safe diagnostic report export;
 - a local-only conversation-store package wired into the `/chat` UI through a history sidebar for create, resume, rename, and delete;
 - local conversation export/import, wired into the `/chat` history sidebar (export current, export all, import with a result summary);
-- English/French UI translation with browser-language detection and a visible toggle, and light/dark/system theme support with a visible toggle, both persisted locally.
+- English/French UI translation with browser-language detection and a visible toggle, including onboarding/settings/debug/chat surfaces, plus a runtime-only language instruction for model replies;
+- light/dark/system theme support with a visible toggle, persisted locally.
 
-The product is not yet a complete MVP. Broad model support, encrypted sync, production-ready telemetry persistence, browser end-to-end coverage, and full UI translation coverage remain future work.
+The product is not yet a complete MVP. Broad model support, encrypted sync, production-ready telemetry persistence, and browser end-to-end coverage remain future work.
 
 ## Sprint 1 - App shell, model registry, privacy redactor, telemetry schema
 
@@ -347,6 +348,43 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 
 - These are alpha safeguards, not a guarantee of model quality.
 - Browser-level layout and export smoke coverage is still manual; add dedicated browser/E2E coverage later.
+
+## Sprint 6.4 - v0.6.2-alpha i18n completion and runtime recovery
+
+### Built
+
+- Completed English/French coverage for user-facing strings across home, onboarding, settings, app shell/navigation, chat, conversation history, export/import controls, debug dashboard, runtime status badges, model loading/recovery states, empty states, errors, confirmations, privacy warnings, theme/language controls, and accessibility labels.
+- Converted the task catalog, performance mode catalog, model-status text, and model-router explanation text to translation keys instead of hardcoded English.
+- Added a stricter translation helper: missing localized keys throw in development/tests and fall back to English in production-like use.
+- Added runtime-only language instructions before each WebLLM inference based on the selected UI locale:
+  - French: "Réponds en français par défaut. Utilise une autre langue uniquement si l’utilisateur le demande explicitement."
+  - English: "Reply in English by default. Use another language only when the user explicitly requests it."
+- Changing the UI language affects subsequent generations without recreating the conversation.
+- Added automatic post-cancellation recovery: after Stop confirms, the partial assistant output is discarded, the interrupted runtime stays out of `ready`, the worker is torn down, a replacement worker/runtime is created, and the cached model is reloaded before send is enabled again.
+- Added the `recovering` runtime status across `ai-runtime`, local logs, diagnostic reports, debug dashboard display, and runtime status labels.
+- Added technical recovery events: `runtime.recovery.started`, `runtime.recovery.completed`, and `runtime.recovery.failed`.
+
+### Privacy and architecture notes
+
+- The hidden language instruction is never persisted in conversation history, never shown in the chat UI, never exported with conversations, never included in diagnostic reports, and never written to local technical logs.
+- Language adherence is best effort and depends on the local model; FreeAI Open does not claim every model can answer correctly in French.
+- Recovery logs stay technical-only: event name, severity, runtime status, and error code where applicable.
+- No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, server endpoint, or server-side WebLLM path was added.
+
+### Tests
+
+- Added catalog-key parity tests for English/French dictionaries.
+- Added representative translation coverage tests across public routes/components and fallback behavior.
+- Added locale preference persistence tests.
+- Added runtime tests for English/French hidden system-message injection, locale changes between generations, no logging of instructions, replacement runtime generation after cancellation, repeated Stop clicks, and `recovering` model loads.
+- Added local-log and diagnostic-report tests for `runtimeStatus: "recovering"`.
+- Added tests proving hidden language instructions are not exported with conversations or included in diagnostic reports.
+
+### Known limitations after v0.6.2-alpha
+
+- Model response language is best effort; future routing should prefer French-capable or multilingual models when French is selected.
+- Browser smoke coverage for switching languages, repeated Stop/recovery cycles, export privacy, and theme persistence remains manual until a browser-level test suite is introduced.
+- The model catalog remains intentionally small.
 
 ## Cross-cutting remaining work
 

@@ -37,13 +37,38 @@ Versions are alpha milestones while the MVP is still under active development.
 
 ### Planned
 
-- Translation coverage does not yet include onboarding (task/mode selection), settings, the model catalog, or model-router explanation text; these remain English-only for now.
+- Browser-level automated coverage for language/theme persistence, export/import, and Stop/recovery remains limited.
 - The model catalog is intentionally small and still uses early compatibility metadata.
 - Supabase-backed persistence is not started.
 - Google Drive sync is not started.
 - The browser runtime still targets a small WebLLM test model before broader model support.
 - Export/import has no browser end-to-end coverage yet (verified manually); encrypted export is not implemented.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
+
+## [0.6.2-alpha] - 2026-07-15
+
+### Fixed
+
+- Completed English/French UI coverage across the public app surfaces: home, onboarding, settings, app shell, chat, conversation history, export/import controls, debug dashboard, runtime status badges, model loading/recovery states, privacy notices, errors, confirmation messages, theme controls, language controls, and accessibility labels.
+- Replaced hardcoded onboarding, settings, task/mode catalog, model-router explanation, and runtime recovery strings with typed translation keys.
+- Added tests that compare English and French catalog keys, cover representative strings from every public route/component area, verify locale preference persistence, and verify safe English fallback behavior for unexpected missing keys.
+- Fixed Stop recovery so a confirmed cancellation no longer marks the interrupted runtime as ready for the next generation. The app now treats the interrupted worker as unsafe, recycles it, reloads the cached model, and returns to `ready` only after the replacement runtime loads.
+- Added the `recovering` runtime status to runtime types, local logs, diagnostic report validation, debug dashboard display, runtime status labels, and tests.
+
+### Changed
+
+- Before each WebLLM generation, the app now passes a hidden runtime-only language instruction based on the selected UI locale.
+  - French: "Réponds en français par défaut. Utilise une autre langue uniquement si l’utilisateur le demande explicitement."
+  - English: "Reply in English by default. Use another language only when the user explicitly requests it."
+- The hidden language instruction is best effort. Actual response language still depends on the selected local model and the user's explicit request.
+- The hidden instruction is not persisted in conversation history, not shown in the UI, not exported with conversations, not included in diagnostic reports, and not written to local technical logs.
+- Import validation errors shown in the chat sidebar now use localized UI messages instead of package-internal English validation text.
+
+### Security and Privacy
+
+- Added technical-only runtime recovery log events: `runtime.recovery.started`, `runtime.recovery.completed`, and `runtime.recovery.failed`.
+- Recovery logs contain only event names, severity, runtime status, and technical error codes.
+- Added tests proving the hidden language instruction is not exported, logged, or included in diagnostics.
 
 ## [0.5.0-alpha] - 2026-07-05
 
@@ -146,7 +171,8 @@ Versions are alpha milestones while the MVP is still under active development.
 - Added a simple local chat flow using the browser runtime.
 - Added runtime error classification and privacy safety tests.
 
-[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.5.0-alpha...HEAD
+[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.2-alpha...HEAD
+[0.6.2-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.1-alpha...v0.6.2-alpha
 [0.5.0-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.4.1-alpha...v0.5.0-alpha
 [0.4.1-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.4.0-alpha...v0.4.1-alpha
 [0.4.0-alpha]: https://github.com/maximecapard/Free-ai-open/releases/tag/v0.4.0-alpha

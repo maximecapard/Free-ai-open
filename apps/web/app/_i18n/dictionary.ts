@@ -13,6 +13,17 @@ type DotPaths<T, Prefix extends string = ""> = {
 
 export type TranslationKey = DotPaths<typeof en>;
 
+export function getDictionaryKeys(dictionary: Dictionary, prefix = ""): string[] {
+  return collectDictionaryKeys(dictionary as Record<string, unknown>, prefix);
+}
+
+function collectDictionaryKeys(dictionary: Record<string, unknown>, prefix: string): string[] {
+  return Object.entries(dictionary).flatMap(([key, value]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    return typeof value === "string" ? [path] : collectDictionaryKeys(value as Record<string, unknown>, path);
+  });
+}
+
 export function getByPath(dictionary: Dictionary, path: string): string | undefined {
   const value = path.split(".").reduce<unknown>((node, segment) => {
     if (node && typeof node === "object" && segment in node) {
@@ -22,4 +33,34 @@ export function getByPath(dictionary: Dictionary, path: string): string | undefi
   }, dictionary);
 
   return typeof value === "string" ? value : undefined;
+}
+
+export function interpolate(text: string, params?: Record<string, string | number>): string {
+  if (!params) return text;
+  return Object.entries(params).reduce((next, [name, value]) => next.replaceAll(`{${name}}`, String(value)), text);
+}
+
+export function translateFromDictionary(
+  dictionary: Dictionary,
+  fallbackDictionary: Dictionary,
+  key: TranslationKey,
+  params?: Record<string, string | number>,
+  options: { throwOnMissing?: boolean } = {}
+): string {
+  const localized = getByPath(dictionary, key);
+  if (localized !== undefined) return interpolate(localized, params);
+
+  const fallback = getByPath(fallbackDictionary, key);
+  if (fallback !== undefined) {
+    if (options.throwOnMissing) {
+      throw new Error(`Missing translation key: ${key}`);
+    }
+    return interpolate(fallback, params);
+  }
+
+  if (options.throwOnMissing) {
+    throw new Error(`Unknown translation key: ${key}`);
+  }
+
+  return key;
 }

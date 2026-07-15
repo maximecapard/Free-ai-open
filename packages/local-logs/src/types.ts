@@ -2,7 +2,7 @@ import type { Backend, DeviceTier } from "@free-ai-open/types";
 
 export type LocalLogSeverity = "debug" | "info" | "warn" | "error" | "critical";
 
-export type RuntimeStatus = "idle" | "loading_model" | "ready" | "generating" | "cancelling" | "error";
+export type RuntimeStatus = "idle" | "loading_model" | "ready" | "generating" | "cancelling" | "recovering" | "error";
 
 export interface LocalLogPerformanceMetrics {
   loadTimeMs?: number;

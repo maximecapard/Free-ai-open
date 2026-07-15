@@ -180,17 +180,23 @@ describe("local logs", () => {
     ]);
   });
 
-  it("accepts the cancelling runtime status", async () => {
+  it("accepts the cancelling and recovering runtime statuses", async () => {
     const store = new MemoryLocalLogStore();
     const client = createTestClient(store);
 
-    const record = await client.addLocalLog({
+    const cancelling = await client.addLocalLog({
       event: "inference.cancel.requested",
       severity: "info",
       runtimeStatus: "cancelling",
     });
+    const recovering = await client.addLocalLog({
+      event: "runtime.recovery.started",
+      severity: "info",
+      runtimeStatus: "recovering",
+    });
 
-    expect(record).toMatchObject({ event: "inference.cancel.requested", runtimeStatus: "cancelling" });
+    expect(cancelling).toMatchObject({ event: "inference.cancel.requested", runtimeStatus: "cancelling" });
+    expect(recovering).toMatchObject({ event: "runtime.recovery.started", runtimeStatus: "recovering" });
   });
 
   it("clears stored logs", async () => {

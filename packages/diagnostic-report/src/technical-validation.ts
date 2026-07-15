@@ -24,6 +24,7 @@ const RUNTIME_STATUSES = new Set<RuntimeStatus>([
   "ready",
   "generating",
   "cancelling",
+  "recovering",
   "error",
 ]);
 

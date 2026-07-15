@@ -39,6 +39,7 @@ vi.mock("@mlc-ai/web-llm", () => ({
 
 const { createInferenceRuntime } = await import("./runtime");
 const { GENERATION_SAFETY_LIMITS } = await import("./generation-safety");
+const { getRuntimeLanguageInstruction } = await import("./language-instruction");
 
 function fakeWorker(): InferenceChatWorker {
   return { postMessage: vi.fn(), onmessage: null };
@@ -151,6 +152,59 @@ describe("createInferenceRuntime", () => {
     );
   });
 
+  it("passes the hidden French language instruction to WebLLM without logging it", async () => {
+    mocks.mockEngine.chat.completions.create.mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: "Bonjour" }, finish_reason: "stop" }] };
+      })()
+    );
+
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    await drain(runtime.generate({ conversationId: "c1", prompt: "réponds", responseLocale: "fr" }));
+
+    expect(mocks.mockEngine.chat.completions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          { role: "system", content: getRuntimeLanguageInstruction("fr") },
+          { role: "user", content: "réponds" },
+        ],
+      })
+    );
+
+    const serializedLogs = JSON.stringify([...mocks.createLogEvent.mock.calls, ...mocks.addLocalLog.mock.calls]);
+    expect(serializedLogs).not.toContain(getRuntimeLanguageInstruction("fr"));
+    expect(serializedLogs).not.toContain("réponds");
+  });
+
+  it("uses English by default and applies locale changes to subsequent generations", async () => {
+    mocks.mockEngine.chat.completions.create
+      .mockResolvedValueOnce(
+        (async function* () {
+          yield { choices: [{ delta: { content: "Hello" }, finish_reason: "stop" }] };
+        })()
+      )
+      .mockResolvedValueOnce(
+        (async function* () {
+          yield { choices: [{ delta: { content: "Bonjour" }, finish_reason: "stop" }] };
+        })()
+      );
+
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    await drain(runtime.generate({ conversationId: "c1", prompt: "hi", responseLocale: "en" }));
+    await drain(runtime.generate({ conversationId: "c1", prompt: "salut", responseLocale: "fr" }));
+
+    expect(mocks.mockEngine.chat.completions.create.mock.calls[0]?.[0].messages[0]).toEqual({
+      role: "system",
+      content: getRuntimeLanguageInstruction("en"),
+    });
+    expect(mocks.mockEngine.chat.completions.create.mock.calls[1]?.[0].messages[0]).toEqual({
+      role: "system",
+      content: getRuntimeLanguageInstruction("fr"),
+    });
+  });
+
   it("stops degenerate output without logging prompt or generated content", async () => {
     const unstableOutput = "<>".repeat(GENERATION_SAFETY_LIMITS.maxRepeatedSymbolBlockRun + 1);
     mocks.mockEngine.chat.completions.create.mockResolvedValue(
@@ -195,8 +249,19 @@ describe("createInferenceRuntime", () => {
     const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
 
     expect(chunks).toEqual([{ type: "token", text: "Par" }, { type: "done", reason: "cancelled" }]);
-    expect(runtime.getState().status).toBe("ready");
+    expect(runtime.getState().status).toBe("cancelling");
     expect(runtime.getState().error).toBeNull();
+  });
+
+  it("uses the recovering status while loading a replacement runtime", async () => {
+    const runtime = createInferenceRuntime(fakeWorker());
+    const states: string[] = [];
+    runtime.subscribe((state) => states.push(state.status));
+
+    await runtime.loadModel("test-model", { initialStatus: "recovering" });
+
+    expect(states).toContain("recovering");
+    expect(runtime.getState().status).toBe("ready");
   });
 
   it("surfaces a generation failure without leaking prompt content anywhere", async () => {
@@ -256,6 +321,20 @@ describe("createInferenceRuntime", () => {
       expect(mocks.mockEngine.interruptGenerate).toHaveBeenCalledTimes(1);
     });
 
+    it("ignores repeated Stop clicks while cancellation is already in progress", async () => {
+      const runtime = createInferenceRuntime(fakeWorker());
+      await startHangingGeneration(runtime);
+
+      runtime.stopGeneration();
+      runtime.stopGeneration();
+
+      expect(runtime.getState().status).toBe("cancelling");
+      expect(mocks.mockEngine.interruptGenerate).toHaveBeenCalledTimes(1);
+      expect(
+        mocks.addLocalLog.mock.calls.filter((call) => call[0]?.event === "inference.cancel.requested")
+      ).toHaveLength(1);
+    });
+
     it("logs inference.cancel.requested immediately, without any prompt content", async () => {
       const runtime = createInferenceRuntime(fakeWorker());
       await startHangingGeneration(runtime);
@@ -283,7 +362,7 @@ describe("createInferenceRuntime", () => {
       ]);
     });
 
-    it("accepts a new message once cancellation is confirmed", async () => {
+    it("keeps the interrupted runtime in cancelling after confirmation until the app recycles it", async () => {
       let resolveAbort: (() => void) | undefined;
       mocks.mockEngine.chat.completions.create.mockResolvedValueOnce(
         (async function* () {
@@ -310,7 +389,7 @@ describe("createInferenceRuntime", () => {
 
       resolveAbort();
       await firstGeneration;
-      expect(runtime.getState().status).toBe("ready");
+      expect(runtime.getState().status).toBe("cancelling");
       expect(mocks.addLocalLog).toHaveBeenCalledWith(expect.objectContaining({ event: "inference.cancelled" }));
 
       mocks.mockEngine.chat.completions.create.mockResolvedValueOnce(
@@ -320,8 +399,49 @@ describe("createInferenceRuntime", () => {
       );
       const secondGeneration = await drain(runtime.generate({ conversationId: "c3", prompt: "new message" }));
 
-      expect(secondGeneration).toEqual([{ type: "token", text: "Hello" }, { type: "done", reason: "completed" }]);
-      expect(runtime.getState().status).toBe("ready");
+      expect(secondGeneration).toEqual([
+        { type: "error", error: { code: "unknown", message: "Runtime is not ready to generate." } },
+      ]);
+      expect(runtime.getState().status).toBe("cancelling");
+    });
+
+    it("allows a replacement runtime to generate after the interrupted runtime is abandoned", async () => {
+      let resolveAbort: (() => void) | undefined;
+      mocks.mockEngine.chat.completions.create
+        .mockResolvedValueOnce(
+          (async function* () {
+            yield { choices: [{ delta: { content: "Par" }, finish_reason: null }] };
+            await new Promise<void>((resolve) => {
+              resolveAbort = resolve;
+            });
+            yield { choices: [{ delta: {}, finish_reason: "abort" }] };
+          })()
+        )
+        .mockResolvedValueOnce(
+          (async function* () {
+            yield { choices: [{ delta: { content: "Recovered" }, finish_reason: "stop" }] };
+          })()
+        );
+
+      const interruptedRuntime = createInferenceRuntime(fakeWorker());
+      await interruptedRuntime.loadModel("test-model");
+      const firstGeneration = drain(interruptedRuntime.generate({ conversationId: "c1", prompt: "hi" }));
+      while (!resolveAbort) {
+        await Promise.resolve();
+      }
+
+      interruptedRuntime.stopGeneration();
+      resolveAbort();
+      await firstGeneration;
+      expect(interruptedRuntime.getState().status).toBe("cancelling");
+
+      const recoveredRuntime = createInferenceRuntime(fakeWorker());
+      await recoveredRuntime.loadModel("test-model", { initialStatus: "recovering" });
+      const chunks = await drain(recoveredRuntime.generate({ conversationId: "c2", prompt: "next" }));
+
+      expect(chunks).toEqual([{ type: "token", text: "Recovered" }, { type: "done", reason: "completed" }]);
+      expect(recoveredRuntime.getState().status).toBe("ready");
+      expect(mocks.CreateWebWorkerMLCEngine).toHaveBeenCalledTimes(2);
     });
 
     it("recovers via a timeout when cancellation is never confirmed, without falsely logging inference.cancelled", async () => {
