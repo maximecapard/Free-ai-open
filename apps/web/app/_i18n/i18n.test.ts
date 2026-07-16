@@ -31,6 +31,7 @@ const REPRESENTATIVE_KEYS: TranslationKey[] = [
   "header.primaryNavigation",
   "privacy.notice",
   "home.useRecommended",
+  "home.checkingRecommendation",
   "deviceCapability.recommended",
   "runtimeStatusPlain.ready",
   "chat.composerHint",

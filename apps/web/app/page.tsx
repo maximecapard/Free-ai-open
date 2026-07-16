@@ -6,11 +6,13 @@ import { detectDeviceProfile } from "@free-ai-open/device-profiler";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import { PrivacyNotice } from "./_components/PrivacyNotice";
 import { DeviceCapabilitySummary } from "./_components/DeviceCapabilitySummary";
+import { getRecommendedChatPath } from "./_lib/deviceRecommendation";
 import { useTranslations } from "./_i18n/LocaleContext";
 
 export default function HomePage() {
   const t = useTranslations();
   const [profile, setProfile] = useState<DeviceProfile | null>(null);
+  const recommendedChatPath = getRecommendedChatPath(profile);
 
   useEffect(() => {
     let cancelled = false;
@@ -29,9 +31,15 @@ export default function HomePage() {
       <p style={{ fontSize: 20, lineHeight: 1.5, color: "var(--fo-text-muted)", maxWidth: 720 }}>{t("home.lead")}</p>
 
       <div style={{ display: "flex", gap: 12, marginTop: 32, flexWrap: "wrap" }}>
-        <Link href="/chat?task=chat&mode=balanced" className="fo-button fo-button-primary">
-          {t("home.useRecommended")}
-        </Link>
+        {recommendedChatPath ? (
+          <Link href={recommendedChatPath} className="fo-button fo-button-primary">
+            {t("home.useRecommended")}
+          </Link>
+        ) : (
+          <button type="button" className="fo-button fo-button-primary" disabled>
+            {t("home.checkingRecommendation")}
+          </button>
+        )}
         <Link href="/onboarding" className="fo-button fo-button-secondary">
           {t("home.getStarted")}
         </Link>

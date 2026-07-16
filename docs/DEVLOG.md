@@ -510,7 +510,7 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - Added a responsive application shell in `apps/web/app/_components/Header.tsx`: a compact, always-Ink vertical navigation rail on desktop (brand icon, Home/Chat/Settings/Debug links with `aria-current`, language/theme toggles) and a compact fixed, safe-area-aware top bar on mobile with a small dropdown menu holding the same links/toggles. Both blocks of markup render unconditionally; the existing 720px breakpoint used everywhere else in the app decides which is visible, so there is still exactly one responsive rule to reason about. `apps/web/app/layout.tsx` now wraps `<Header/>` and `{children}` in an `.app-shell`/`.app-shell__content` flex structure instead of stacking a plain top header above the page.
 - Added a small hand-rolled line-icon set (`apps/web/app/_components/icons.tsx`) for the nav (home, chat, settings, debug, menu, close) — simple 1.75px strokes per the brand guide, no icon library dependency added.
 - Added `apps/web/app/_components/DeviceCapabilitySummary.tsx`, a shared presentational component (device profile in, plain-language capability summary + advanced-details disclosure out) that replaces the near-duplicate device-check markup previously hand-written on the home and onboarding/device pages. It maps `(webgpuAvailable, deviceTier)` to one of four public-facing categories — "Limited compatibility", "Suitable for lightweight models", "Recommended experience", "High-performance device" — via a new pure `describeDeviceCapability()` helper in `apps/web/app/_lib/deviceRecommendation.ts`, with boundaries that intentionally mirror the existing `recommendPerformanceMode()` so the label a user sees always matches the mode the app actually recommends. The raw numeric tier, backend, memory, and storage figures move behind an "Advanced technical details" disclosure, never removed, just no longer the default view.
-- Added a "Use the recommended setup" primary call to action on the home page that links straight to a working `/chat?task=chat&mode=balanced` session — the previous "Skip to chat" link went to a bare `/chat` with no `task`/`mode` query parameters, which meant `chat/page.tsx`'s runtime-initialization effect (gated on both being present) never ran and the local model never loaded. "Get started" remains as the secondary path into the full onboarding/customization flow.
+- Added a "Use the recommended setup" primary call to action on the home page that links straight to a working `/chat?task=chat&mode=<recommended>` session once local device profiling has resolved — the previous "Skip to chat" link went to a bare `/chat` with no `task`/`mode` query parameters, which meant `chat/page.tsx`'s runtime-initialization effect (gated on both being present) never ran and the local model never loaded. "Get started" remains as the secondary path into the full onboarding/customization flow.
 - Highlighted the device-recommended performance mode on `/onboarding/mode` with a "Recommended for this device" badge, computed the same way the recommended-setup link picks its default.
 - Renamed the "Performance" mode's *display* label only, to "Quality" (English) / "Qualité" (French); `PerformanceMode`'s `"performance"` value, `catalog.ts`, and all router/compatibility logic are byte-for-byte unchanged.
 - Added a `runtimeStatusPlain.*` translation namespace with the mission's suggested plain-language runtime wording ("Preparing the local model", "Ready on this device", "Writing a response", "Stopping", "Preparing the model again", "Something went wrong") and switched `RuntimeStatusBadge` (the normal chat interface) to it; the existing `runtimeStatus.*` namespace is kept for technical/debug use.
@@ -538,6 +538,29 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - The mobile top bar's dropdown menu is a small hand-built disclosure (state + Escape + outside-click), not a shared, reusable "popover" primitive; if a third or fourth place in the app needs the same pattern, it's worth extracting one then rather than duplicating it a third time.
 - `describeDeviceCapability()`'s four-category mapping and the "Quality" mode label are UX/copy decisions based on the mission's stated guidance, not user-tested wording.
 - The public logo assets are still production PNGs, not a true vector logo system (unchanged from Sprint 6.8; still future brand work).
+
+## Sprint 6.10 - v0.6.5-alpha review fixes
+
+### Built
+
+- Corrected the home "Use the recommended setup" CTA so it shares the same `deviceRecommendation.ts` source of truth as `/onboarding/mode`. Once local profiling resolves, tier 0/1 devices route to `fast`, tier 2/3 devices route to `balanced`, and tier 4 devices route to `performance`. While profiling is pending, the CTA shows a detection state instead of hardcoding `balanced`.
+- Introduced accessible light-mode semantic text colors: muted text now uses `#68707A`, and small teal text uses `--fo-accent-text` (`#007E68`) while the brighter brand teal values remain available for accent fills, borders, focus, and active decoration.
+- Raised mobile/coarse-pointer touch targets to 44px for language/theme segmented controls, the mobile history trigger, drawer close control, conversation rename/delete/confirm/cancel actions, and import/export actions. Desktop can still use the compact variants where appropriate.
+
+### Privacy and architecture notes
+
+- Device recommendation still runs entirely in the browser through `detectDeviceProfile()` and the existing local `DeviceProfile.deviceTier`. No new device signal, server endpoint, `fetch`, `sendBeacon`, Supabase, Google Drive, telemetry path, local log, or diagnostic export path was added.
+- The contrast and touch-target fixes are CSS/UI accessibility changes only. They do not touch prompts, responses, documents, conversation storage, model routing packages, WebLLM runtime code, or server behavior.
+
+### Tests
+
+- Added unit coverage for recommended chat destinations across low, normal, and strong tiers, plus the pending-profile state and home/onboarding source-of-truth consistency.
+- Added WCAG contrast tests that calculate ratios from the actual CSS tokens for light and dark semantic text pairs.
+- Added lightweight coverage for mobile touch-target CSS, accessible labels on icon/history controls, delete-confirm wiring, and theme preference persistence.
+
+### Known limitations after Sprint 6.10
+
+- The project still does not include a browser-level rendering/E2E framework. Exact rendered dimensions and visual readability across device emulation remain release-checklist manual smoke tests.
 
 ## Cross-cutting remaining work
 

@@ -43,6 +43,7 @@ export const fr: Dictionary = {
     kicker: "Assistant IA local et open-source",
     lead: "Choisissez ce que vous voulez faire, la rapidité ou la qualité souhaitée, et FreeAI Open recommande un modèle qui s'exécute entièrement sur votre appareil.",
     useRecommended: "Démarrer avec les réglages recommandés",
+    checkingRecommendation: "Recherche des réglages recommandés…",
     getStarted: "Commencer",
     statusHeading: "Cet appareil",
     checkingDevice: "Vérification de cet appareil…",

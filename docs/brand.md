@@ -30,10 +30,13 @@ The source palette is implemented in `apps/web/app/globals.css` as `--fo-*` toke
 - Paper 50: `#FDFBF9`
 - Surface 100: `#F4F6F7`
 - Slate 700: `#3E4247`
-- Muted 500: `#707781`
+- Muted 500: `#68707A`
+- Accent Text Light: `#007E68`
 - Line 200: `#DDE1E5`
 
-Use semantic tokens such as `--fo-bg`, `--fo-surface`, `--fo-text`, `--fo-text-muted`, `--fo-border`, `--fo-accent`, `--fo-accent-soft`, and `--fo-focus` in product CSS. The legacy `--color-*` aliases remain as compatibility shims while the UI migrates gradually.
+Use semantic tokens such as `--fo-bg`, `--fo-surface`, `--fo-text`, `--fo-text-muted`, `--fo-border`, `--fo-accent`, `--fo-accent-text`, `--fo-accent-soft`, and `--fo-focus` in product CSS. The legacy `--color-*` aliases remain as compatibility shims while the UI migrates gradually.
+
+In light mode, `--fo-text-muted` resolves to `#68707A` and small teal text resolves through `--fo-accent-text` to `#007E68`, so normal-size labels, helper text, links, and status pills meet the 4.5:1 WCAG AA target on Paper and Surface. `#00D8AB` and `#00A985` remain the visual brand teal values for fills, borders, focus, active decoration, and non-text uses.
 
 ## Accent Discipline
 
@@ -66,7 +69,7 @@ No runtime third-party font CDN is used. If Inter is unavailable, the browser fa
 - **Secondary button:** light surface, Line/border-token border, Ink/text-token text (`.fo-button-secondary`).
 - **Field:** Paper/white background, a discreet border, and a 2px Open Teal 500 focus ring.
 - **Card:** `--fo-surface` or white, a light border, 16px radius, no decorative shadow (`.fo-card`). Shadows are reserved for real overlays — drawers, floating controls, dropdown menus (`--fo-shadow-float`).
-- **Active local state:** a Teal Soft chip or panel with Teal 700 text (`--fo-accent-soft` / `--fo-accent-strong`). Avoid a generic "success green" — teal carries this meaning on its own.
+- **Active local state:** a Teal Soft chip or panel with accessible teal text (`--fo-accent-soft` / `--fo-accent-text`). Avoid a generic "success green" — teal carries this meaning on its own.
 - **Logs / diagnostic surfaces:** Ink 950 background, Paper-colored code, muted metadata, measured (not alarming) red for errors. See `.fo-ink-surface` for how this is implemented as a scoped token override so the rest of the design system keeps working inside it.
 
 ## Imagery
