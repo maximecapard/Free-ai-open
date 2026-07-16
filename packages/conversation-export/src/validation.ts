@@ -11,7 +11,7 @@ import type {
 } from "./types";
 
 const ROOT_KEYS = new Set(["format", "version", "exportedAt", "source", "conversations"]);
-const CONVERSATION_KEYS = new Set(["id", "title", "schemaVersion", "createdAt", "updatedAt", "messages"]);
+const CONVERSATION_KEYS = new Set(["id", "title", "schemaVersion", "createdAt", "updatedAt", "messages", "task"]);
 const MESSAGE_KEYS = new Set(["id", "role", "content", "createdAt"]);
 const VALID_ROLES = new Set(["user", "assistant", "system"]);
 
@@ -93,6 +93,10 @@ function validateExportConversation(
   collectUnexpectedKeys(value, CONVERSATION_KEYS, path, errors);
   validateBoundedString(value.id, `${path}.id`, limits.maxIdLength, errors);
   validateBoundedString(value.title, `${path}.title`, limits.maxTitleLength, errors);
+
+  if (value.task !== undefined) {
+    validateBoundedString(value.task, `${path}.task`, limits.maxTitleLength, errors, { allowEmpty: false });
+  }
 
   if (value.schemaVersion !== 1) {
     errors.push(`${path}.schemaVersion: must be 1`);

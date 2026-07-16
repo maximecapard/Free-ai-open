@@ -9,8 +9,9 @@ const REPRESENTATIVE_KEYS: TranslationKey[] = [
   "home.lead",
   "settings.title",
   "onboarding.deviceTitle",
-  "onboarding.taskTitle",
   "onboarding.modeTitle",
+  "newChatDialog.title",
+  "newChatDialog.body",
   "tasks.document_analysis.label",
   "modes.balanced.label",
   "modelStatus.noCompatibleModel",
@@ -30,13 +31,14 @@ const REPRESENTATIVE_KEYS: TranslationKey[] = [
   "header.chat",
   "header.primaryNavigation",
   "privacy.notice",
-  "home.useRecommended",
-  "home.checkingRecommendation",
+  "home.openChat",
   "deviceCapability.recommended",
   "runtimeStatusPlain.ready",
   "chat.composerHint",
   "chat.technicalDetails",
   "modes.recommendedBadge",
+  "settings.performanceHeading",
+  "settings.resetConfirm",
 ];
 
 describe("i18n dictionaries", () => {

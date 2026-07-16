@@ -562,6 +562,45 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 
 - The project still does not include a browser-level rendering/E2E framework. Exact rendered dimensions and visual readability across device emulation remain release-checklist manual smoke tests.
 
+## Sprint 6.11 - v0.6.6-alpha part 1: shell, first-run persistence, per-conversation task
+
+### Built
+
+- Added a first-run "Getting Started" flow gating `/` and `/chat`: explain (existing `/onboarding` intro), detect the device (existing `/onboarding/device`), recommend and confirm a performance mode (rewritten `/onboarding/mode`, now step 2 of 2 — the task-selection step and `/onboarding/task` are removed), persist the choice, mark completion, and continue straight to `/chat`. Getting Started is shown once and only reappears after `resetGettingStarted()` (from Settings) or the browser's site data being cleared.
+- Added `apps/web/app/_lib/gettingStartedPreference.ts`: a single, schema-versioned `localStorage` record (`free-ai-open:getting-started`) holding `completed`, `performanceMode`, and an optional coarse `device` snapshot (tier, WebGPU availability, form factor), following the same window-guarded/try-catch convention as `themePreference.ts`/`localePreference.ts`.
+- Added per-conversation usage selection: `NewChatTaskDialog` is a small accessible modal (focus trap, Escape/backdrop close, background scroll lock, focus restoration to whatever triggered it) offering the existing `TaskCategory` catalog minus `document_analysis` (no document upload entry point exists yet, so offering it would promise a capability the product doesn't have). Selecting a task immediately creates the conversation with that task in its metadata, opens it, and closes the dialog; the performance mode is never asked here.
+- Reworked `/chat`: task/mode are no longer read from the URL. The performance mode comes from `gettingStartedPreference`; the active conversation's task comes from its own stored metadata via a new `resolveConversationTask()` helper in `_lib/catalog.ts`, defaulting missing/invalid values to `"chat"`. The model-router recommendation panel now depends on `[activeConversationTask, performanceMode]` and recomputes on either change; the WebLLM worker/runtime lifecycle depends only on `performanceMode` being loaded, since this alpha always loads the same placeholder model regardless of the routing recommendation shown.
+- Added an optional `task` field to `@free-ai-open/conversation-store` (`ConversationMetadata`/`CreateConversationInput`) and to `@free-ai-open/conversation-export` (`ConversationExportConversation`, added to the validator's allowed-key set with a bounded-string check). Format/version are unchanged (`freeai-open-conversations` / `1`); older conversations and older export files without `task` remain fully valid, and the store/export layers only ever pass the value through — no new cross-package dependency was added to keep `task` as an app-validated `TaskCategory` at the storage boundary.
+- Redesigned `/settings`: performance mode (plain-language explanation, pick-then-explicit-"Save" flow so a change is never applied silently and can't interrupt a reply that's currently generating elsewhere), language (`LanguageToggle`), theme (`ThemeToggle`), "Re-check this device" (re-runs `detectDeviceProfile()` inline), and "Reset first-time setup" (confirm step, then `resetGettingStarted()` + redirect to `/onboarding`). Device profile, the exact `PerformanceMode` value, and the local model ID (`DEFAULT_MODEL_ID`) sit behind an "Advanced technical details" disclosure.
+- Fixed the desktop navigation rail's selected-control contrast: `.app-shell__rail` now forces its semantic tokens (`--fo-text`, `--fo-accent-soft`, `--fo-accent-text`, `--fo-border`, …) to dark-surface values, the same technique `.fo-ink-surface` already uses for `/debug`. Previously the rail's language/theme toggle mixed hardcoded Paper text with the page's theme-following `--fo-accent-soft`, so a light site theme produced white text on a very light teal background for the selected option. The rail-specific pressed-state override is removed entirely; the base `.fo-segmented button[aria-pressed="true"]` rule now resolves correctly inside the rail's forced-dark scope on its own.
+- Added a dedicated desktop chat workspace: `apps/web/app/chat/layout.tsx` wraps `/chat` in a `.chat-shell` div, and new `@media (min-width: 721px)` rules in `globals.css` give it `height: 100dvh`, an independently-scrolling sidebar (`.chat-history-list`) and message transcript (`.chat-main__scroll`), a bottom-anchored composer (`.chat-main__composer`), and every intermediate flex region `min-height: 0` so the scroll regions can actually shrink instead of stretching the document. The page footer is hidden only on this route (`.app-shell__main:has(> .chat-shell) + .app-footer`), and only inside the same desktop media query — mobile's existing off-canvas drawer, normal document flow, and footer are completely unchanged.
+
+### Privacy and architecture notes
+
+- The Getting Started preference store holds only a completion flag, a `PerformanceMode` string, and coarse, already-privacy-reviewed device fields — never raw sensor values, never sent to a server.
+- The per-conversation `task` field is a short catalog label, never prompt/response content. It flows through export/import the same way `title` already does, and import validation rejects a non-string/oversized value the same way it already rejects malformed titles.
+- No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, new server endpoint, or server-side WebLLM path was added. No model-router selection algorithm, WebLLM runtime behavior, telemetry schema, or diagnostic-report schema changed.
+- This is explicitly part 1 of v0.6.6-alpha — the mission scope excluded the full v0.7 model router integration (using `formFactor`/refined tiers to prefer specific models per task) on purpose; routing recommendations remain advisory display only, as before.
+
+### Tests
+
+- Added `gettingStartedPreference.test.ts` (completion/mode/device persistence, schema-version guard, corrupted-JSON guard, reset).
+- Added `catalog.test.ts` (`newChatTaskOptions` excludes `document_analysis` and otherwise mirrors the shared catalog; `resolveConversationTask` defaults missing/invalid values to `"chat"`).
+- Extended `accessibilityTokens.test.ts` with rail-token-forcing and selected-state-not-color-alone assertions, and added `chatShellLayout.test.ts` asserting the desktop `.chat-shell`/`.chat-main__*` CSS structure (fixed height, `min-height: 0` on nested flex regions, independent `overflow-y: auto` scroll regions, anchored composer, route-scoped footer hiding).
+- Extended `conversation-store`'s and `conversation-export`'s test suites with `task` field round-tripping, missing-task migration defaults, and old-export-without-task backward compatibility.
+- Updated `deviceRecommendation.test.ts` and `i18n.test.ts` for the retired `getRecommendedChatPath`/`home.useRecommended`/`onboarding.taskTitle` surface.
+
+### Known limitations after Sprint 6.11
+
+- Settings' performance-mode change always requires an explicit "Save" click rather than truly detecting an in-progress generation elsewhere (the runtime's lifecycle is tied to the mounted `/chat` page, which already tears down on navigation away — there is currently no cross-page/cross-tab "is generating" signal to check). The always-explicit-confirm flow satisfies the "never silently interrupt" requirement without that signal.
+- The redesign is presentation/data-flow layer over already-tested logic; no component-rendering or browser E2E framework was added, consistent with prior sprints. `NewChatTaskDialog`'s focus-trap/keyboard behavior is verified by source review and manual browser testing, not an automated DOM test, since the project still has no such test layer.
+- No further v0.6.6-alpha work (if any) has been scoped yet; this sprint is explicitly "part 1."
+
+### Planned work (not implemented yet)
+
+- v0.7: use the refined device tier/`formFactor` in `model-router` to prefer specific models per task/device, as already described in `docs/roadmap.md` — intentionally out of scope for this sprint.
+- Any further v0.6.6-alpha parts, if the mission is extended.
+
 ## Cross-cutting remaining work
 
 - Expand and validate the model registry before adding more model records.

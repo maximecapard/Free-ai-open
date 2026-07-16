@@ -45,8 +45,8 @@ Server data is technical only:
 - `model-router`: task/mode/device based model selection.
 - `model-registry`: model metadata and validation.
 - `local-storage`: IndexedDB and local persistence.
-- `conversation-store`: local-only browser conversation persistence.
-- `conversation-export`: versioned local JSON conversation export/import helpers.
+- `conversation-store`: local-only browser conversation persistence, including an optional per-conversation `task` (usage/purpose) field.
+- `conversation-export`: versioned local JSON conversation export/import helpers, preserving the optional `task` field under the same `freeai-open-conversations` version `1` format.
 - `logger`: structured local logs.
 - `privacy-redactor`: removes sensitive data.
 - `telemetry`: event schemas and client/server helpers.
@@ -76,6 +76,24 @@ Translation and theme are app-level (`apps/web`) concerns, not packages, since t
 - Theme: CSS custom-property color tokens defined in `globals.css` for dark (default) and light, toggled via a `data-theme` attribute on `<html>` set by a `useTheme()` React context (`apps/web/app/_theme`) and persisted in `localStorage`. "System" leaves the attribute unset and relies on a `prefers-color-scheme` media query. A blocking inline script in the root layout applies a stored light/dark choice before hydration to avoid a flash of the wrong theme.
 - Brand assets: production web PNGs live under `apps/web/public/brand/` and are referenced by the app metadata and compact navigation. Source brand files stay local-only under `.local/brand-source/` and are not part of the public repository. A true vector logo source is still future brand work.
 - Neither system sends data to a server or stores anything beyond a small preference value (locale or theme name) in `localStorage`.
+
+## First-run setup and per-conversation task
+
+`apps/web/app/_lib/gettingStartedPreference.ts` is a single, schema-versioned `localStorage` record (`free-ai-open:getting-started`) holding whether the first-run "Getting Started" flow has been completed, the confirmed `PerformanceMode`, and an optional coarse device snapshot (`deviceTier`, `webgpuAvailable`, `formFactor`) kept only to explain the choice later — never raw sensor values. It follows the same window-guarded/try-catch convention as `themePreference.ts`/`localePreference.ts`, but bundles the whole flow's state in one record (rather than one key per field) since "has setup finished" and "what mode was chosen" are the same decision.
+
+`/` and `/chat` both call `isGettingStartedCompleted()` on mount and redirect to `/onboarding` when it is false, so the first-run flow is shown automatically rather than offered as an optional shortcut. `/onboarding` now has two steps: device detection (`/onboarding/device`, unchanged) and performance-mode confirmation (`/onboarding/mode`, rewritten). The previous third step, `/onboarding/task`, is removed — task selection moved to per-conversation (see below) since asking for it once during setup no longer matched how the product is used. Confirming a mode calls `completeGettingStarted(mode, deviceSnapshot)` and navigates straight to `/chat`; the mode can be changed later from `/settings`, which calls `setStoredPerformanceMode()` directly without touching the completion flag, and can reset the whole flow via `resetGettingStarted()`.
+
+Each conversation now carries its own optional `task` (a `TaskCategory` value) in `ConversationMetadata`, set once when the conversation is created and never changed afterward. Selecting "New chat" opens `apps/web/app/_components/NewChatTaskDialog.tsx`, a small accessible modal (focus trap via a Tab/Shift+Tab keydown handler scoped to the dialog's own focusable elements, Escape and backdrop-click to close, background scroll lock while open, focus restored to whatever element was previously focused) that asks what the conversation is for using `apps/web/app/_lib/catalog.ts`'s existing `TaskCategory` catalog — never a separate list. `newChatTaskOptions` filters out `document_analysis`, since the product has no document upload/analysis entry point yet and offering it would promise a capability that doesn't exist. Selecting a task creates the conversation with that task already set, opens it, and closes the dialog; the performance mode is never re-asked here, since it is a global preference, not a per-conversation one.
+
+`/chat` reads the performance mode from `gettingStartedPreference` and the active conversation's task from its own metadata (`resolveConversationTask()` in `catalog.ts` defaults a missing/invalid value to `"chat"`, covering conversations created before this field existed and conversations imported from an older export). The model-router recommendation panel recomputes whenever either changes; the WebLLM worker/runtime lifecycle itself depends only on the performance mode being loaded, since this alpha always loads the same placeholder model regardless of the router's advisory recommendation — task/mode changes therefore never reload the runtime or interrupt an in-progress generation.
+
+## Desktop chat workspace layout
+
+`/chat` has its own nested route layout, `apps/web/app/chat/layout.tsx`, which wraps the page in a `.chat-shell` div. This keeps the fixed-height, independently-scrolling treatment described below scoped to `/chat` alone — every other route continues to use the root layout's normal document-flow page scrolling untouched.
+
+On desktop (`min-width: 721px`, the same breakpoint used everywhere else in the app), `globals.css` gives `.chat-shell` `height: 100dvh` and turns the page into a fixed application workspace: the conversation sidebar (`.chat-history-list`) and the message transcript (`.chat-main__scroll`) each get their own `overflow-y: auto` region, the composer (`.chat-main__composer`) stays `flex-shrink: 0` and anchored at the bottom, and every intermediate flex container along the chain is `min-height: 0` — the standard fix for a flex child otherwise refusing to shrink below its content's intrinsic height and defeating the inner `overflow-y: auto` regions. The page footer is hidden only on this route, and only inside the same desktop media query, via `.app-shell__main:has(> .chat-shell) + .app-footer { display: none; }` — a `:has()` selector rather than JS route-awareness, since the footer would otherwise either get clipped or force the shell taller than the viewport.
+
+Mobile is untouched: none of the rules above apply below the 721px breakpoint, so the existing off-canvas history drawer, normal page scrolling, and footer all render exactly as before this change.
 
 ## Runtime cancellation recovery
 

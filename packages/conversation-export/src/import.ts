@@ -64,6 +64,7 @@ export function prepareImportedConversations(
       updatedAt: conversation.updatedAt,
       messageCount: messages.length,
       messages,
+      task: conversation.task,
       importMetadata: {
         source: validExport.source,
         originalId: conversation.id,

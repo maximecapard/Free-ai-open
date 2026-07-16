@@ -47,9 +47,13 @@ Users should be able to:
 
 Implemented today: erase local conversations (delete from the `/chat` history sidebar), erase/view/export local logs and the diagnostic report (`/debug`), and local JSON conversation export/import from the `/chat` history sidebar. A telemetry on/off toggle, erasing the model cache, encrypted export, and encrypted Drive sync are not implemented yet — see [`docs/roadmap.md`](roadmap.md).
 
+## First-run setup preference
+
+Whether the first-run "Getting Started" flow has been completed, the performance mode the user confirmed, and a coarse device snapshot (tier, WebGPU availability, form factor — the same fields already covered under "Device capability profiling" below) used only to explain that choice later are stored as a single local preference value, never sent to a server. Getting Started is shown automatically only when this value shows it hasn't been completed, and is shown again only after the user resets it from Settings or clears the browser's site data for this app.
+
 ## Local conversations
 
-Conversation persistence is local-only. Stored conversations may contain user prompts and assistant responses, so they must not be sent to telemetry, diagnostic reports, Supabase, Google Drive, or any server endpoint by default.
+Conversation persistence is local-only. Stored conversations may contain user prompts and assistant responses, so they must not be sent to telemetry, diagnostic reports, Supabase, Google Drive, or any server endpoint by default. Each conversation may also carry a short usage/purpose label (its "task", e.g. "coding" or "writing") chosen when the conversation was created — never prompt or response content, and included in local exports the same way the conversation title already is.
 
 The conversation store uses IndexedDB when available and an in-memory fallback when IndexedDB is unavailable. The fallback is temporary and disappears when the page session ends.
 
@@ -57,7 +61,7 @@ Sprint 5.1 adds unit coverage for the IndexedDB store, no-IndexedDB memory fallb
 
 ## Local conversation export/import
 
-The core export/import format is a local JSON file with `format: "freeai-open-conversations"` and `version: 1`. Export files may contain prompts and model responses because their purpose is user-controlled local backup. They must not be sent to telemetry, local technical logs, diagnostic reports, Supabase, Google Drive, or any server endpoint by default.
+The core export/import format is a local JSON file with `format: "freeai-open-conversations"` and `version: 1`. Export files may contain prompts and model responses because their purpose is user-controlled local backup. They must not be sent to telemetry, local technical logs, diagnostic reports, Supabase, Google Drive, or any server endpoint by default. Each conversation's optional `task` label is preserved on export/import the same way its title is; older export files without a `task` field remain fully valid to import.
 
 Imports are validated strictly before use. Imported conversations receive new local conversation IDs by default so an import cannot silently overwrite an existing conversation. The export format is not encrypted; encrypted backup is future work.
 

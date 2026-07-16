@@ -35,7 +35,7 @@ export default function OnboardingDevicePage() {
       </div>
 
       {profile && (
-        <Link href="/onboarding/task" className="fo-button fo-button-primary" style={{ marginTop: 32 }}>
+        <Link href="/onboarding/mode" className="fo-button fo-button-primary" style={{ marginTop: 32 }}>
           {t("common.continue")}
         </Link>
       )}

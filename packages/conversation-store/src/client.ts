@@ -64,6 +64,7 @@ function toMetadata(conversation: Conversation): ConversationMetadata {
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
     messageCount: conversation.messages.length,
+    task: conversation.task,
   };
 }
 
@@ -81,6 +82,7 @@ function normalizeConversation(conversation: Conversation, limits: ConversationS
     updatedAt: conversation.updatedAt,
     messageCount: messages.length,
     messages,
+    task: conversation.task,
   };
 }
 
@@ -107,6 +109,7 @@ export class ConversationStoreClient {
       updatedAt: nowIso,
       messageCount: 0,
       messages: [],
+      task: input.task,
     };
 
     try {

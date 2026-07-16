@@ -34,6 +34,11 @@ export const performanceModes: ModeOption[] = [
   { id: "performance", labelKey: "modes.performance.label", descriptionKey: "modes.performance.description" },
 ];
 
+// Presented when starting a new conversation. Excludes document_analysis:
+// the product has no document upload/analysis entry point yet, so offering
+// it here would promise a capability that doesn't actually exist.
+export const newChatTaskOptions: TaskOption[] = taskCategories.filter((task) => task.id !== "document_analysis");
+
 export function findTaskLabelKey(id: string | null | undefined): TranslationKey | null {
   return taskCategories.find((task) => task.id === id)?.labelKey ?? null;
 }
@@ -48,4 +53,13 @@ export function isTaskCategory(value: string | null | undefined): value is TaskC
 
 export function isPerformanceMode(value: string | null | undefined): value is PerformanceMode {
   return performanceModes.some((mode) => mode.id === value);
+}
+
+// Conversations created before the per-conversation task field existed (or
+// imported from an older export) have no stored task. Falls back to "chat"
+// (general conversation) rather than losing the conversation or blocking on
+// a choice, per the migration rule: default missing task metadata to the
+// current general chat behavior.
+export function resolveConversationTask(task: string | null | undefined): TaskCategory {
+  return isTaskCategory(task) ? task : "chat";
 }

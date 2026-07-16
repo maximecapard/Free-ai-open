@@ -309,6 +309,25 @@ describe("conversation store", () => {
     await expect(client.getRecentConversations(1)).resolves.toMatchObject([{ title: "New" }]);
   });
 
+  it("stores and returns the optional task field on create, get, and list", async () => {
+    const client = createTestClient();
+
+    const created = await client.createConversation({ title: "Coding help", task: "coding" });
+    expect(created?.task).toBe("coding");
+
+    await expect(client.getConversation(created!.id)).resolves.toMatchObject({ task: "coding" });
+    await expect(client.listConversations()).resolves.toMatchObject([{ task: "coding" }]);
+  });
+
+  it("leaves task undefined for conversations created without one, for safe migration of old data", async () => {
+    const client = createTestClient();
+
+    const created = await client.createConversation({ title: "No task set" });
+    expect(created?.task).toBeUndefined();
+
+    await expect(client.getConversation(created!.id)).resolves.toMatchObject({ task: undefined });
+  });
+
   it("does not make network requests or send beacons", async () => {
     const fetchSpy = vi.fn();
     const sendBeaconSpy = vi.fn();

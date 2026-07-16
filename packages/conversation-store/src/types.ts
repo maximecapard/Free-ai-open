@@ -16,6 +16,13 @@ export interface ConversationMetadata {
   createdAt: string;
   updatedAt: string;
   messageCount: number;
+  // The usage/task this conversation was created for (e.g. "chat", "coding").
+  // Kept as a plain optional string rather than importing @free-ai-open/types'
+  // TaskCategory, so this package stays free of an app-level dependency;
+  // callers validate/narrow the value themselves. Absent on conversations
+  // created before this field existed — callers must default it (the app
+  // layer defaults missing/invalid values to general chat behavior).
+  task?: string;
 }
 
 export interface Conversation extends ConversationMetadata {
@@ -26,6 +33,7 @@ export interface CreateConversationInput {
   id?: ConversationId;
   title?: string;
   createdAt?: string;
+  task?: string;
 }
 
 export interface AddConversationMessageInput {

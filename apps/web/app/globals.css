@@ -392,6 +392,36 @@ samp {
   color: var(--fo-text);
 }
 
+.chat-layout {
+  display: flex;
+  gap: var(--fo-space-6);
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--fo-space-6);
+  align-items: flex-start;
+}
+
+.chat-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.chat-main {
+  flex: 1;
+  min-width: 0;
+}
+
 .chat-history-title-button {
   display: block;
   width: 100%;
@@ -466,6 +496,20 @@ samp {
   background: var(--fo-ink-950);
   color: var(--fo-paper-50);
   border-right: 1px solid rgba(253, 251, 249, 0.1);
+  /* Forces the semantic tokens themselves (same technique as .fo-ink-surface)
+     so anything themed inside the rail — e.g. the language/theme segmented
+     controls — always resolves against dark-surface values regardless of the
+     selected site theme. Without this, a light-mode page theme leaked its
+     light --fo-accent-soft (a near-opaque light teal) into the rail while the
+     rail's own text stayed hardcoded Paper, producing unreadable white text
+     on a very light teal selected-control background. */
+  --fo-text: var(--fo-paper-50);
+  --fo-text-muted: rgba(253, 251, 249, 0.72);
+  --fo-border: rgba(253, 251, 249, 0.14);
+  --fo-accent: var(--fo-teal-500);
+  --fo-accent-strong: var(--fo-teal-500);
+  --fo-accent-text: var(--fo-teal-500);
+  --fo-accent-soft: rgba(0, 216, 171, 0.12);
 }
 
 .app-shell__rail-brand {
@@ -534,19 +578,22 @@ samp {
   gap: 2px;
 }
 
-.app-shell__rail-footer .fo-segmented button {
-  color: rgba(253, 251, 249, 0.72);
-  border-color: rgba(253, 251, 249, 0.16);
+/* Unpressed rail options stay dimmed for visual quiet; the pressed state
+   falls through to the base .fo-segmented button[aria-pressed="true"] rule
+   below, which now resolves against this rail's forced-dark tokens above
+   (accent-soft background, Paper text, teal border) instead of needing its
+   own duplicated color values. */
+/* :not([aria-pressed="true"]) matters here, not just for readability: this
+   selector and the base ".fo-segmented button[aria-pressed=true]" rule have
+   equal specificity, and this one comes later in the file, so without the
+   exclusion it silently won and re-dimmed the pressed/selected button's text
+   too — the exact bug this contrast fix exists to prevent. */
+.app-shell__rail-footer .fo-segmented button:not([aria-pressed="true"]) {
+  color: var(--fo-text-muted);
 }
 
 .app-shell__rail-footer .fo-segmented button:hover {
-  color: var(--fo-paper-50);
-}
-
-.app-shell__rail-footer .fo-segmented button[aria-pressed="true"] {
-  background: var(--fo-accent-soft);
-  color: var(--fo-paper-50);
-  border-color: var(--fo-teal-500);
+  color: var(--fo-text);
 }
 
 .app-shell__content {
@@ -843,6 +890,150 @@ samp {
   .conversation-export-action {
     padding: 8px 12px;
   }
+}
+
+/* Chat workspace: on desktop, a fixed-height application workspace with
+   independently scrolling sidebar and message regions, so switching
+   conversations or scrolling a long history never moves the whole page back
+   to the top and a long conversation list never stretches the document.
+   Scoped to /chat's own nested layout (see chat/layout.tsx's ".chat-shell"
+   wrapper) so every other route keeps the root layout's normal document-flow
+   page scrolling untouched. Mobile keeps the existing off-canvas drawer and
+   normal document flow entirely unchanged: every rule below sits behind the
+   same 720px desktop breakpoint used everywhere else in the app. */
+@media (min-width: 721px) {
+  .chat-shell {
+    display: flex;
+    height: 100dvh;
+    min-height: 0;
+  }
+
+  /* The chat workspace owns the full viewport height on desktop; the
+     footer would either get clipped or force the shell taller than the
+     viewport, so it is hidden for this route only. Unrelated pages (Home,
+     Settings, Debug, onboarding) are untouched since :has() only matches
+     when a ".chat-shell" is actually present. */
+  .app-shell__main:has(> .chat-shell) + .app-footer {
+    display: none;
+  }
+
+  .chat-layout {
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+    display: flex;
+    gap: 0;
+    padding: 0;
+    max-width: none;
+    margin: 0;
+    align-items: stretch;
+  }
+
+  .chat-sidebar {
+    height: 100%;
+    min-height: 0;
+    padding: var(--fo-space-6) var(--fo-space-4);
+    border-right: 1px solid var(--fo-border);
+  }
+
+  .chat-history-list {
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+  }
+
+  .chat-main {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: var(--fo-space-6);
+    overflow: hidden;
+  }
+
+  .chat-main__header {
+    flex-shrink: 0;
+  }
+
+  .chat-main__scroll {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  .chat-main__composer {
+    flex-shrink: 0;
+    padding-top: var(--fo-space-4);
+  }
+}
+
+.fo-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(13, 17, 24, 0.56);
+}
+
+.fo-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 91;
+  width: min(480px, calc(100vw - 32px));
+  max-height: min(600px, calc(100vh - 64px));
+  overflow-y: auto;
+  padding: var(--fo-space-6);
+  background: var(--fo-surface-elevated);
+  border: 1px solid var(--fo-border);
+  border-radius: var(--fo-radius-card);
+  box-shadow: var(--fo-shadow-float);
+}
+
+.fo-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.fo-modal__title {
+  margin: 0;
+  font-size: 20px;
+}
+
+.fo-modal__close {
+  flex-shrink: 0;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 8px;
+  border: none;
+  background: transparent;
+}
+
+.fo-modal__options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fo-modal__option {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  min-height: 56px;
+  padding: 12px 14px;
+  text-align: left;
+  border-radius: var(--fo-radius-control);
+  background: var(--fo-surface);
+}
+
+.fo-modal__option:hover {
+  border-color: var(--fo-accent);
+  background: var(--fo-surface-elevated);
 }
 
 @media (prefers-reduced-motion: reduce) {

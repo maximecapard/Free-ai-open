@@ -28,6 +28,10 @@ export interface ConversationExportConversation {
   createdAt: string;
   updatedAt: string;
   messages: ConversationExportMessage[];
+  // Optional so exports created before this field existed remain valid
+  // imports; older readers of a newer export simply see it as absent too,
+  // since it was already rejected as an unexpected field before this change.
+  task?: string;
 }
 
 export interface ConversationExportData {

@@ -1,7 +1,7 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { detectDeviceProfile } from "@free-ai-open/device-profiler";
 import { sampleModels } from "@free-ai-open/model-registry";
 import { selectRecommendedModel } from "@free-ai-open/model-router";
@@ -9,6 +9,7 @@ import type { ModelRouterResult } from "@free-ai-open/model-router";
 import { createInferenceRuntime } from "@free-ai-open/ai-runtime";
 import type { GenerationStopReason, InferenceRuntime, RuntimeErrorCode, RuntimeState } from "@free-ai-open/ai-runtime";
 import { createLogEvent, logEvent } from "@free-ai-open/logger";
+import type { PerformanceMode, TaskCategory } from "@free-ai-open/types";
 import {
   addMessage,
   createConversation,
@@ -31,8 +32,9 @@ import { ChatTranscript } from "../_components/ChatTranscript";
 import type { ChatMessageItem } from "../_components/ChatTranscript";
 import { ChatHistoryDrawerPanel } from "../_components/ChatHistoryDrawerPanel";
 import { useMobileHistoryDrawer } from "../_components/useMobileHistoryDrawer";
+import { NewChatTaskDialog } from "../_components/NewChatTaskDialog";
 import type { ConversationImportSummary } from "../_components/ConversationExportImportControls";
-import { findModeLabelKey, findTaskLabelKey, isPerformanceMode, isTaskCategory } from "../_lib/catalog";
+import { findModeLabelKey, findTaskLabelKey, resolveConversationTask } from "../_lib/catalog";
 import { rejectionReasonKey, routeDecisionKey } from "../_lib/routeExplanation";
 import { runtimeErrorKey } from "../_lib/runtimeErrorLabel";
 import { terminateWorkerAfter } from "../_lib/workerTeardown";
@@ -48,6 +50,7 @@ import {
   shouldDiscardPartialAssistantOutput,
   shouldPersistAssistantOutput,
 } from "../_lib/generationPersistence";
+import { getStoredPerformanceMode, isGettingStartedCompleted } from "../_lib/gettingStartedPreference";
 import { recordRuntimeRecoveryEvent } from "../_lib/runtimeRecovery";
 import { canSendChatMessage, isConversationSwitchBlockedStatus } from "../_lib/runtimeUiState";
 import { createStreamingTextBuffer } from "../_lib/streamingBuffer";
@@ -60,21 +63,16 @@ const IDLE_RUNTIME_STATE: RuntimeState = { status: "idle", modelId: null, loadPr
 // A wedged engine (e.g. after a cancel timeout) can leave dispose() pending
 // forever; the worker must never be leaked waiting on it.
 const TEARDOWN_GRACE_MS = 2_000;
-function ChatContent() {
+
+export default function ChatPage() {
   const t = useTranslations();
   const { locale } = useLocale();
-  const searchParams = useSearchParams();
-  const rawTask = searchParams.get("task");
-  const rawMode = searchParams.get("mode");
-  const task = isTaskCategory(rawTask) ? rawTask : null;
-  const mode = isPerformanceMode(rawMode) ? rawMode : null;
-  const taskLabelKey = findTaskLabelKey(task);
-  const modeLabelKey = findModeLabelKey(mode);
-  const taskLabel = taskLabelKey ? t(taskLabelKey) : null;
-  const modeLabel = modeLabelKey ? t(modeLabelKey) : null;
+  const router = useRouter();
 
   const drawer = useMobileHistoryDrawer();
   const [message, setMessage] = useState("");
+  const [performanceMode, setPerformanceMode] = useState<PerformanceMode | null>(null);
+  const [activeConversationTask, setActiveConversationTask] = useState<TaskCategory>("chat");
   const [routeResult, setRouteResult] = useState<ModelRouterResult | null>(null);
   const [runtimeState, setRuntimeState] = useState<RuntimeState>(IDLE_RUNTIME_STATE);
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
@@ -82,20 +80,38 @@ function ChatContent() {
   const [activeConversationId, setActiveConversationId] = useState<ConversationId | null>(null);
   const [storageNotice, setStorageNotice] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<ConversationImportSummary | null>(null);
+  const [isNewChatDialogOpen, setIsNewChatDialogOpen] = useState(false);
   const runtimeRef = useRef<InferenceRuntime | null>(null);
   const workerRef = useRef<Worker | null>(null);
   const unsubscribeRef = useRef<(() => void) | null>(null);
   const pendingAssistantIdRef = useRef<string | null>(null);
   const recoveryEpochRef = useRef(0);
   const recoveryInProgressRef = useRef(false);
+  const lastFocusedBeforeDialogRef = useRef<HTMLElement | null>(null);
+
+  const taskLabelKey = findTaskLabelKey(activeConversationTask);
+  const modeLabelKey = findModeLabelKey(performanceMode);
+  const taskLabel = taskLabelKey ? t(taskLabelKey) : null;
+  const modeLabel = modeLabelKey ? t(modeLabelKey) : null;
+
+  // Getting Started must be completed before /chat can start the local
+  // runtime — sends the user to the first-run flow instead of silently
+  // falling back to a default performance mode.
+  useEffect(() => {
+    if (!isGettingStartedCompleted()) router.replace("/onboarding");
+  }, [router]);
+
+  useEffect(() => {
+    setPerformanceMode(getStoredPerformanceMode());
+  }, []);
 
   const refreshConversations = useCallback(async () => {
     setConversations(await listConversations());
   }, []);
 
   // Resumes the last-viewed conversation after a refresh. Independent of the
-  // task/mode runtime lifecycle effect below, so switching conversations
-  // never re-initializes the WebLLM runtime.
+  // performance-mode runtime lifecycle effect below, so switching
+  // conversations never re-initializes the WebLLM runtime.
   useEffect(() => {
     let cancelled = false;
 
@@ -111,6 +127,7 @@ function ChatContent() {
       if (cancelled || !conversation) return;
 
       setActiveConversationId(conversation.id);
+      setActiveConversationTask(resolveConversationTask(conversation.task));
       setMessages(toChatMessageItems(conversation));
       setStoredActiveConversationId(conversation.id);
     })();
@@ -120,16 +137,21 @@ function ChatContent() {
     };
   }, []);
 
+  // Router recommendation is purely advisory display: this alpha always
+  // loads the same placeholder model regardless of task/mode (see
+  // chat.placeholderModelNote below), so it is safe and cheap to recompute
+  // whenever the active conversation's task or the performance mode changes,
+  // without touching the runtime/worker lifecycle at all.
   useEffect(() => {
-    if (!task || !mode) return;
+    if (!performanceMode) return;
     let cancelled = false;
 
     detectDeviceProfile().then((deviceProfile) => {
       if (cancelled) return;
 
       const result = selectRecommendedModel({
-        task,
-        performanceMode: mode,
+        task: activeConversationTask,
+        performanceMode,
         deviceProfile,
         modelRegistry: sampleModels,
       });
@@ -137,8 +159,8 @@ function ChatContent() {
       setRouteResult(result);
       logEvent(
         createLogEvent("router_decision", "info", {
-          task,
-          performanceMode: mode,
+          task: activeConversationTask,
+          performanceMode,
           deviceTier: deviceProfile.deviceTier,
           selectedModelId: result.selectedModel?.id ?? null,
           fallbackModelId: result.fallbackModel?.id ?? null,
@@ -151,7 +173,7 @@ function ChatContent() {
     return () => {
       cancelled = true;
     };
-  }, [task, mode]);
+  }, [activeConversationTask, performanceMode]);
 
   const teardownRuntime = useCallback(() => {
     unsubscribeRef.current?.();
@@ -235,10 +257,10 @@ function ChatContent() {
   }, [initializeRuntime]);
 
   useEffect(() => {
-    if (!task || !mode) return;
+    if (!performanceMode) return;
     void initializeRuntime();
     return () => teardownRuntime();
-  }, [task, mode, initializeRuntime, teardownRuntime]);
+  }, [performanceMode, initializeRuntime, teardownRuntime]);
 
   const isConversationSwitchBlocked = isConversationSwitchBlockedStatus(runtimeState.status);
 
@@ -263,13 +285,35 @@ function ChatContent() {
     );
   }, []);
 
-  const handleNewChat = useCallback(() => {
+  const openNewChatDialog = useCallback(() => {
     if (isConversationSwitchBlocked) return;
-    setStorageNotice(null);
-    setActiveConversationId(null);
-    setMessages([]);
-    clearStoredActiveConversationId();
+    lastFocusedBeforeDialogRef.current = document.activeElement as HTMLElement | null;
+    setIsNewChatDialogOpen(true);
   }, [isConversationSwitchBlocked]);
+
+  const closeNewChatDialog = useCallback(() => {
+    setIsNewChatDialogOpen(false);
+    lastFocusedBeforeDialogRef.current?.focus?.({ preventScroll: true });
+    lastFocusedBeforeDialogRef.current = null;
+  }, []);
+
+  const handleSelectNewChatTask = useCallback(async (task: TaskCategory) => {
+    setIsNewChatDialogOpen(false);
+    lastFocusedBeforeDialogRef.current = null;
+    setStorageNotice(null);
+
+    const created = await createConversation({ task });
+    if (!created) {
+      setStorageNotice(t("storageNotice.couldNotStartConversation"));
+      return;
+    }
+
+    setActiveConversationId(created.id);
+    setActiveConversationTask(task);
+    setMessages([]);
+    setStoredActiveConversationId(created.id);
+    await refreshConversations();
+  }, [refreshConversations, t]);
 
   const handleSelectConversation = useCallback(async (id: string) => {
     if (isConversationSwitchBlocked) return;
@@ -280,6 +324,7 @@ function ChatContent() {
       return;
     }
     setActiveConversationId(conversation.id);
+    setActiveConversationTask(resolveConversationTask(conversation.task));
     setMessages(toChatMessageItems(conversation));
     setStoredActiveConversationId(conversation.id);
   }, [isConversationSwitchBlocked, t]);
@@ -302,6 +347,7 @@ function ChatContent() {
     }
     if (activeConversationId === id) {
       setActiveConversationId(null);
+      setActiveConversationTask("chat");
       setMessages([]);
       clearStoredActiveConversationId();
     }
@@ -385,6 +431,7 @@ function ChatContent() {
         id: conversation.id,
         title: conversation.title,
         createdAt: conversation.createdAt,
+        task: conversation.task,
       });
       if (!created) {
         skippedCount += 1;
@@ -415,9 +462,9 @@ function ChatContent() {
   }, []);
 
   const handleNewChatFromDrawer = useCallback(() => {
-    handleNewChat();
     drawer.startNewChat();
-  }, [drawer.startNewChat, handleNewChat]);
+    openNewChatDialog();
+  }, [drawer.startNewChat, openNewChatDialog]);
 
   const handleSelectConversationFromDrawer = useCallback((id: string) => {
     void handleSelectConversation(id);
@@ -432,13 +479,18 @@ function ChatContent() {
 
     setStorageNotice(null);
     let conversationId = activeConversationId;
+    const isFirstMessageOfConversation = messages.length === 0;
+    let justCreatedLazily = false;
+
     if (!conversationId) {
-      const created = await createConversation({ title: deriveConversationTitle(prompt) });
+      const created = await createConversation({ task: "chat", title: deriveConversationTitle(prompt) });
       if (!created) {
         setStorageNotice(t("storageNotice.couldNotStartConversation"));
       } else {
         conversationId = created.id;
+        justCreatedLazily = true;
         setActiveConversationId(created.id);
+        setActiveConversationTask("chat");
         setStoredActiveConversationId(created.id);
         await refreshConversations();
       }
@@ -450,8 +502,18 @@ function ChatContent() {
     setMessages((previous) => [...previous, userMessage, { id: assistantId, role: "assistant", content: "" }]);
     setMessage("");
 
-    if (conversationId && !(await addMessage(conversationId, { role: "user", content: prompt }))) {
-      setStorageNotice(t("storageNotice.couldNotSaveMessage"));
+    if (conversationId) {
+      if (!(await addMessage(conversationId, { role: "user", content: prompt }))) {
+        setStorageNotice(t("storageNotice.couldNotSaveMessage"));
+      } else if (isFirstMessageOfConversation && !justCreatedLazily) {
+        // The conversation may have been created via the New Chat dialog
+        // (default "New conversation" title, no message yet) — retitle it
+        // from the first message now, same as the always-had-a-title lazy
+        // path above. Fire-and-forget: a rename failure is non-blocking.
+        void updateConversationTitle(conversationId, deriveConversationTitle(prompt)).then((updated) => {
+          if (updated) void refreshConversations();
+        });
+      }
     }
 
     let assistantText = "";
@@ -504,10 +566,7 @@ function ChatContent() {
   }
 
   return (
-    <div
-      className="chat-layout"
-      style={{ display: "flex", gap: 24, maxWidth: 1200, margin: "0 auto", padding: 24, alignItems: "flex-start" }}
-    >
+    <div className="chat-layout">
       <ChatHistoryDrawerPanel
         isOpen={drawer.isOpen}
         isDesktopViewport={drawer.isDesktopViewport}
@@ -530,173 +589,172 @@ function ChatContent() {
         onDismissImportSummary={handleDismissImportSummary}
       />
 
-      <main ref={drawer.backgroundRef} style={{ flex: 1, minWidth: 0 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          flexWrap: "wrap",
-          gap: 12,
-          marginBottom: 16,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <button
-            ref={drawer.triggerRef}
-            type="button"
-            className="chat-history-trigger"
-            aria-haspopup="dialog"
-            aria-expanded={drawer.isOpen}
-            aria-controls={drawer.panelId}
-            onClick={drawer.toggle}
+      <NewChatTaskDialog isOpen={isNewChatDialogOpen} onClose={closeNewChatDialog} onSelectTask={handleSelectNewChatTask} />
+
+      <main ref={drawer.backgroundRef} className="chat-main">
+        <div className="chat-main__header">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 12,
+              marginBottom: 16,
+            }}
           >
-            {drawer.isOpen ? t("history.closeHistory") : t("history.openHistory")}
-          </button>
-          <h1 className="fo-page-title" style={{ margin: 0, fontSize: 24 }}>
-            {t("chat.heading")}
-          </h1>
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <ModelStatusPill taskLabel={taskLabel} modeLabel={modeLabel} modelName={routeResult?.selectedModel?.displayName} />
-          {task && mode && <RuntimeStatusBadge state={runtimeState} />}
-        </div>
-      </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <button
+                ref={drawer.triggerRef}
+                type="button"
+                className="chat-history-trigger"
+                aria-haspopup="dialog"
+                aria-expanded={drawer.isOpen}
+                aria-controls={drawer.panelId}
+                onClick={drawer.toggle}
+              >
+                {drawer.isOpen ? t("history.closeHistory") : t("history.openHistory")}
+              </button>
+              <h1 className="fo-page-title" style={{ margin: 0, fontSize: 24 }}>
+                {t("chat.heading")}
+              </h1>
+            </div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <ModelStatusPill taskLabel={taskLabel} modeLabel={modeLabel} modelName={routeResult?.selectedModel?.displayName} />
+              {performanceMode && <RuntimeStatusBadge state={runtimeState} />}
+            </div>
+          </div>
 
-      {storageNotice && (
-        <section
-          role="status"
-          aria-live="polite"
-          className="fo-inline-notice"
-          style={{
-            borderColor: "var(--fo-warning)",
-            background: "var(--fo-warning-soft)",
-            marginBottom: 16,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-            fontSize: 13,
-          }}
-        >
-          <span>{storageNotice}</span>
-          <button type="button" className="fo-button fo-button-secondary" onClick={() => setStorageNotice(null)}>
-            {t("common.dismiss")}
-          </button>
-        </section>
-      )}
-
-      {task && mode && routeResult && (
-        <section className="fo-inline-notice" style={{ marginBottom: 16 }}>
-          <strong>{routeResult.selectedModel ? t("chat.recommendedModel") : t("chat.noModelAvailable")}</strong>
-          <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>
-            {t(routeDecisionKey(routeResult), {
-              task: taskLabel ?? task ?? t("chat.noTaskSelected"),
-              mode: modeLabel ?? mode ?? "",
-              model: routeResult.selectedModel?.displayName ?? "",
-              fallback: routeResult.fallbackModel?.displayName ?? "",
-              count: routeResult.rejectedModels.length,
-            })}
-          </p>
-          <p className="fo-muted" style={{ margin: "8px 0 0", fontSize: 13 }}>
-            {t("chat.placeholderModelNote")}
-          </p>
-
-          {routeResult.rejectedModels.length > 0 && (
-            <details className="fo-muted" style={{ marginTop: 12, fontSize: 13 }}>
-              <summary style={{ cursor: "pointer" }}>
-                {t("chat.advancedNotUsed", {
-                  count: routeResult.rejectedModels.length,
-                  plural: routeResult.rejectedModels.length > 1 ? "s" : "",
-                })}
-              </summary>
-              <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
-                {routeResult.rejectedModels.map((rejected) => (
-                  <li key={rejected.modelId}>
-                    <span className="fo-technical-value">{rejected.modelId}</span> — {t(rejectionReasonKey(rejected.reason))}
-                  </li>
-                ))}
-              </ul>
-            </details>
+          {storageNotice && (
+            <section
+              role="status"
+              aria-live="polite"
+              className="fo-inline-notice"
+              style={{
+                borderColor: "var(--fo-warning)",
+                background: "var(--fo-warning-soft)",
+                marginBottom: 16,
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+                fontSize: 13,
+              }}
+            >
+              <span>{storageNotice}</span>
+              <button type="button" className="fo-button fo-button-secondary" onClick={() => setStorageNotice(null)}>
+                {t("common.dismiss")}
+              </button>
+            </section>
           )}
-        </section>
-      )}
 
-      {runtimeState.status === "error" && runtimeState.error && (
-        <section role="alert" className="fo-inline-notice" style={{ borderColor: "var(--fo-danger)", background: "var(--fo-danger-soft)", marginBottom: 16 }}>
-          <strong>{t("chat.localModelUnavailable")}</strong>
-          <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>{t(runtimeErrorKey(runtimeState.error.code))}</p>
-          <button type="button" className="fo-button fo-button-secondary" onClick={() => void initializeRuntime()} style={{ marginTop: 8 }}>
-            {t("chat.reloadModel")}
-          </button>
-          <details className="fo-muted" style={{ marginTop: 8, fontSize: 12 }}>
-            <summary style={{ cursor: "pointer" }}>{t("chat.technicalDetails")}</summary>
-            <p className="fo-technical-value" style={{ margin: "6px 0 0" }}>
-              {runtimeState.error.code}
-            </p>
-          </details>
-        </section>
-      )}
+          {performanceMode && routeResult && (
+            <section className="fo-inline-notice" style={{ marginBottom: 16 }}>
+              <strong>{routeResult.selectedModel ? t("chat.recommendedModel") : t("chat.noModelAvailable")}</strong>
+              <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>
+                {t(routeDecisionKey(routeResult), {
+                  task: taskLabel ?? t("chat.noTaskSelected"),
+                  mode: modeLabel ?? "",
+                  model: routeResult.selectedModel?.displayName ?? "",
+                  fallback: routeResult.fallbackModel?.displayName ?? "",
+                  count: routeResult.rejectedModels.length,
+                })}
+              </p>
+              <p className="fo-muted" style={{ margin: "8px 0 0", fontSize: 13 }}>
+                {t("chat.placeholderModelNote")}
+              </p>
 
-      <section className="fo-card" style={{ padding: 16, minHeight: 320 }}>
-        <ChatTranscript messages={messages} />
-      </section>
+              {routeResult.rejectedModels.length > 0 && (
+                <details className="fo-muted" style={{ marginTop: 12, fontSize: 13 }}>
+                  <summary style={{ cursor: "pointer" }}>
+                    {t("chat.advancedNotUsed", {
+                      count: routeResult.rejectedModels.length,
+                      plural: routeResult.rejectedModels.length > 1 ? "s" : "",
+                    })}
+                  </summary>
+                  <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
+                    {routeResult.rejectedModels.map((rejected) => (
+                      <li key={rejected.modelId}>
+                        <span className="fo-technical-value">{rejected.modelId}</span> — {t(rejectionReasonKey(rejected.reason))}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </section>
+          )}
 
-      <form style={{ display: "flex", gap: 12, marginTop: 16, alignItems: "flex-end" }} onSubmit={handleSubmit}>
-        <textarea
-          value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-          placeholder={t("chat.askPlaceholder")}
-          aria-label={t("chat.composerLabel")}
-          disabled={runtimeState.status !== "ready"}
-          rows={2}
-          enterKeyHint="send"
-          style={{
-            flex: 1,
-            resize: "vertical",
-            minHeight: 44,
-            maxHeight: 220,
-            padding: "10px 14px",
-            fontFamily: "inherit",
-            lineHeight: 1.5,
-          }}
-        />
-        {runtimeState.status === "generating" ? (
-          <button type="button" className="fo-button fo-button-secondary" onClick={() => runtimeRef.current?.stopGeneration()}>
-            {t("common.stop")}
-          </button>
-        ) : runtimeState.status === "cancelling" ? (
-          <button type="button" className="fo-button fo-button-secondary" disabled aria-busy="true">
-            {t("common.stopping")}
-          </button>
-        ) : (
-          <button type="submit" className="fo-button fo-button-primary" disabled={!canSendChatMessage(runtimeState.status, message)}>
-            {t("common.send")}
-          </button>
-        )}
-      </form>
-      <p className="fo-muted" style={{ margin: "6px 0 0", fontSize: 12, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-        {t("chat.composerHint")}
-      </p>
+          {runtimeState.status === "error" && runtimeState.error && (
+            <section role="alert" className="fo-inline-notice" style={{ borderColor: "var(--fo-danger)", background: "var(--fo-danger-soft)", marginBottom: 16 }}>
+              <strong>{t("chat.localModelUnavailable")}</strong>
+              <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>{t(runtimeErrorKey(runtimeState.error.code))}</p>
+              <button type="button" className="fo-button fo-button-secondary" onClick={() => void initializeRuntime()} style={{ marginTop: 8 }}>
+                {t("chat.reloadModel")}
+              </button>
+              <details className="fo-muted" style={{ marginTop: 8, fontSize: 12 }}>
+                <summary style={{ cursor: "pointer" }}>{t("chat.technicalDetails")}</summary>
+                <p className="fo-technical-value" style={{ margin: "6px 0 0" }}>
+                  {runtimeState.error.code}
+                </p>
+              </details>
+            </section>
+          )}
+        </div>
 
-      <div style={{ marginTop: 24 }}>
-        <PrivacyNotice />
-      </div>
+        <div className="chat-main__scroll">
+          <section className="fo-card" style={{ padding: 16, minHeight: 320 }}>
+            <ChatTranscript messages={messages} />
+          </section>
+        </div>
+
+        <div className="chat-main__composer">
+          <form style={{ display: "flex", gap: 12, alignItems: "flex-end" }} onSubmit={handleSubmit}>
+            <textarea
+              value={message}
+              onChange={(event) => setMessage(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  event.currentTarget.form?.requestSubmit();
+                }
+              }}
+              placeholder={t("chat.askPlaceholder")}
+              aria-label={t("chat.composerLabel")}
+              disabled={runtimeState.status !== "ready"}
+              rows={2}
+              enterKeyHint="send"
+              style={{
+                flex: 1,
+                resize: "vertical",
+                minHeight: 44,
+                maxHeight: 220,
+                padding: "10px 14px",
+                fontFamily: "inherit",
+                lineHeight: 1.5,
+              }}
+            />
+            {runtimeState.status === "generating" ? (
+              <button type="button" className="fo-button fo-button-secondary" onClick={() => runtimeRef.current?.stopGeneration()}>
+                {t("common.stop")}
+              </button>
+            ) : runtimeState.status === "cancelling" ? (
+              <button type="button" className="fo-button fo-button-secondary" disabled aria-busy="true">
+                {t("common.stopping")}
+              </button>
+            ) : (
+              <button type="submit" className="fo-button fo-button-primary" disabled={!canSendChatMessage(runtimeState.status, message)}>
+                {t("common.send")}
+              </button>
+            )}
+          </form>
+          <p className="fo-muted" style={{ margin: "6px 0 0", fontSize: 12, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+            {t("chat.composerHint")}
+          </p>
+          <div style={{ marginTop: 16 }}>
+            <PrivacyNotice />
+          </div>
+        </div>
       </main>
     </div>
-  );
-}
-
-export default function ChatPage() {
-  return (
-    <Suspense fallback={null}>
-      <ChatContent />
-    </Suspense>
   );
 }
