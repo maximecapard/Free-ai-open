@@ -16,6 +16,7 @@ const REPRESENTATIVE_KEYS: TranslationKey[] = [
   "modelStatus.noCompatibleModel",
   "router.selectedWithFallback",
   "chat.reloadModel",
+  "chat.scrollToLatest",
   "history.storedLocally",
   "backup.privacyNote",
   "runtimeStatus.recovering",

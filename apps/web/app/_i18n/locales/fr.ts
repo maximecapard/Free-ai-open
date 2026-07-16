@@ -152,6 +152,7 @@ export const fr: Dictionary = {
     reloadModel: "Recharger le modèle",
     askPlaceholder: "Posez votre question en local…",
     emptyTranscript: "Envoyez un message pour commencer à discuter avec le modèle local.",
+    scrollToLatest: "Aller au dernier message",
   },
   history: {
     newChat: "+ Nouvelle conversation",

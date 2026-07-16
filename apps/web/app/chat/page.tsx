@@ -50,6 +50,7 @@ import {
 } from "../_lib/generationPersistence";
 import { recordRuntimeRecoveryEvent } from "../_lib/runtimeRecovery";
 import { canSendChatMessage, isConversationSwitchBlockedStatus } from "../_lib/runtimeUiState";
+import { createStreamingTextBuffer } from "../_lib/streamingBuffer";
 import { useLocale, useTranslations } from "../_i18n/LocaleContext";
 
 const IDLE_RUNTIME_STATE: RuntimeState = { status: "idle", modelId: null, loadProgress: 0, error: null };
@@ -256,15 +257,21 @@ function ChatContent() {
     }
   }, [recoverRuntime, runtimeState.status, runtimeState.error, t]);
 
-  function handleNewChat() {
+  const appendAssistantText = useCallback((assistantId: string, text: string) => {
+    setMessages((previous) =>
+      previous.map((item) => (item.id === assistantId ? { ...item, content: item.content + text } : item))
+    );
+  }, []);
+
+  const handleNewChat = useCallback(() => {
     if (isConversationSwitchBlocked) return;
     setStorageNotice(null);
     setActiveConversationId(null);
     setMessages([]);
     clearStoredActiveConversationId();
-  }
+  }, [isConversationSwitchBlocked]);
 
-  async function handleSelectConversation(id: string) {
+  const handleSelectConversation = useCallback(async (id: string) => {
     if (isConversationSwitchBlocked) return;
     setStorageNotice(null);
     const conversation = await getConversation(id as ConversationId);
@@ -275,18 +282,18 @@ function ChatContent() {
     setActiveConversationId(conversation.id);
     setMessages(toChatMessageItems(conversation));
     setStoredActiveConversationId(conversation.id);
-  }
+  }, [isConversationSwitchBlocked, t]);
 
-  async function handleRenameConversation(id: string, title: string) {
+  const handleRenameConversation = useCallback(async (id: string, title: string) => {
     const updated = await updateConversationTitle(id as ConversationId, title);
     if (!updated) {
       setStorageNotice(t("storageNotice.couldNotRename"));
       return;
     }
     await refreshConversations();
-  }
+  }, [refreshConversations, t]);
 
-  async function handleDeleteConversation(id: string) {
+  const handleDeleteConversation = useCallback(async (id: string) => {
     if (isConversationSwitchBlocked) return;
     const success = await deleteConversation(id as ConversationId);
     if (!success) {
@@ -299,9 +306,9 @@ function ChatContent() {
       clearStoredActiveConversationId();
     }
     await refreshConversations();
-  }
+  }, [activeConversationId, isConversationSwitchBlocked, refreshConversations, t]);
 
-  async function handleExportActiveConversation() {
+  const handleExportActiveConversation = useCallback(async () => {
     setStorageNotice(null);
     if (!activeConversationId) {
       setStorageNotice(t("backup.noActiveConversation"));
@@ -320,9 +327,9 @@ function ChatContent() {
     } catch {
       setStorageNotice(t("backup.couldNotBuildExportOne"));
     }
-  }
+  }, [activeConversationId, t]);
 
-  async function handleExportAllConversations() {
+  const handleExportAllConversations = useCallback(async () => {
     setStorageNotice(null);
     const metadataList = await listConversations();
     if (metadataList.length === 0) {
@@ -344,9 +351,9 @@ function ChatContent() {
     } catch {
       setStorageNotice(t("backup.couldNotBuildExportAll"));
     }
-  }
+  }, [t]);
 
-  async function handleImportFile(file: File) {
+  const handleImportFile = useCallback(async (file: File) => {
     setStorageNotice(null);
     setImportSummary(null);
 
@@ -401,21 +408,21 @@ function ChatContent() {
 
     setImportSummary({ importedCount, skippedCount, errors });
     await refreshConversations();
-  }
+  }, [refreshConversations, t]);
 
-  function handleDismissImportSummary() {
+  const handleDismissImportSummary = useCallback(() => {
     setImportSummary(null);
-  }
+  }, []);
 
-  function handleNewChatFromDrawer() {
+  const handleNewChatFromDrawer = useCallback(() => {
     handleNewChat();
     drawer.startNewChat();
-  }
+  }, [drawer.startNewChat, handleNewChat]);
 
-  function handleSelectConversationFromDrawer(id: string) {
+  const handleSelectConversationFromDrawer = useCallback((id: string) => {
     void handleSelectConversation(id);
     drawer.selectConversation();
-  }
+  }, [drawer.selectConversation, handleSelectConversation]);
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -450,19 +457,24 @@ function ChatContent() {
     let assistantText = "";
     let stopReason: GenerationStopReason | null = null;
     let runtimeErrorCode: RuntimeErrorCode | undefined;
+    const streamBuffer = createStreamingTextBuffer({
+      onFlush: (text) => appendAssistantText(assistantId, text),
+    });
 
-    for await (const chunk of runtime.generate({ conversationId: conversationId ?? "local-chat", prompt, responseLocale: locale })) {
-      if (chunk.type === "token") {
-        assistantText += chunk.text;
-        setMessages((previous) =>
-          previous.map((item) => (item.id === assistantId ? { ...item, content: item.content + chunk.text } : item))
-        );
-      } else if (chunk.type === "done") {
-        stopReason = chunk.reason;
-      } else if (chunk.type === "error") {
-        runtimeErrorCode = chunk.error.code;
-        break;
+    try {
+      for await (const chunk of runtime.generate({ conversationId: conversationId ?? "local-chat", prompt, responseLocale: locale })) {
+        if (chunk.type === "token") {
+          assistantText += chunk.text;
+          streamBuffer.append(chunk.text);
+        } else if (chunk.type === "done") {
+          stopReason = chunk.reason;
+        } else if (chunk.type === "error") {
+          runtimeErrorCode = chunk.error.code;
+          break;
+        }
       }
+    } finally {
+      streamBuffer.flush();
     }
 
     if (shouldDiscardPartialAssistantOutput(stopReason, runtimeErrorCode)) {

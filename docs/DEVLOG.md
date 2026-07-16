@@ -413,6 +413,33 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - Broader browser/E2E coverage for the mobile drawer alongside the rest of the app (see "Cross-cutting remaining work" below).
 - Extending the same off-canvas drawer pattern to other panels if further mobile navigation needs arise.
 
+## Sprint 6.6 - v0.6.3-alpha streaming render responsiveness
+
+### Built
+
+- Audited the `/chat` streaming path and found the main UI bottleneck: every tiny WebLLM token chunk appended text through `setMessages`, remapped the full messages array, and rerendered the chat page subtree even though only the active assistant bubble changed.
+- Added `apps/web/app/_lib/streamingBuffer.ts` with a named `STREAM_RENDER_INTERVAL_MS` constant. The runtime stream is unchanged; the UI batches visible assistant text updates and flushes pending text on completion, cancellation, error, or disposal.
+- Preserved every generated character in the in-memory `assistantText` accumulator used for completion handling and local persistence decisions. The render buffer only controls when React sees visible updates.
+- Added `apps/web/app/_lib/chatAutoscroll.ts` and wired the transcript to follow streaming output only while the user is near the bottom. Scroll work is scheduled through `requestAnimationFrame`, and a translated "Scroll to latest" button appears when the user has scrolled away.
+- Memoized individual chat message bubbles plus the history drawer/sidebar/export controls, with stable callbacks from `/chat`, so unchanged history/import/export UI does not rerender on each buffered transcript flush.
+
+### Privacy and architecture notes
+
+- The buffering layer is local UI state only. It does not call `fetch`, `sendBeacon`, Supabase, Google Drive, telemetry, local technical logs, diagnostic reports, or any server endpoint.
+- Generated text remains forbidden in logs and diagnostics. The buffer contains generated text only in memory long enough to update the visible assistant bubble.
+- No WebLLM runtime behavior, model selection, conversation export/import format, or diagnostic schema changed.
+
+### Tests
+
+- Added unit tests for chunk coalescing without character loss, interval timing, flush-on-completion, flush-on-cancellation/error disposal, and independence from locale/theme state.
+- Added unit tests for near-bottom autoscroll decisions, including the case where a user has intentionally scrolled away from the latest message.
+- Kept browser-level scroll/focus/performance checks in `docs/RELEASE_CHECKLIST.md` because the project still does not have a DOM rendering or browser E2E test layer.
+
+### Known limitations after Sprint 6.6
+
+- The transcript is not virtualized. Very long imported conversations may still benefit from future windowing/virtualization, but no new dependency was added in this sprint.
+- Browser smoke testing is still required to validate perceived smoothness on real mobile devices.
+
 ## Cross-cutting remaining work
 
 - Expand and validate the model registry before adding more model records.
