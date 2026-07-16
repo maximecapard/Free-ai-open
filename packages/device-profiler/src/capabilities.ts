@@ -5,11 +5,10 @@ function lower(value: string | undefined): string {
   return value?.toLowerCase() ?? "";
 }
 
-// Best-effort only. UA-based mobile/tablet hints are not fully reliable (most
-// notably, iPadOS Safari reports a desktop Macintosh user agent by default),
-// so this deliberately falls back to "unknown" rather than guessing when
-// signals disagree or are absent, per "do not use user-agent strings as the
-// only classification mechanism."
+// Best-effort only. UA-based mobile/tablet hints are not fully reliable. The
+// specific iPadOS Safari desktop-mode signal must run before generic macOS
+// desktop classification, otherwise a touch tablet reports as "Macintosh" and
+// bypasses the tablet tier cap.
 export function detectFormFactor(navigatorLike: NavigatorLike | undefined): FormFactor {
   const userAgent = lower(navigatorLike?.userAgent);
   const uaDataMobile = navigatorLike?.userAgentData?.mobile;
@@ -23,6 +22,12 @@ export function detectFormFactor(navigatorLike: NavigatorLike | undefined): Form
     uaDataMobile === true || userAgent.includes("iphone") || (userAgent.includes("android") && userAgent.includes("mobile"));
   if (looksLikeMobile) return "mobile";
 
+  const looksLikeDesktopStyleIpad =
+    (userAgent.includes("macintosh") || userAgent.includes("mac os")) && maxTouchPoints > 1;
+  if (looksLikeDesktopStyleIpad) {
+    return uaDataMobile === undefined ? "tablet" : "unknown";
+  }
+
   if (uaDataMobile === false) return "desktop";
 
   const osFamily = detectOsFamily(navigatorLike);
@@ -30,7 +35,6 @@ export function detectFormFactor(navigatorLike: NavigatorLike | undefined): Form
     // A touch-capable "desktop" OS report is most often a touchscreen laptop,
     // not a tablet — keep it conservative and call it desktop rather than
     // guessing tablet from touch points alone.
-    void maxTouchPoints;
     return "desktop";
   }
 

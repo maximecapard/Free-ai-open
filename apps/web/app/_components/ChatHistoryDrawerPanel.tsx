@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, type RefObject } from "react";
 import { ChatHistorySidebar } from "./ChatHistorySidebar";
 import type { ChatHistorySidebarProps } from "./ChatHistorySidebar";
 import { useTranslations } from "../_i18n/LocaleContext";
@@ -9,6 +9,8 @@ export interface ChatHistoryDrawerPanelProps extends ChatHistorySidebarProps {
   isOpen: boolean;
   isDesktopViewport: boolean;
   panelId: string;
+  panelRef: RefObject<HTMLDivElement | null>;
+  closeButtonRef: RefObject<HTMLButtonElement | null>;
   onClose: () => void;
   onBackdropClick: () => void;
 }
@@ -23,6 +25,8 @@ export const ChatHistoryDrawerPanel = memo(function ChatHistoryDrawerPanel({
   isOpen,
   isDesktopViewport,
   panelId,
+  panelRef,
+  closeButtonRef,
   onClose,
   onBackdropClick,
   ...sidebarProps
@@ -37,16 +41,24 @@ export const ChatHistoryDrawerPanel = memo(function ChatHistoryDrawerPanel({
         aria-hidden="true"
       />
       <div
+        ref={panelRef}
         id={panelId}
         className={`chat-history-panel${isOpen ? " is-open" : ""}`}
         role={isDesktopViewport ? undefined : "dialog"}
         aria-modal={isDesktopViewport ? undefined : true}
         aria-label={isDesktopViewport ? undefined : t("history.title")}
+        tabIndex={isDesktopViewport ? undefined : -1}
         inert={!isDesktopViewport && !isOpen ? true : undefined}
       >
         <div className="chat-history-panel-header">
           <strong>{t("history.title")}</strong>
-          <button type="button" className="chat-history-close" onClick={onClose} aria-label={t("history.closeHistory")}>
+          <button
+            ref={closeButtonRef}
+            type="button"
+            className="chat-history-close"
+            onClick={onClose}
+            aria-label={t("history.closeHistory")}
+          >
             ×
           </button>
         </div>
