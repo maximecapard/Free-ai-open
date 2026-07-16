@@ -9,22 +9,10 @@ export function Footer() {
   const t = useTranslations();
 
   return (
-    <footer
-      style={{
-        maxWidth: 960,
-        margin: "0 auto",
-        padding: "24px 24px 48px",
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 16,
-        fontSize: 13,
-        opacity: 0.6,
-        flexWrap: "wrap",
-      }}
-    >
+    <footer className="app-footer">
       <span>{t("footer.tagline")}</span>
       {(sponsorsUrl || coffeeUrl) && (
-        <span style={{ display: "flex", gap: 12 }}>
+        <span className="app-footer__links">
           {sponsorsUrl && <a href={sponsorsUrl}>{t("footer.support")}</a>}
           {coffeeUrl && <a href={coffeeUrl}>{t("footer.coffee")}</a>}
         </span>

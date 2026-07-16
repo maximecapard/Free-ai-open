@@ -14,16 +14,8 @@ export default function OnboardingIntroPage() {
 
       <Link
         href="/onboarding/device"
-        style={{
-          display: "inline-block",
-          marginTop: 32,
-          padding: "12px 20px",
-          borderRadius: 12,
-          background: "var(--color-text)",
-          color: "var(--color-bg)",
-          fontWeight: 600,
-          textDecoration: "none",
-        }}
+        className="fo-button fo-button-primary"
+        style={{ marginTop: 32 }}
       >
         {t("common.continue")}
       </Link>

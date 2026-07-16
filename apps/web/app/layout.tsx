@@ -9,6 +9,11 @@ import { THEME_INIT_SCRIPT } from "./_lib/themePreference";
 export const metadata: Metadata = {
   title: "FreeAI Open",
   description: "Local-first open-source browser AI assistant.",
+  applicationName: "FreeAI Open",
+  icons: {
+    icon: [{ url: "/brand/favicon.png", sizes: "64x64", type: "image/png" }],
+    apple: [{ url: "/brand/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
 };
 
 // viewportFit: "cover" lets the fixed mobile chat-history trigger read

@@ -1,71 +1,109 @@
 :root {
   color-scheme: dark;
-  --color-bg: #0b0b0f;
-  --color-bg-elevated: #1c1c22;
-  --color-bg-elevated-2: #151519;
-  --color-text: #f7f7f7;
-  --color-border: #333333;
-  --color-border-subtle: #222222;
-  --color-danger: #e5484d;
-  --color-danger-bg: rgba(229, 72, 77, 0.08);
-  --color-warning: #e5a53e;
-  --color-warning-bg: rgba(229, 165, 62, 0.08);
-  --color-success: #3ecf8e;
-  --color-muted-dot: #888888;
+  --fo-ink-950: #0d1118;
+  --fo-ink-900: #171c25;
+  --fo-teal-500: #00d8ab;
+  --fo-teal-700: #00a985;
+  --fo-teal-100: #d9f8f0;
+  --fo-paper-50: #fdfbf9;
+  --fo-surface-100: #f4f6f7;
+  --fo-slate-700: #3e4247;
+  --fo-muted-500: #707781;
+  --fo-line-200: #dde1e5;
+  --fo-danger: #c8323a;
+  --fo-warning: #a1743d;
+  --fo-radius-control: 8px;
+  --fo-radius-card: 16px;
+  --fo-radius-panel: 28px;
+  --fo-space-1: 4px;
+  --fo-space-2: 8px;
+  --fo-space-3: 12px;
+  --fo-space-4: 16px;
+  --fo-space-6: 24px;
+  --fo-space-8: 32px;
+  --fo-space-12: 48px;
+  --fo-space-16: 64px;
+  --fo-space-24: 96px;
+  --fo-font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --fo-font-mono: ui-monospace, SFMono-Regular, Consolas, monospace;
+  --fo-duration-fast: 180ms;
+  --fo-duration-panel: 320ms;
+  --fo-focus-ring: 0 0 0 3px rgba(0, 216, 171, 0.32);
+  --fo-shadow-float: 0 16px 40px rgba(13, 17, 24, 0.24);
+  --fo-bg: var(--fo-ink-950);
+  --fo-surface: var(--fo-ink-900);
+  --fo-surface-elevated: #111722;
+  --fo-text: var(--fo-paper-50);
+  --fo-text-muted: rgba(253, 251, 249, 0.72);
+  --fo-border: rgba(253, 251, 249, 0.14);
+  --fo-border-subtle: rgba(253, 251, 249, 0.08);
+  --fo-accent: var(--fo-teal-500);
+  --fo-accent-strong: var(--fo-teal-500);
+  --fo-accent-soft: rgba(0, 216, 171, 0.12);
+  --fo-danger-soft: rgba(200, 50, 58, 0.14);
+  --fo-warning-soft: rgba(161, 116, 61, 0.16);
+  --fo-focus: var(--fo-focus-ring);
+
+  /* Compatibility aliases for the current app while shared CSS classes land. */
+  --color-bg: var(--fo-bg);
+  --color-bg-elevated: var(--fo-surface);
+  --color-bg-elevated-2: var(--fo-surface-elevated);
+  --color-text: var(--fo-text);
+  --color-border: var(--fo-border);
+  --color-border-subtle: var(--fo-border-subtle);
+  --color-danger: var(--fo-danger);
+  --color-danger-bg: var(--fo-danger-soft);
+  --color-warning: var(--fo-warning);
+  --color-warning-bg: var(--fo-warning-soft);
+  --color-success: var(--fo-accent);
+  --color-muted-dot: var(--fo-muted-500);
 }
 
-/* Explicit dark override, so flipping data-theme back to "dark" always wins
-   over the system media query below regardless of OS preference. */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --color-bg: #0b0b0f;
-  --color-bg-elevated: #1c1c22;
-  --color-bg-elevated-2: #151519;
-  --color-text: #f7f7f7;
-  --color-border: #333333;
-  --color-border-subtle: #222222;
-  --color-danger: #e5484d;
-  --color-danger-bg: rgba(229, 72, 77, 0.08);
-  --color-warning: #e5a53e;
-  --color-warning-bg: rgba(229, 165, 62, 0.08);
-  --color-success: #3ecf8e;
-  --color-muted-dot: #888888;
+  --fo-bg: var(--fo-ink-950);
+  --fo-surface: var(--fo-ink-900);
+  --fo-surface-elevated: #111722;
+  --fo-text: var(--fo-paper-50);
+  --fo-text-muted: rgba(253, 251, 249, 0.72);
+  --fo-border: rgba(253, 251, 249, 0.14);
+  --fo-border-subtle: rgba(253, 251, 249, 0.08);
+  --fo-accent: var(--fo-teal-500);
+  --fo-accent-strong: var(--fo-teal-500);
+  --fo-accent-soft: rgba(0, 216, 171, 0.12);
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --color-bg: #ffffff;
-  --color-bg-elevated: #f4f4f6;
-  --color-bg-elevated-2: #eceef2;
-  --color-text: #14141a;
-  --color-border: #d8d8de;
-  --color-border-subtle: #e6e6ea;
-  --color-danger: #c8323a;
-  --color-danger-bg: rgba(200, 50, 58, 0.08);
-  --color-warning: #a1743d;
-  --color-warning-bg: rgba(161, 116, 61, 0.08);
-  --color-success: #1f9d68;
-  --color-muted-dot: #767680;
+  --fo-bg: var(--fo-paper-50);
+  --fo-surface: var(--fo-surface-100);
+  --fo-surface-elevated: #ffffff;
+  --fo-text: var(--fo-ink-950);
+  --fo-text-muted: var(--fo-muted-500);
+  --fo-border: var(--fo-line-200);
+  --fo-border-subtle: rgba(13, 17, 24, 0.08);
+  --fo-accent: var(--fo-teal-700);
+  --fo-accent-strong: var(--fo-teal-700);
+  --fo-accent-soft: var(--fo-teal-100);
+  --fo-danger-soft: rgba(200, 50, 58, 0.08);
+  --fo-warning-soft: rgba(161, 116, 61, 0.1);
 }
 
-/* "System" preference: no data-theme attribute is set at all (see
-   themePreference.ts). Falls back to the dark defaults above unless the OS
-   reports a light preference. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]):not([data-theme="light"]) {
     color-scheme: light;
-    --color-bg: #ffffff;
-    --color-bg-elevated: #f4f4f6;
-    --color-bg-elevated-2: #eceef2;
-    --color-text: #14141a;
-    --color-border: #d8d8de;
-    --color-border-subtle: #e6e6ea;
-    --color-danger: #c8323a;
-    --color-danger-bg: rgba(200, 50, 58, 0.08);
-    --color-warning: #a1743d;
-    --color-warning-bg: rgba(161, 116, 61, 0.08);
-    --color-success: #1f9d68;
-    --color-muted-dot: #767680;
+    --fo-bg: var(--fo-paper-50);
+    --fo-surface: var(--fo-surface-100);
+    --fo-surface-elevated: #ffffff;
+    --fo-text: var(--fo-ink-950);
+    --fo-text-muted: var(--fo-muted-500);
+    --fo-border: var(--fo-line-200);
+    --fo-border-subtle: rgba(13, 17, 24, 0.08);
+    --fo-accent: var(--fo-teal-700);
+    --fo-accent-strong: var(--fo-teal-700);
+    --fo-accent-soft: var(--fo-teal-100);
+    --fo-danger-soft: rgba(200, 50, 58, 0.08);
+    --fo-warning-soft: rgba(161, 116, 61, 0.1);
   }
 }
 
@@ -73,19 +111,291 @@
   box-sizing: border-box;
 }
 
+html {
+  background: var(--fo-bg);
+}
+
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: var(--color-bg);
-  color: var(--color-text);
+  min-height: 100vh;
+  font-family: var(--fo-font-sans);
+  background: var(--fo-bg);
+  color: var(--fo-text);
+  line-height: 1.5;
+  text-rendering: optimizeLegibility;
 }
 
 a {
   color: inherit;
+  text-decoration-color: var(--fo-border);
+  text-underline-offset: 3px;
 }
 
-button, input, textarea, select {
+button,
+input,
+textarea,
+select {
   font: inherit;
+}
+
+button,
+input,
+textarea,
+select,
+a {
+  transition:
+    border-color var(--fo-duration-fast) ease,
+    background-color var(--fo-duration-fast) ease,
+    color var(--fo-duration-fast) ease,
+    opacity var(--fo-duration-fast) ease;
+}
+
+button {
+  min-height: 40px;
+  border-radius: var(--fo-radius-control);
+  border: 1px solid var(--fo-border);
+  background: var(--fo-surface);
+  color: var(--fo-text);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--fo-accent);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+input,
+textarea,
+select {
+  border-radius: var(--fo-radius-control);
+  border: 1px solid var(--fo-border);
+  background: var(--fo-surface-elevated);
+  color: var(--fo-text);
+}
+
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--fo-font-mono);
+}
+
+:focus-visible {
+  outline: 2px solid var(--fo-accent);
+  outline-offset: 2px;
+  box-shadow: var(--fo-focus);
+}
+
+.fo-container {
+  width: min(100% - 48px, 1240px);
+  margin: 0 auto;
+}
+
+.fo-container-narrow {
+  width: min(100% - 48px, 920px);
+  margin: 0 auto;
+}
+
+.fo-card {
+  border: 1px solid var(--fo-border);
+  border-radius: var(--fo-radius-card);
+  background: var(--fo-surface);
+}
+
+.fo-panel {
+  border: 1px solid var(--fo-border);
+  border-radius: var(--fo-radius-panel);
+  background: var(--fo-surface);
+}
+
+.fo-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--fo-space-2);
+  padding: 10px 16px;
+  border-radius: var(--fo-radius-control);
+  text-decoration: none;
+  font-weight: 650;
+}
+
+.fo-button-primary {
+  border-color: var(--fo-ink-950);
+  background: var(--fo-ink-950);
+  color: var(--fo-paper-50);
+}
+
+.fo-button-secondary {
+  border: 1px solid var(--fo-border);
+  background: var(--fo-surface);
+  color: var(--fo-text);
+}
+
+.fo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fo-space-2);
+  padding: 6px 12px;
+  border: 1px solid var(--fo-border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--fo-surface) 86%, transparent);
+  color: var(--fo-text-muted);
+  font-size: 13px;
+}
+
+.fo-status-dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--color-muted-dot);
+}
+
+.fo-kicker,
+.fo-technical-label {
+  margin: 0;
+  color: var(--fo-text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.fo-display {
+  margin: 16px 0;
+  font-size: clamp(48px, 8vw, 64px);
+  line-height: 1.04;
+  font-weight: 750;
+}
+
+.fo-page-title {
+  margin: 0 0 16px;
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.1;
+  font-weight: 750;
+}
+
+.fo-muted {
+  color: var(--fo-text-muted);
+}
+
+.fo-inline-notice {
+  border: 1px solid var(--fo-border);
+  border-radius: var(--fo-radius-card);
+  background: var(--fo-surface);
+  padding: var(--fo-space-4);
+}
+
+.fo-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--fo-text);
+  font-weight: 750;
+  line-height: 1;
+}
+
+.fo-brand__icon {
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+
+.fo-brand__name {
+  font-size: 16px;
+}
+
+.app-header {
+  border-bottom: 1px solid var(--fo-border-subtle);
+  background: color-mix(in srgb, var(--fo-bg) 92%, transparent);
+}
+
+.app-header__brand {
+  text-decoration: none;
+}
+
+.app-header,
+.app-footer {
+  width: min(100% - 48px, 1240px);
+  margin: 0 auto;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fo-space-4);
+  padding: 18px 0;
+}
+
+.app-header__controls,
+.app-nav,
+.fo-segmented {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.app-header__controls {
+  gap: var(--fo-space-4);
+}
+
+.app-nav {
+  gap: var(--fo-space-4);
+  color: var(--fo-text-muted);
+  font-size: 14px;
+}
+
+.app-nav a {
+  text-decoration: none;
+}
+
+.app-nav a:hover {
+  color: var(--fo-text);
+}
+
+.fo-segmented {
+  gap: var(--fo-space-1);
+}
+
+.fo-segmented button {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 12px;
+  background: transparent;
+}
+
+.fo-segmented button[aria-pressed="true"] {
+  border-color: var(--fo-accent);
+  background: var(--fo-accent-soft);
+  color: var(--fo-text);
+}
+
+.app-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--fo-space-4);
+  flex-wrap: wrap;
+  padding: 32px 0 48px;
+  color: var(--fo-text-muted);
+  font-size: 13px;
+}
+
+.app-footer__links {
+  display: flex;
+  gap: var(--fo-space-3);
+}
+
+.privacy-notice {
+  margin: 0;
+  color: var(--fo-text-muted);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .chat-transcript {
@@ -122,18 +432,14 @@ button, input, textarea, select {
   bottom: 12px;
   z-index: 2;
   padding: 8px 12px;
-  border-radius: 12px;
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-elevated);
-  color: var(--color-text);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  border-radius: var(--fo-radius-control);
+  border: 1px solid var(--fo-border);
+  background: var(--fo-surface);
+  color: var(--fo-text);
+  box-shadow: var(--fo-shadow-float);
   cursor: pointer;
 }
 
-/* On desktop the history panel wrapper is a plain pass-through block so the
-   sidebar keeps its existing fixed-width flex layout; the trigger button,
-   backdrop, and mobile-only panel header stay hidden until the mobile media
-   query below re-enables them. */
 .chat-history-panel {
   flex-shrink: 0;
 }
@@ -144,15 +450,20 @@ button, input, textarea, select {
   display: none;
 }
 
-/* The chat layout is a fixed-width sidebar + flexible main column; below
-   ~720px that leaves too little room for the conversation, so the history
-   panel becomes an off-canvas drawer (trigger button + backdrop + slide-in
-   panel) instead of a permanent block in the document flow. */
 @media (max-width: 720px) {
+  .fo-container,
+  .fo-container-narrow,
+  .app-header,
+  .app-footer {
+    width: min(100% - 32px, 1240px);
+  }
+
+  .app-header {
+    align-items: flex-start;
+  }
+
   .chat-layout {
     flex-direction: column !important;
-    /* Clears the fixed chat-history-trigger (top-right corner) so it never
-       overlaps the chat heading row underneath it. */
     padding-top: calc(88px + env(safe-area-inset-top, 0px)) !important;
   }
 
@@ -167,19 +478,17 @@ button, input, textarea, select {
     top: calc(12px + env(safe-area-inset-top, 0px));
     right: calc(12px + env(safe-area-inset-right, 0px));
     z-index: 60;
+    min-height: 44px;
     padding: 8px 12px;
-    border-radius: 12px;
-    border: 1px solid var(--color-border);
-    background: var(--color-bg-elevated);
-    color: var(--color-text);
+    border-radius: var(--fo-radius-control);
+    border: 1px solid var(--fo-border);
+    background: var(--fo-surface);
+    color: var(--fo-text);
     font-size: 13px;
     cursor: pointer;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    box-shadow: var(--fo-shadow-float);
   }
 
-  /* The open drawer already has its own close button, backdrop, and Escape
-     handling; hiding the persistent trigger while open avoids it visually
-     colliding with the panel's right edge on narrow viewports. */
   .chat-history-trigger[aria-expanded="true"] {
     display: none;
   }
@@ -188,10 +497,10 @@ button, input, textarea, select {
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(13, 17, 24, 0.56);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.2s ease;
+    transition: opacity var(--fo-duration-fast) ease;
     z-index: 40;
   }
 
@@ -206,10 +515,10 @@ button, input, textarea, select {
     bottom: 0;
     left: 0;
     width: min(320px, 85vw);
-    background: var(--color-bg);
-    border-right: 1px solid var(--color-border);
+    background: var(--fo-bg);
+    border-right: 1px solid var(--fo-border);
     transform: translateX(-100%);
-    transition: transform 0.2s ease;
+    transition: transform var(--fo-duration-panel) ease;
     z-index: 50;
     display: flex;
     flex-direction: column;
@@ -217,6 +526,7 @@ button, input, textarea, select {
     padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px))
       calc(16px + env(safe-area-inset-left, 0px));
     overflow-y: auto;
+    box-shadow: var(--fo-shadow-float);
   }
 
   .chat-history-panel.is-open {
@@ -234,9 +544,10 @@ button, input, textarea, select {
   }
 
   .chat-history-close {
+    min-width: 44px;
     border: none;
     background: transparent;
-    color: var(--color-text);
+    color: var(--fo-text);
     font-size: 20px;
     line-height: 1;
     padding: 4px 8px;
@@ -245,8 +556,12 @@ button, input, textarea, select {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat-history-backdrop,
-  .chat-history-panel {
-    transition: none;
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
   }
 }

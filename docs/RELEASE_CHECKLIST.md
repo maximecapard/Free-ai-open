@@ -23,6 +23,8 @@ Run through this list before cutting an alpha release. All boxes should be check
 - [ ] Language: switch to French, navigate home/onboarding/settings/chat/debug, and confirm visible user-facing UI is translated.
 - [ ] Model response language: with French selected, send a French message and verify the local runtime receives the French hidden system instruction. Switch to English and confirm the next generation receives the English instruction.
 - [ ] Theme/language persistence: change language and theme, refresh, and confirm both preferences persist locally.
+- [ ] Brand assets: confirm the browser tab uses the FreeAI Open favicon, mobile/apple touch icon assets exist under `apps/web/public/brand/`, and the header renders the square symbol plus real `FreeAI Open` text rather than the large horizontal raster reference.
+- [ ] Brand tokens: check light/dark/system modes for the brand palette, readable contrast, visible teal focus ring, neutral primary surfaces, and restrained teal usage on active/local/focus states only.
 - [ ] Export privacy: export a conversation and confirm the JSON contains only conversation content plus export schema fields, not hidden runtime language instructions.
 - [ ] Mobile history drawer: below a 720px viewport, the chat history sidebar is hidden from the normal page flow and a menu button ("Open conversation history") appears in the chat header; opening it shows an overlay drawer with New chat, conversation history, rename/delete, and export/import.
 - [ ] Mobile drawer closing: the drawer closes via its close button, a backdrop click, Escape, and automatically after selecting a conversation or starting a new chat; focus returns to the menu button after closing.

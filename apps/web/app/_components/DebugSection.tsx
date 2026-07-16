@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 export function DebugSection({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section style={{ border: "1px solid var(--color-border)", borderRadius: 16, padding: 16, marginBottom: 16 }}>
+    <section className="fo-card" style={{ padding: 16, marginBottom: 16 }}>
       <h2 style={{ fontSize: 16, margin: "0 0 12px" }}>{title}</h2>
       {children}
     </section>
