@@ -112,41 +112,33 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
                   disabled={disabled}
                   title={conversation.title}
                   aria-current={isActive}
+                  className="chat-history-title-button"
                   style={{
-                    display: "block",
-                    width: "100%",
-                    minHeight: "auto",
-                    textAlign: "left",
-                    background: "transparent",
-                    border: "none",
-                    padding: 0,
                     fontSize: 14,
                     fontWeight: isActive ? 650 : 400,
                     cursor: disabled ? "default" : "pointer",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
                   }}
                 >
                   {conversation.title}
                 </button>
               )}
 
-              <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 12 }}>
+              <div className="chat-history-actions" style={{ marginTop: 6, fontSize: 12 }}>
                 {isPendingDelete ? (
                   <>
                     <span className="fo-muted">{t("common.deleteConfirm")}</span>
                     <button
                       type="button"
                       onClick={() => onDelete(conversation.id)}
-                      style={{ minHeight: "auto", border: "none", background: "transparent", color: "var(--fo-danger)", textDecoration: "underline", padding: 0 }}
+                      className="chat-history-action"
+                      style={{ color: "var(--fo-danger)" }}
                     >
                       {t("common.yes")}
                     </button>
                     <button
                       type="button"
                       onClick={() => setPendingDeleteId(null)}
-                      style={{ minHeight: "auto", border: "none", background: "transparent", textDecoration: "underline", padding: 0 }}
+                      className="chat-history-action"
                     >
                       {t("common.cancel")}
                     </button>
@@ -158,8 +150,7 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
                       disabled={disabled}
                       onClick={() => startRename(conversation)}
                       aria-label={`${t("common.rename")}: ${conversation.title}`}
-                      className="fo-muted"
-                      style={{ minHeight: "auto", border: "none", background: "transparent", textDecoration: "underline", padding: 0 }}
+                      className="chat-history-action fo-muted"
                     >
                       {t("common.rename")}
                     </button>
@@ -168,8 +159,7 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
                       disabled={disabled}
                       onClick={() => setPendingDeleteId(conversation.id)}
                       aria-label={`${t("common.delete")}: ${conversation.title}`}
-                      className="fo-muted"
-                      style={{ minHeight: "auto", border: "none", background: "transparent", textDecoration: "underline", padding: 0 }}
+                      className="chat-history-action fo-muted"
                     >
                       {t("common.delete")}
                     </button>

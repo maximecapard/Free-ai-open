@@ -41,6 +41,7 @@ export const en = {
     kicker: "Open-source local AI assistant",
     lead: "Pick what you want to do, choose how fast or how capable you want it to be, and FreeAI Open recommends a model that runs entirely on your device.",
     useRecommended: "Use the recommended setup",
+    checkingRecommendation: "Checking recommended setup…",
     getStarted: "Get started",
     statusHeading: "This device",
     checkingDevice: "Checking this device…",

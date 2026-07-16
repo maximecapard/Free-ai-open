@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { detectDeviceProfile } from "@free-ai-open/device-profiler";
 import { findTaskLabelKey, performanceModes } from "../../_lib/catalog";
-import { recommendPerformanceMode } from "../../_lib/deviceRecommendation";
+import { getRecommendedPerformanceModeForProfile } from "../../_lib/deviceRecommendation";
 import { useTranslations } from "../../_i18n/LocaleContext";
 
 function OnboardingModeContent() {
@@ -19,7 +19,7 @@ function OnboardingModeContent() {
   useEffect(() => {
     let cancelled = false;
     detectDeviceProfile().then((profile) => {
-      if (!cancelled) setRecommendedModeId(recommendPerformanceMode(profile.deviceTier));
+      if (!cancelled) setRecommendedModeId(getRecommendedPerformanceModeForProfile(profile));
     });
     return () => {
       cancelled = true;
@@ -60,7 +60,7 @@ function OnboardingModeContent() {
               <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                 <strong>{t(mode.labelKey)}</strong>
                 {isRecommended && (
-                  <span className="fo-badge" style={{ borderColor: "var(--fo-accent)", color: "var(--fo-accent-strong)" }}>
+                  <span className="fo-badge" style={{ borderColor: "var(--fo-accent)", color: "var(--fo-accent-text)" }}>
                     {t("modes.recommendedBadge")}
                   </span>
                 )}

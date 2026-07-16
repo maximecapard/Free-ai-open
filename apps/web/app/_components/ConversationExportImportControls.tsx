@@ -61,19 +61,18 @@ export const ConversationExportImportControls = memo(function ConversationExport
         {t("backup.title")}
       </p>
 
-      <div role="group" aria-label={t("history.exportConversations")} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        <button type="button" className="fo-button fo-button-secondary" onClick={onExportActive} disabled={disabled} style={{ fontSize: 12, minHeight: 36, padding: "6px 12px" }}>
+      <div role="group" aria-label={t("history.exportConversations")} className="conversation-export-actions">
+        <button type="button" className="fo-button fo-button-secondary conversation-export-action" onClick={onExportActive} disabled={disabled}>
           {t("backup.exportCurrent")}
         </button>
-        <button type="button" className="fo-button fo-button-secondary" onClick={onExportAll} disabled={disabled} style={{ fontSize: 12, minHeight: 36, padding: "6px 12px" }}>
+        <button type="button" className="fo-button fo-button-secondary conversation-export-action" onClick={onExportAll} disabled={disabled}>
           {t("backup.exportAll")}
         </button>
         <button
           type="button"
-          className="fo-button fo-button-secondary"
+          className="fo-button fo-button-secondary conversation-export-action"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled}
-          style={{ fontSize: 12, minHeight: 36, padding: "6px 12px" }}
         >
           {t("backup.import")}
         </button>
@@ -95,7 +94,7 @@ export const ConversationExportImportControls = memo(function ConversationExport
         <div role="status" className="fo-card" style={{ padding: 8, fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
             <span>{summaryText}</span>
-            <button type="button" onClick={onDismissImportSummary} style={{ fontSize: 11, minHeight: "auto", border: "none", background: "transparent", textDecoration: "underline", padding: 0 }}>
+            <button type="button" onClick={onDismissImportSummary} className="chat-history-action" style={{ fontSize: 11 }}>
               {t("common.dismiss")}
             </button>
           </div>

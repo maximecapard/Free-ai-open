@@ -56,7 +56,7 @@ Versions are alpha milestones while the MVP is still under active development.
 - Completed the product-wide UX/visual redesign on top of the brand foundation: a responsive app shell (`apps/web/app/_components/Header.tsx`), a shared `DeviceCapabilitySummary` component, and a small hand-rolled line-icon set (`apps/web/app/_components/icons.tsx`, no new dependency).
 - Added a compact, always-Ink desktop navigation rail (brand icon, Home/Chat/Settings/Debug links, language/theme toggles) and a compact fixed, safe-area-aware mobile top bar with a small dropdown menu for the same links/toggles, both rendered from the same markup with the visibility split handled entirely by the existing 720px CSS breakpoint.
 - Added a plain-language device capability summary ("Limited compatibility" / "Suitable for lightweight models" / "Recommended experience" / "High-performance device") shown by default on the home page and the onboarding device-check step, with the raw device tier, backend, memory, and storage figures moved behind an "Advanced technical details" disclosure.
-- Added a "Use the recommended setup" primary action on the home page that links directly to a working `/chat?task=chat&mode=balanced` session, so a first-time visitor can start chatting without going through onboarding; "Get started" (onboarding) remains available as the customization path.
+- Added a "Use the recommended setup" primary action on the home page that waits for the local device profile and then links directly to a working `/chat?task=chat&mode=<recommended>` session using the same recommendation source as onboarding; while profiling is pending, the CTA shows a detection state instead of falsely claiming `balanced` is recommended.
 - Highlighted the device-recommended performance mode on the onboarding mode-selection step with a "Recommended for this device" badge.
 - Renamed the "Performance" mode's display label to "Quality" (English) / "Qualité" (French) for the normal interface; the underlying `PerformanceMode` value and all routing logic are unchanged.
 - Added plain-language runtime status wording ("Preparing the local model", "Ready on this device", "Writing a response", "Preparing the model again", …) for the normal chat interface, with the existing raw-ish `runtimeStatus.*` labels reserved for technical/debug use.
@@ -74,10 +74,17 @@ Versions are alpha milestones while the MVP is still under active development.
 - Rewrote every remaining app surface (home, all four onboarding steps, chat, conversation history/import-export, debug, settings) to use the shared `--fo-*` tokens and `.fo-*`/`.app-shell__*` classes instead of local inline colors; no `--color-*` compatibility alias is referenced directly from component code anymore, though the aliases themselves remain defined for any future/external use.
 - Restyled the conversation history list: the active conversation now has an accent-soft background plus a left accent stripe (not color alone — the row is also bold and carries `aria-current`), and rename/delete actions are minimal underlined text controls instead of bordered buttons, reducing visual noise around the conversation list.
 - Restyled the shared export/import controls with the button/card token system; behavior, wiring, and the existing privacy note (readable JSON content, not encrypted, no cloud sync) are unchanged.
+- Tightened light-mode semantic text colors: muted text now uses `#68707A`, and small teal text uses the accessible `--fo-accent-text` token (`#007E68`) while the brighter teal brand tokens remain available for visual accents, borders, focus, and active decoration.
+- Raised mobile/coarse-pointer touch targets for language/theme choices, the mobile history trigger, drawer close control, conversation rename/delete/confirm/cancel actions, and import/export actions to the intended 44px minimum while keeping compact desktop styling.
+
+### Tests
+
+- Added recommendation tests proving the home recommended CTA resolves tier 0/1 devices to `fast`, ordinary supported devices to `balanced`, strong devices to `performance`, and pending profiling to no hardcoded `balanced` link, while sharing the same recommendation source as onboarding.
+- Added WCAG contrast tests that calculate ratios for core semantic text pairs, plus coverage for mobile touch-target CSS, accessible icon/action labels, delete-confirm wiring, and theme preference persistence.
 
 ### Security and Privacy
 
-- No application behavior, model routing, runtime behavior, telemetry, diagnostics, local logs, server endpoint, `fetch`, `sendBeacon`, Supabase, Google Drive, or cloud-sync path changed.
+- No model-routing package behavior, WebLLM runtime behavior, telemetry, diagnostics, local logs, server endpoint, `fetch`, `sendBeacon`, Supabase, Google Drive, or cloud-sync path changed.
 - Local brand-source files under `.local/brand-source/` remain local-only and are not part of the public repository.
 - The new `DeviceCapabilitySummary` component and the debug dashboard's `formFactor` field only ever display the same coarse `DeviceProfile` fields already covered by prior privacy review; no new device signal was added and nothing new is transmitted.
 

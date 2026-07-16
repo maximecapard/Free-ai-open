@@ -8,7 +8,8 @@
   --fo-paper-50: #fdfbf9;
   --fo-surface-100: #f4f6f7;
   --fo-slate-700: #3e4247;
-  --fo-muted-500: #707781;
+  --fo-muted-500: #68707a;
+  --fo-accent-text-light: #007e68;
   --fo-line-200: #dde1e5;
   --fo-danger: #c8323a;
   --fo-warning: #a1743d;
@@ -41,6 +42,7 @@
   --fo-border-subtle: rgba(253, 251, 249, 0.08);
   --fo-accent: var(--fo-teal-500);
   --fo-accent-strong: var(--fo-teal-500);
+  --fo-accent-text: var(--fo-teal-500);
   --fo-accent-soft: rgba(0, 216, 171, 0.12);
   --fo-danger-soft: rgba(200, 50, 58, 0.14);
   --fo-warning-soft: rgba(161, 116, 61, 0.16);
@@ -72,6 +74,7 @@
   --fo-border-subtle: rgba(253, 251, 249, 0.08);
   --fo-accent: var(--fo-teal-500);
   --fo-accent-strong: var(--fo-teal-500);
+  --fo-accent-text: var(--fo-teal-500);
   --fo-accent-soft: rgba(0, 216, 171, 0.12);
 }
 
@@ -85,7 +88,8 @@
   --fo-border: var(--fo-line-200);
   --fo-border-subtle: rgba(13, 17, 24, 0.08);
   --fo-accent: var(--fo-teal-700);
-  --fo-accent-strong: var(--fo-teal-700);
+  --fo-accent-strong: var(--fo-accent-text-light);
+  --fo-accent-text: var(--fo-accent-text-light);
   --fo-accent-soft: var(--fo-teal-100);
   --fo-danger-soft: rgba(200, 50, 58, 0.08);
   --fo-warning-soft: rgba(161, 116, 61, 0.1);
@@ -102,7 +106,8 @@
     --fo-border: var(--fo-line-200);
     --fo-border-subtle: rgba(13, 17, 24, 0.08);
     --fo-accent: var(--fo-teal-700);
-    --fo-accent-strong: var(--fo-teal-700);
+    --fo-accent-strong: var(--fo-accent-text-light);
+    --fo-accent-text: var(--fo-accent-text-light);
     --fo-accent-soft: var(--fo-teal-100);
     --fo-danger-soft: rgba(200, 50, 58, 0.08);
     --fo-warning-soft: rgba(161, 116, 61, 0.1);
@@ -323,6 +328,7 @@ samp {
   --fo-border-subtle: rgba(253, 251, 249, 0.08);
   --fo-accent: var(--fo-teal-500);
   --fo-accent-strong: var(--fo-teal-500);
+  --fo-accent-text: var(--fo-teal-500);
   --fo-accent-soft: rgba(0, 216, 171, 0.12);
   background: var(--fo-bg);
   color: var(--fo-text);
@@ -384,6 +390,44 @@ samp {
   border-color: var(--fo-accent);
   background: var(--fo-accent-soft);
   color: var(--fo-text);
+}
+
+.chat-history-title-button {
+  display: block;
+  width: 100%;
+  min-height: 32px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  padding: 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-history-actions,
+.conversation-export-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--fo-space-2);
+}
+
+.chat-history-action {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-decoration: underline;
+  padding: 2px 0;
+}
+
+.conversation-export-action {
+  min-height: 36px;
+  padding: 6px 12px;
+  font-size: 12px;
 }
 
 .app-footer {
@@ -762,6 +806,7 @@ samp {
 
   .chat-history-close {
     min-width: 44px;
+    min-height: 44px;
     border: none;
     background: transparent;
     color: var(--fo-text);
@@ -769,6 +814,34 @@ samp {
     line-height: 1;
     padding: 4px 8px;
     cursor: pointer;
+  }
+}
+
+@media (hover: none), (pointer: coarse), (max-width: 720px) {
+  .fo-segmented button,
+  .chat-history-title-button,
+  .chat-history-action,
+  .conversation-export-action,
+  .chat-history-trigger,
+  .chat-history-close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .fo-segmented button {
+    padding: 8px 12px;
+  }
+
+  .chat-history-title-button {
+    padding: 8px 0;
+  }
+
+  .chat-history-action {
+    padding: 8px 4px;
+  }
+
+  .conversation-export-action {
+    padding: 8px 12px;
   }
 }
 
