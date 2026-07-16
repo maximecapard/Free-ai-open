@@ -29,6 +29,10 @@ Run through this list before cutting an alpha release. All boxes should be check
 - [ ] Mobile drawer accessibility: background page scrolling is blocked while the drawer is open, Tab does not reach the drawer's content while it is closed and off-screen, and the drawer's open/close motion is disabled when the OS is set to reduce motion.
 - [ ] Mobile drawer content: test with many conversations, a long conversation title, and a long active conversation, in both English/French and light/dark/system themes, and confirm the composer stays reachable near the bottom without page-wide horizontal scrolling.
 - [ ] Desktop sidebar: above 720px, the sidebar remains visible in its normal position with no menu button or backdrop, and selection/rename/delete/import/export all still work.
+- [ ] Fixed mobile trigger: below 720px, scroll deep into a long conversation and confirm the "Open conversation history" button stays visible in the top-right corner the whole time, does not cover chat content, and toggles closed/open with an updated label and `aria-expanded` value.
+- [ ] Fixed mobile trigger safe area: on a real notched device (or a browser device emulation with a safe-area override), confirm the fixed button and the drawer's edges are not drawn under the notch/status bar/home indicator.
+- [ ] Device tier: on a real or emulated high-RAM Android phone (e.g. Redmi Note 13 Pro 5G, ~12 GB RAM), open `/onboarding/device` or `/debug` and confirm the displayed device tier is no longer `webgpu_high`/tier 3 purely from RAM — it should read tier 1 or 2 unless the browser also reports strong measured performance.
+- [ ] Device tier contrast: compare the displayed tier for the same browser in desktop mode vs. mobile device emulation at similar RAM; confirm they differ.
 
 ## Future automated coverage
 

@@ -45,6 +45,36 @@ Versions are alpha milestones while the MVP is still under active development.
 - Export/import has no browser end-to-end coverage yet (verified manually); encrypted export is not implemented.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
 
+## [0.6.4-alpha] - 2026-07-16
+
+### Fixed
+
+- Fixed mobile conversation navigation: the "Open conversation history" control is now a persistent `position: fixed` button pinned to the top-right corner of the viewport on mobile, so it stays reachable while scrolling through a long conversation instead of scrolling away with the page. The button now toggles the drawer (its label and `aria-expanded` reflect open/closed state) and is hidden while the drawer itself is open, since the drawer already offers its own close button, backdrop, and Escape handling.
+- Fixed device tier overestimation on mobile hardware: `getDeviceTier` no longer derives the tier primarily from `navigator.deviceMemory`. A high-RAM phone (e.g. a 12 GB Redmi Note 13 Pro 5G) is no longer automatically classified the same as a desktop PC (tier 3/`webgpu_high`); it now lands at tier 1–2 unless real measured performance justifies promotion.
+
+### Added
+
+- Added safe-area-inset awareness for the fixed mobile trigger and the drawer panel (`env(safe-area-inset-*)`, with `viewport-fit: cover` enabled in `apps/web/app/layout.tsx`) so neither is drawn under a device notch, status bar, or home indicator where supported.
+- Added a richer, still-coarse device capability profile to `@free-ai-open/device-profiler`: `formFactor` (`mobile`/`tablet`/`desktop`/`unknown`), `architectureClass` (`arm`/`x86`/`unknown`, from the Client Hints high-entropy API when available), `memoryClass`, and `cpuConcurrencyClass` (both coarse `low`/`medium`/`high`/`unknown` buckets, never raw numbers).
+- Added a `measuredPerformance` input (`modelLoadTimeMs`, `firstTokenTimeMs`, `tokensPerSecond`, `recentFailureCount`) that `getDeviceTier`/`buildDeviceProfile` can optionally consume: strong measured tokens/sec can promote a device above its form-factor-based tier cap, and repeated recent failures can demote it by one tier. No caller populates this yet with real data — see "Changed" below.
+- Replaced the previous RAM/storage tier thresholds with a small, documented scoring model in `@free-ai-open/device-profiler`'s new `scoring.ts`: bounded points for coarse memory/CPU/backend signals, a form-factor tier cap for mobile/tablet/unknown devices, and optional measured-performance promotion/demotion — see `docs/architecture.md`.
+
+### Changed
+
+- `DeviceProfile` now always includes `formFactor`, `architectureClass`, `memoryClass`, and `cpuConcurrencyClass`; `model-router`'s legacy `routeModel()` input path (which only carries a bare tier number, not a full profile) reports these as `"unknown"` rather than guessing.
+- Model routing itself is unchanged: `model-router` continues to consume `DeviceProfile.deviceTier` as a plain `0–4` number and does not need to know how the tier was computed.
+
+### Tests
+
+- Added device-profiler tests proving: WebGPU absence still forces tier 0 regardless of memory; a 12 GB mobile phone never reaches tier 3 from coarse signals alone; a 12 GB desktop reaches a different (higher) tier than an identical-memory mobile device; a low-memory desktop stays conservative; a mobile device with WebGPU but no measurements stays conservative even at high coarse scores; strong measured tokens/sec promotes a mobile device; weak measured performance does not promote; repeated recent failures demote a profile by one tier without going below tier 1; and unavailable browser capability APIs (Client Hints, `hardwareConcurrency`, UA hints) fall back safely to `"unknown"` instead of throwing.
+- Added a test asserting `DeviceProfile` only ever exposes the coarse category values (never a raw `hardwareConcurrency`, `userAgent`, or `maxTouchPoints` field), so it cannot act as a unique hardware fingerprint.
+- Updated `model-router` and `diagnostic-report` test fixtures for the new required `DeviceProfile` fields; router and diagnostic-report behavior itself is unchanged and their existing assertions still pass.
+- Added a mobile-history-drawer reducer test for the new toggle action.
+
+### Security and Privacy
+
+- All new device capability fields are coarse, bucketed categories (4 or fewer possible values each), never raw sensor values, a raw user agent string, or a combined hardware fingerprint. No new remote transmission, `fetch`, `sendBeacon`, Supabase, Google Drive, or server endpoint was added; device profiling remains entirely local and synchronous with the existing `/onboarding/device` and `/debug` display paths.
+
 ## [0.6.3-alpha] - 2026-07-16
 
 ### Added
@@ -194,7 +224,8 @@ Versions are alpha milestones while the MVP is still under active development.
 - Added a simple local chat flow using the browser runtime.
 - Added runtime error classification and privacy safety tests.
 
-[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.3-alpha...HEAD
+[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.4-alpha...HEAD
+[0.6.4-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.3-alpha...v0.6.4-alpha
 [0.6.3-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.2-alpha...v0.6.3-alpha
 [0.6.2-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.1-alpha...v0.6.2-alpha
 [0.5.0-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.4.1-alpha...v0.5.0-alpha

@@ -151,6 +151,9 @@ button, input, textarea, select {
 @media (max-width: 720px) {
   .chat-layout {
     flex-direction: column !important;
+    /* Clears the fixed chat-history-trigger (top-right corner) so it never
+       overlaps the chat heading row underneath it. */
+    padding-top: calc(88px + env(safe-area-inset-top, 0px)) !important;
   }
 
   .chat-message {
@@ -160,6 +163,10 @@ button, input, textarea, select {
   .chat-history-trigger {
     display: inline-flex;
     align-items: center;
+    position: fixed;
+    top: calc(12px + env(safe-area-inset-top, 0px));
+    right: calc(12px + env(safe-area-inset-right, 0px));
+    z-index: 60;
     padding: 8px 12px;
     border-radius: 12px;
     border: 1px solid var(--color-border);
@@ -167,6 +174,14 @@ button, input, textarea, select {
     color: var(--color-text);
     font-size: 13px;
     cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  }
+
+  /* The open drawer already has its own close button, backdrop, and Escape
+     handling; hiding the persistent trigger while open avoids it visually
+     colliding with the panel's right edge on narrow viewports. */
+  .chat-history-trigger[aria-expanded="true"] {
+    display: none;
   }
 
   .chat-history-backdrop {
@@ -199,7 +214,8 @@ button, input, textarea, select {
     display: flex;
     flex-direction: column;
     gap: 12px;
-    padding: 16px;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px))
+      calc(16px + env(safe-area-inset-left, 0px));
     overflow-y: auto;
   }
 

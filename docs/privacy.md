@@ -77,6 +77,12 @@ When a chat generation starts, FreeAI Open adds a hidden runtime-only system ins
 
 Changing the UI language affects the next generation; it does not rewrite existing conversation messages.
 
+## Device capability profiling
+
+FreeAI Open estimates a coarse device capability tier (`0`–`4`) locally to pick a suitable model, and to show device information in onboarding and `/debug`. This check runs entirely in the browser and is never sent to a server.
+
+The profile only ever contains coarse, bounded categories: a form factor (`mobile`/`tablet`/`desktop`/`unknown`), an architecture class (`arm`/`x86`/`unknown`), a memory class and a CPU-concurrency class (each `low`/`medium`/`high`/`unknown`), WebGPU availability, and the preferred backend. None of these are raw sensor values, a raw user-agent string, or a combination specific enough to uniquely identify a device — they cannot be used as a device fingerprint. An optional, locally-supplied measured-performance value (tokens per second, load time, first-token time, recent failure count) can adjust the tier, but nothing populates it with real data yet, and it is never sent anywhere.
+
 ## Cancellation recovery
 
 After Stop, the interrupted WebLLM worker is treated as potentially unsafe. FreeAI Open discards the partial assistant response, moves through a local `recovering` state, terminates the old worker, and reloads the cached model in a new runtime before enabling the next send action. Recovery events are local technical metadata only (`runtime.recovery.started`, `runtime.recovery.completed`, `runtime.recovery.failed`) and must not contain prompts, model replies, conversations, documents, or hidden language instructions.

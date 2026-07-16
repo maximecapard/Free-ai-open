@@ -10,6 +10,11 @@ describe("mobile history drawer reducer", () => {
     expect(mobileHistoryDrawerReducer(true, { type: "open" })).toBe(true);
   });
 
+  it("toggles open and closed", () => {
+    expect(mobileHistoryDrawerReducer(false, { type: "toggle" })).toBe(true);
+    expect(mobileHistoryDrawerReducer(true, { type: "toggle" })).toBe(false);
+  });
+
   it("closes on the close action", () => {
     expect(mobileHistoryDrawerReducer(true, { type: "close" })).toBe(false);
   });

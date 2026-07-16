@@ -25,13 +25,13 @@ Implemented in the current alpha:
 - Browser-local WebLLM runtime through a Web Worker.
 - Streaming chat UI.
 - Stop generation recovery, including cancelling/recovering states, timeout handling, stalled-generation recovery, automatic runtime recycling, unstable-output detection, and reload model support.
-- Local conversation history in the `/chat` UI, with an accessible off-canvas navigation drawer for switching conversations on mobile.
+- Local conversation history in the `/chat` UI, with an accessible off-canvas navigation drawer for switching conversations on mobile, opened from a persistent button that stays reachable while scrolling.
 - IndexedDB conversation storage with an in-memory fallback when IndexedDB is unavailable.
 - Local conversation export/import in the `/chat` history sidebar: export the current conversation, export all conversations, or import a JSON export file, entirely on-device.
 - Local technical logs stored in the browser.
 - Privacy-safe diagnostic report generation and export.
 - `/debug` dashboard for runtime status, device information, technical logs, and diagnostics.
-- Device profiling and model routing groundwork.
+- Device profiling and model routing groundwork, with a device capability tier based on multiple coarse signals (form factor, memory, CPU concurrency, WebGPU/backend) rather than RAM alone.
 - Strict schemas and redaction utilities for privacy-sensitive telemetry and logs.
 - English/French UI language toggle (defaults to the browser's language, persisted locally) across the public app surfaces.
 - Best-effort local model response language based on the selected UI locale through a hidden runtime-only instruction. Actual language quality depends on the selected model.

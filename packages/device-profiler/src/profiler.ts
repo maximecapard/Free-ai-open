@@ -1,23 +1,10 @@
-import type { Backend, DeviceTier } from "@free-ai-open/types";
+import type { Backend } from "@free-ai-open/types";
+import { classifyCpuConcurrency, classifyMemory, detectArchitectureClass, detectCpuConcurrency, detectFormFactor } from "./capabilities";
 import { detectBrowserInfo } from "./families";
-import type {
-  DeviceProfile,
-  DeviceProfilerEnvironment,
-  DeviceTierInfo,
-  DeviceTierInput,
-  DeviceTierLabel,
-  LightweightBenchmarkResult,
-  NavigatorLike,
-} from "./types";
+import { getDeviceTier } from "./scoring";
+import type { DeviceProfile, DeviceProfilerEnvironment, LightweightBenchmarkResult, NavigatorLike } from "./types";
 
 const BYTES_PER_GB = 1024 ** 3;
-const DEVICE_TIER_LABELS: Record<DeviceTier, DeviceTierLabel> = {
-  0: "cpu_only",
-  1: "webgpu_low",
-  2: "webgpu_medium",
-  3: "webgpu_high",
-  4: "desktop_power",
-};
 
 function readGlobalNavigator(): NavigatorLike | undefined {
   const maybeNavigator = globalThis as typeof globalThis & { navigator?: NavigatorLike };
@@ -80,39 +67,26 @@ export function runLightweightBenchmark(): LightweightBenchmarkResult {
   };
 }
 
-export function getDeviceTier(input: DeviceTierInput): DeviceTierInfo {
-  if (!input.webgpuAvailable) {
-    return { tier: 0, label: DEVICE_TIER_LABELS[0] };
-  }
-
-  const memoryGb = input.estimatedMemoryGb ?? 0;
-  const storageGb = input.storageQuotaGb ?? 0;
-
-  if (memoryGb >= 16 && storageGb >= 16) {
-    return { tier: 4, label: DEVICE_TIER_LABELS[4] };
-  }
-  if (memoryGb >= 8) {
-    return { tier: 3, label: DEVICE_TIER_LABELS[3] };
-  }
-  if (memoryGb >= 4) {
-    return { tier: 2, label: DEVICE_TIER_LABELS[2] };
-  }
-  return { tier: 1, label: DEVICE_TIER_LABELS[1] };
-}
-
 export async function buildDeviceProfile(environment: DeviceProfilerEnvironment = {}): Promise<DeviceProfile> {
   const navigatorLike = environment.navigator;
   const wasmAvailable = environment.webAssemblyAvailable ?? readWebAssemblyAvailability();
-  const [webgpuAvailable, storageQuotaGb] = await Promise.all([
+  const [webgpuAvailable, storageQuotaGb, architectureClass] = await Promise.all([
     detectWebGPUAvailability(navigatorLike),
     estimateStorageQuota(navigatorLike),
+    detectArchitectureClass(navigatorLike),
   ]);
   const estimatedMemoryGb = estimateDeviceMemory(navigatorLike);
+  const cpuConcurrency = detectCpuConcurrency(navigatorLike);
+  const formFactor = detectFormFactor(navigatorLike);
+  const measuredPerformance = environment.measuredPerformance;
   const deviceTierInfo = getDeviceTier({
     webgpuAvailable,
     wasmAvailable,
     estimatedMemoryGb,
     storageQuotaGb,
+    formFactor,
+    cpuConcurrency,
+    measuredPerformance,
   });
   const preferredBackend: Backend = webgpuAvailable ? "webgpu" : wasmAvailable ? "wasm" : "cpu";
   const browserInfo = detectBrowserInfo(navigatorLike);
@@ -127,6 +101,11 @@ export async function buildDeviceProfile(environment: DeviceProfilerEnvironment 
     benchmark: runLightweightBenchmark(),
     deviceTier: deviceTierInfo.tier,
     deviceTierLabel: deviceTierInfo.label,
+    formFactor,
+    architectureClass,
+    memoryClass: classifyMemory(estimatedMemoryGb),
+    cpuConcurrencyClass: classifyCpuConcurrency(cpuConcurrency),
+    ...(measuredPerformance ? { measuredPerformance } : {}),
   };
 }
 
