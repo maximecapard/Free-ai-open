@@ -29,7 +29,8 @@ import { PrivacyNotice } from "../_components/PrivacyNotice";
 import { RuntimeStatusBadge } from "../_components/RuntimeStatusBadge";
 import { ChatTranscript } from "../_components/ChatTranscript";
 import type { ChatMessageItem } from "../_components/ChatTranscript";
-import { ChatHistorySidebar } from "../_components/ChatHistorySidebar";
+import { ChatHistoryDrawerPanel } from "../_components/ChatHistoryDrawerPanel";
+import { useMobileHistoryDrawer } from "../_components/useMobileHistoryDrawer";
 import type { ConversationImportSummary } from "../_components/ConversationExportImportControls";
 import { findModeLabelKey, findTaskLabelKey, isPerformanceMode, isTaskCategory } from "../_lib/catalog";
 import { rejectionReasonKey, routeDecisionKey } from "../_lib/routeExplanation";
@@ -71,6 +72,7 @@ function ChatContent() {
   const taskLabel = taskLabelKey ? t(taskLabelKey) : null;
   const modeLabel = modeLabelKey ? t(modeLabelKey) : null;
 
+  const drawer = useMobileHistoryDrawer();
   const [message, setMessage] = useState("");
   const [routeResult, setRouteResult] = useState<ModelRouterResult | null>(null);
   const [runtimeState, setRuntimeState] = useState<RuntimeState>(IDLE_RUNTIME_STATE);
@@ -405,6 +407,16 @@ function ChatContent() {
     setImportSummary(null);
   }
 
+  function handleNewChatFromDrawer() {
+    handleNewChat();
+    drawer.startNewChat();
+  }
+
+  function handleSelectConversationFromDrawer(id: string) {
+    void handleSelectConversation(id);
+    drawer.selectConversation();
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     const runtime = runtimeRef.current;
@@ -484,12 +496,17 @@ function ChatContent() {
       className="chat-layout"
       style={{ display: "flex", gap: 24, maxWidth: 1200, margin: "0 auto", padding: 24, alignItems: "flex-start" }}
     >
-      <ChatHistorySidebar
+      <ChatHistoryDrawerPanel
+        isOpen={drawer.isOpen}
+        isDesktopViewport={drawer.isDesktopViewport}
+        panelId={drawer.panelId}
+        onClose={drawer.close}
+        onBackdropClick={drawer.dismissBackdrop}
         conversations={conversations}
         activeConversationId={activeConversationId}
         disabled={isConversationSwitchBlocked}
-        onNewChat={handleNewChat}
-        onSelect={handleSelectConversation}
+        onNewChat={handleNewChatFromDrawer}
+        onSelect={handleSelectConversationFromDrawer}
         onRename={handleRenameConversation}
         onDelete={handleDeleteConversation}
         onExportActive={handleExportActiveConversation}
@@ -510,7 +527,20 @@ function ChatContent() {
           marginBottom: 16,
         }}
       >
-        <h1 style={{ margin: 0 }}>{t("chat.heading")}</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <button
+            ref={drawer.triggerRef}
+            type="button"
+            className="chat-history-trigger"
+            aria-haspopup="dialog"
+            aria-expanded={drawer.isOpen}
+            aria-controls={drawer.panelId}
+            onClick={drawer.open}
+          >
+            {t("history.openHistory")}
+          </button>
+          <h1 style={{ margin: 0 }}>{t("chat.heading")}</h1>
+        </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <ModelStatusPill taskLabel={taskLabel} modeLabel={modeLabel} modelName={routeResult?.selectedModel?.displayName} />
           {task && mode && <RuntimeStatusBadge state={runtimeState} />}

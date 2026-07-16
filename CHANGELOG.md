@@ -45,6 +45,24 @@ Versions are alpha milestones while the MVP is still under active development.
 - Export/import has no browser end-to-end coverage yet (verified manually); encrypted export is not implemented.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
 
+## [0.6.3-alpha] - 2026-07-16
+
+### Added
+
+- Added an accessible mobile conversation history drawer: below a 720px viewport width, the `/chat` history panel (new chat, conversation list, rename/delete, export/import) now opens as an off-canvas overlay from a menu button in the chat header, instead of stacking above the conversation.
+- The mobile drawer closes automatically when a conversation is selected or a new chat is started, and can also be closed via a close button, a backdrop click, or Escape; focus returns to the menu button after closing.
+- The drawer blocks background page scrolling while open, does not trap keyboard focus, marks its off-screen content `inert` when closed on mobile so it isn't keyboard-reachable, and respects `prefers-reduced-motion`.
+- Added `history.title` ("Conversations"), `history.openHistory` ("Open conversation history"), `history.closeHistory` ("Close conversation history"), `history.importConversations` ("Import conversations"), and `history.exportConversations` ("Export conversations") translation keys in English and French.
+
+### Changed
+
+- Replaced the mobile `.chat-sidebar` stacking behavior (added in Sprint 6.2) with the drawer/overlay pattern described above. The desktop sidebar's layout, proportions, and behavior (selection, rename, delete, new chat, import, export) are unchanged, since the drawer reuses the existing `ChatHistorySidebar` component without modification.
+- The shared export/import controls now group the export buttons under a labelled ARIA group and use clearer accessible names ("Import conversations") for the hidden file input.
+
+### Security and Privacy
+
+- The mobile drawer only re-presents existing local-only conversation history and export/import actions through the same unmodified handlers; no new server endpoint, `fetch`, `sendBeacon`, Supabase, Google Drive, or cloud sync path was added, and no new local storage keys or technical log events were introduced.
+
 ## [0.6.2-alpha] - 2026-07-15
 
 ### Fixed
@@ -171,7 +189,8 @@ Versions are alpha milestones while the MVP is still under active development.
 - Added a simple local chat flow using the browser runtime.
 - Added runtime error classification and privacy safety tests.
 
-[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.2-alpha...HEAD
+[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.3-alpha...HEAD
+[0.6.3-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.2-alpha...v0.6.3-alpha
 [0.6.2-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.1-alpha...v0.6.2-alpha
 [0.5.0-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.4.1-alpha...v0.5.0-alpha
 [0.4.1-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.4.0-alpha...v0.4.1-alpha

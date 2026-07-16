@@ -156,6 +156,11 @@ export const en = {
     storedLocally: "Stored locally. This conversation stays on your device.",
     noConversationsYet: "No conversations yet.",
     clearingSiteData: "Clearing your browser's site data for this app will delete this history.",
+    title: "Conversations",
+    openHistory: "Open conversation history",
+    closeHistory: "Close conversation history",
+    importConversations: "Import conversations",
+    exportConversations: "Export conversations",
   },
   backup: {
     title: "Backup",

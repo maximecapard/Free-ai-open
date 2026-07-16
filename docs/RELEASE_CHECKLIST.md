@@ -22,6 +22,11 @@ Run through this list before cutting an alpha release. All boxes should be check
 - [ ] Model response language: with French selected, send a French message and verify the local runtime receives the French hidden system instruction. Switch to English and confirm the next generation receives the English instruction.
 - [ ] Theme/language persistence: change language and theme, refresh, and confirm both preferences persist locally.
 - [ ] Export privacy: export a conversation and confirm the JSON contains only conversation content plus export schema fields, not hidden runtime language instructions.
+- [ ] Mobile history drawer: below a 720px viewport, the chat history sidebar is hidden from the normal page flow and a menu button ("Open conversation history") appears in the chat header; opening it shows an overlay drawer with New chat, conversation history, rename/delete, and export/import.
+- [ ] Mobile drawer closing: the drawer closes via its close button, a backdrop click, Escape, and automatically after selecting a conversation or starting a new chat; focus returns to the menu button after closing.
+- [ ] Mobile drawer accessibility: background page scrolling is blocked while the drawer is open, Tab does not reach the drawer's content while it is closed and off-screen, and the drawer's open/close motion is disabled when the OS is set to reduce motion.
+- [ ] Mobile drawer content: test with many conversations, a long conversation title, and a long active conversation, in both English/French and light/dark/system themes, and confirm the composer stays reachable near the bottom without page-wide horizontal scrolling.
+- [ ] Desktop sidebar: above 720px, the sidebar remains visible in its normal position with no menu button or backdrop, and selection/rename/delete/import/export all still work.
 
 ## Future automated coverage
 

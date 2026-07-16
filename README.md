@@ -25,7 +25,7 @@ Implemented in the current alpha:
 - Browser-local WebLLM runtime through a Web Worker.
 - Streaming chat UI.
 - Stop generation recovery, including cancelling/recovering states, timeout handling, stalled-generation recovery, automatic runtime recycling, unstable-output detection, and reload model support.
-- Local conversation history in the `/chat` UI.
+- Local conversation history in the `/chat` UI, with an accessible off-canvas navigation drawer for switching conversations on mobile.
 - IndexedDB conversation storage with an in-memory fallback when IndexedDB is unavailable.
 - Local conversation export/import in the `/chat` history sidebar: export the current conversation, export all conversations, or import a JSON export file, entirely on-device.
 - Local technical logs stored in the browser.

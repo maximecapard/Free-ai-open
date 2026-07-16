@@ -1,8 +1,8 @@
 # Roadmap
 
-## Status after v0.6.2-alpha
+## Status after v0.6.3-alpha
 
-Local conversation history (store + `/chat` history sidebar) shipped in `v0.5.0-alpha`. Local conversation export/import is implemented end-to-end, including the `/chat` UI (export current, export all, import with a result summary). The app now has English/French UI coverage across public surfaces, a best-effort runtime-only language instruction for local model responses, a light/dark/system theme toggle, color tokens for both themes, a mobile layout fix for the chat sidebar, accessibility labels, alpha generation safety for unstable local model output, and automatic runtime recycling after cancellation. Next up:
+Local conversation history (store + `/chat` history sidebar) shipped in `v0.5.0-alpha`. Local conversation export/import is implemented end-to-end, including the `/chat` UI (export current, export all, import with a result summary). The app now has English/French UI coverage across public surfaces, a best-effort runtime-only language instruction for local model responses, a light/dark/system theme toggle, color tokens for both themes, an accessible mobile conversation history drawer (replacing the earlier stacked mobile layout), accessibility labels, alpha generation safety for unstable local model output, and automatic runtime recycling after cancellation. Next up:
 
 - **Future:** prefer French-capable or multilingual models when French is selected, once the model registry has enough validated model metadata.
 - **Future:** client-side encrypted export.

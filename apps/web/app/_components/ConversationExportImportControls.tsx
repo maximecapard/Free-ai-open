@@ -59,7 +59,7 @@ export function ConversationExportImportControls({
     >
       <strong style={{ fontSize: 12, opacity: 0.75 }}>{t("backup.title")}</strong>
 
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+      <div role="group" aria-label={t("history.exportConversations")} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         <button type="button" onClick={onExportActive} disabled={disabled} style={{ fontSize: 12 }}>
           {t("backup.exportCurrent")}
         </button>
@@ -78,7 +78,7 @@ export function ConversationExportImportControls({
           ref={fileInputRef}
           type="file"
           accept="application/json,.json"
-          aria-label={t("backup.import")}
+          aria-label={t("history.importConversations")}
           onChange={handleFileChange}
           style={{ display: "none" }}
         />
