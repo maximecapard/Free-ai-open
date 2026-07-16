@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { detectDeviceProfile } from "@free-ai-open/device-profiler";
 import { findTaskLabelKey, performanceModes } from "../../_lib/catalog";
+import { recommendPerformanceMode } from "../../_lib/deviceRecommendation";
 import { useTranslations } from "../../_i18n/LocaleContext";
 
 function OnboardingModeContent() {
@@ -12,10 +14,21 @@ function OnboardingModeContent() {
   const task = searchParams.get("task") ?? undefined;
   const taskLabelKey = findTaskLabelKey(task);
   const taskLabel = taskLabelKey ? t(taskLabelKey) : null;
+  const [recommendedModeId, setRecommendedModeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    detectDeviceProfile().then((profile) => {
+      if (!cancelled) setRecommendedModeId(recommendPerformanceMode(profile.deviceTier));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   if (!task || !taskLabel) {
     return (
-      <main style={{ maxWidth: 720, margin: "0 auto", padding: "48px 24px" }}>
+      <main className="fo-container-narrow" style={{ padding: "48px 0" }}>
         <p>{t("onboarding.chooseTaskFirst")}</p>
         <Link href="/onboarding/task">{t("onboarding.backToTaskSelection")}</Link>
       </main>
@@ -23,31 +36,46 @@ function OnboardingModeContent() {
   }
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: "48px 24px" }}>
-      <p style={{ opacity: 0.6, fontSize: 14 }}>{t("onboarding.step3WithTask", { task: taskLabel })}</p>
-      <h1 style={{ fontSize: 28, margin: "8px 0 24px" }}>{t("onboarding.modeTitle")}</h1>
+    <main className="fo-container-narrow" style={{ padding: "48px 0" }}>
+      <p className="fo-technical-label">{t("onboarding.step3WithTask", { task: taskLabel })}</p>
+      <h1 className="fo-page-title" style={{ marginTop: 8 }}>
+        {t("onboarding.modeTitle")}
+      </h1>
 
       <div style={{ display: "grid", gap: 12 }}>
-        {performanceModes.map((mode) => (
-          <Link
-            key={mode.id}
-            href={`/chat?task=${task}&mode=${mode.id}`}
-            style={{
-              display: "block",
-              padding: 16,
-              borderRadius: 12,
-              border: "1px solid var(--color-border)",
-              textDecoration: "none",
-              color: "inherit",
-            }}
-          >
-            <strong>{t(mode.labelKey)}</strong>
-            <p style={{ margin: "6px 0 0", fontSize: 13, opacity: 0.7 }}>{t(mode.descriptionKey)}</p>
-          </Link>
-        ))}
+        {performanceModes.map((mode) => {
+          const isRecommended = mode.id === recommendedModeId;
+          return (
+            <Link
+              key={mode.id}
+              href={`/chat?task=${task}&mode=${mode.id}`}
+              className="fo-card"
+              style={{
+                padding: 16,
+                textDecoration: "none",
+                color: "inherit",
+                borderColor: isRecommended ? "var(--fo-accent)" : undefined,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <strong>{t(mode.labelKey)}</strong>
+                {isRecommended && (
+                  <span className="fo-badge" style={{ borderColor: "var(--fo-accent)", color: "var(--fo-accent-strong)" }}>
+                    {t("modes.recommendedBadge")}
+                  </span>
+                )}
+              </div>
+              <p className="fo-muted" style={{ margin: "6px 0 0", fontSize: 13 }}>
+                {t(mode.descriptionKey)}
+              </p>
+            </Link>
+          );
+        })}
       </div>
 
-      <p style={{ marginTop: 24, fontSize: 13, opacity: 0.6 }}>{t("onboarding.modeFooter")}</p>
+      <p className="fo-muted" style={{ marginTop: 24, fontSize: 13 }}>
+        {t("onboarding.modeFooter")}
+      </p>
     </main>
   );
 }

@@ -23,9 +23,19 @@ const REPRESENTATIVE_KEYS: TranslationKey[] = [
   "runtimeError.cancel_timeout",
   "storageNotice.generationStoppedRecovering",
   "debug.clearLogsConfirm",
+  "debug.formFactor",
   "header.themeLight",
   "header.language",
+  "header.home",
+  "header.chat",
+  "header.primaryNavigation",
   "privacy.notice",
+  "home.useRecommended",
+  "deviceCapability.recommended",
+  "runtimeStatusPlain.ready",
+  "chat.composerHint",
+  "chat.technicalDetails",
+  "modes.recommendedBadge",
 ];
 
 describe("i18n dictionaries", () => {

@@ -75,7 +75,7 @@ export const ChatTranscript = memo(function ChatTranscript({ messages }: { messa
   }, [scheduleScrollToLatest]);
 
   if (messages.length === 0) {
-    return <p style={{ opacity: 0.6 }}>{t("chat.emptyTranscript")}</p>;
+    return <p className="fo-muted">{t("chat.emptyTranscript")}</p>;
   }
 
   return (
@@ -94,6 +94,8 @@ export const ChatTranscript = memo(function ChatTranscript({ messages }: { messa
 });
 
 const ChatMessageBubble = memo(function ChatMessageBubble({ message }: { message: ChatMessageItem }) {
+  const t = useTranslations();
+
   return (
     <div
       className="chat-message"
@@ -101,12 +103,16 @@ const ChatMessageBubble = memo(function ChatMessageBubble({ message }: { message
         alignSelf: message.role === "user" ? "flex-end" : "flex-start",
         maxWidth: "80%",
         padding: "10px 14px",
-        borderRadius: 12,
-        background: message.role === "user" ? "var(--color-bg-elevated)" : "var(--color-bg-elevated-2)",
-        border: "1px solid var(--color-border)",
+        borderRadius: "var(--fo-radius-card)",
+        background: message.role === "user" ? "var(--fo-surface-elevated)" : "var(--fo-surface)",
+        border: "1px solid var(--fo-border)",
         whiteSpace: "pre-wrap",
+        userSelect: "text",
       }}
     >
+      {/* Alignment carries the visible distinction; this label makes role
+          explicit for screen readers, since layout alone isn't announced. */}
+      <span className="fo-visually-hidden">{message.role === "user" ? t("chat.youLabel") : t("chat.assistantLabel")}</span>
       {message.content || (message.role === "assistant" ? "…" : "")}
     </div>
   );

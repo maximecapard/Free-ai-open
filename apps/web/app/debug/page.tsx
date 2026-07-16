@@ -123,25 +123,20 @@ export default function DebugPage() {
   const lastRuntimeStatus = findLastRuntimeStatus(logs);
 
   return (
-    <main style={{ maxWidth: 720, margin: "0 auto", padding: 24 }}>
-      <h1 style={{ fontSize: 24, marginBottom: 4 }}>{t("debug.title")}</h1>
-      <p style={{ fontSize: 14, opacity: 0.65, marginBottom: 20 }}>{t("debug.subtitle")}</p>
+    <main className="fo-ink-surface" style={{ maxWidth: 760, margin: "24px auto", padding: 24 }}>
+      <p className="fo-technical-label" style={{ margin: 0 }}>
+        {t("debug.title")}
+      </p>
+      <p className="fo-muted" style={{ fontSize: 14, marginTop: 4, marginBottom: 20 }}>
+        {t("debug.subtitle")}
+      </p>
 
       <DebugActions onRefresh={refresh} onCopy={handleCopy} onDownload={handleDownload} onClear={handleClear} statusMessage={statusMessage} />
 
       {!logsAvailable && (
-        <section
-          role="status"
-          style={{
-            border: "1px solid var(--color-warning)",
-            borderRadius: 16,
-            padding: 16,
-            marginBottom: 16,
-            background: "var(--color-warning-bg)",
-          }}
-        >
+        <section className="fo-inline-notice" style={{ borderColor: "var(--fo-warning)", background: "var(--fo-warning-soft)", marginBottom: 16 }}>
           <strong>{t("debug.storageUnavailableTitle")}</strong>
-          <p style={{ margin: "8px 0 0", fontSize: 14, opacity: 0.9 }}>{t("debug.storageUnavailableBody")}</p>
+          <p style={{ margin: "8px 0 0", fontSize: 14 }}>{t("debug.storageUnavailableBody")}</p>
         </section>
       )}
 

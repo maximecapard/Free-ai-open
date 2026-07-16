@@ -20,6 +20,7 @@ export function DebugPerformanceSection({
       <DebugField
         label={t("debug.modelLoadTime")}
         value={loadTimeMs !== undefined ? `${loadTimeMs} ms` : t("debug.notRecordedYet")}
+        technical={loadTimeMs !== undefined}
       />
       <DebugField
         label={t("debug.firstToken")}
@@ -28,10 +29,12 @@ export function DebugPerformanceSection({
             ? `${generationMetrics.firstTokenMs} ms`
             : t("debug.notRecordedYet")
         }
+        technical={generationMetrics?.firstTokenMs !== undefined && generationMetrics.firstTokenMs !== null}
       />
       <DebugField
         label={t("debug.tokensPerSecond")}
         value={generationMetrics?.tokensPerSecond !== undefined ? generationMetrics.tokensPerSecond : t("debug.notRecordedYet")}
+        technical={generationMetrics?.tokensPerSecond !== undefined}
       />
       <DebugField label={t("debug.generationInProgress")} value={isGenerating ? t("debug.yes") : t("debug.no")} />
     </DebugSection>

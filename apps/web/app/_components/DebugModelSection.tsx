@@ -9,10 +9,10 @@ function ModelDetails({ model }: { model: ModelRecord }) {
 
   return (
     <>
-      <DebugField label={t("debug.source")} value={model.source} />
-      <DebugField label={t("debug.status")} value={model.status} />
-      <DebugField label={t("debug.estimatedSize")} value={`${model.estimatedDownloadGb} GB`} />
-      <DebugField label={t("debug.license")} value={model.license} />
+      <DebugField label={t("debug.source")} value={model.source} technical />
+      <DebugField label={t("debug.status")} value={model.status} technical />
+      <DebugField label={t("debug.estimatedSize")} value={`${model.estimatedDownloadGb} GB`} technical />
+      <DebugField label={t("debug.license")} value={model.license} technical />
     </>
   );
 }
@@ -43,7 +43,9 @@ export function DebugModelSection({
         />
         {loadedModelId && loadedModel && <ModelDetails model={loadedModel} />}
         {loadedModelId && !loadedModel && (
-          <p style={{ fontSize: 13, opacity: 0.6, margin: "6px 0 0" }}>{t("debug.notInRegistry")}</p>
+          <p className="fo-muted" style={{ fontSize: 13, margin: "6px 0 0" }}>
+            {t("debug.notInRegistry")}
+          </p>
         )}
       </div>
     </DebugSection>

@@ -9,20 +9,16 @@ export function DebugSection({ title, children }: { title: string; children: Rea
   );
 }
 
-export function DebugField({ label, value }: { label: string; value: ReactNode }) {
+// `technical` applies the shared monospace treatment for genuinely technical
+// values (IDs, codes, tiers, timings, backend names) per the brand guide;
+// plain-language values (Yes/No, translated labels) leave it off.
+export function DebugField({ label, value, technical = false }: { label: string; value: ReactNode; technical?: boolean }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: "space-between",
-        gap: 12,
-        fontSize: 14,
-        padding: "4px 0",
-        borderBottom: "1px solid var(--color-border-subtle)",
-      }}
-    >
-      <span style={{ opacity: 0.65 }}>{label}</span>
-      <span style={{ textAlign: "right" }}>{value}</span>
+    <div className="fo-ink-field">
+      <span className="fo-muted">{label}</span>
+      <span className={technical ? "fo-technical-value" : undefined} style={{ textAlign: "right" }}>
+        {value}
+      </span>
     </div>
   );
 }

@@ -5,11 +5,11 @@ import { DebugSection } from "./DebugSection";
 import { useTranslations } from "../_i18n/LocaleContext";
 
 const SEVERITY_COLOR_VAR: Record<LocalLogRecord["severity"], string> = {
-  debug: "var(--color-muted-dot)",
-  info: "var(--color-muted-dot)",
-  warn: "var(--color-warning)",
-  error: "var(--color-danger)",
-  critical: "var(--color-danger)",
+  debug: "var(--fo-muted-500)",
+  info: "var(--fo-muted-500)",
+  warn: "var(--fo-warning)",
+  error: "var(--fo-danger)",
+  critical: "var(--fo-danger)",
 };
 
 export function DebugRecentLogs({ logs, logsAvailable }: { logs: LocalLogRecord[]; logsAvailable: boolean }) {
@@ -18,13 +18,17 @@ export function DebugRecentLogs({ logs, logsAvailable }: { logs: LocalLogRecord[
   return (
     <DebugSection title={t("debug.recentLogs")}>
       {!logsAvailable ? (
-        <p style={{ fontSize: 14, opacity: 0.75 }}>{t("debug.logsUnavailable")}</p>
+        <p className="fo-muted" style={{ fontSize: 14 }}>
+          {t("debug.logsUnavailable")}
+        </p>
       ) : logs.length === 0 ? (
-        <p style={{ fontSize: 14, opacity: 0.6 }}>{t("debug.noEventsRecorded")}</p>
+        <p className="fo-muted" style={{ fontSize: 14 }}>
+          {t("debug.noEventsRecorded")}
+        </p>
       ) : (
         <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
           {logs.map((log) => (
-            <li key={log.id} style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "baseline" }}>
+            <li key={log.id} className="fo-technical-value" style={{ fontSize: 13, display: "flex", gap: 8, alignItems: "baseline" }}>
               <span
                 style={{
                   width: 8,
@@ -34,9 +38,11 @@ export function DebugRecentLogs({ logs, logsAvailable }: { logs: LocalLogRecord[
                   flexShrink: 0,
                 }}
               />
-              <span style={{ opacity: 0.6, whiteSpace: "nowrap" }}>{new Date(log.timestamp).toLocaleTimeString()}</span>
+              <span className="fo-muted" style={{ whiteSpace: "nowrap" }}>
+                {new Date(log.timestamp).toLocaleTimeString()}
+              </span>
               <span>{log.event}</span>
-              {log.errorCode && <span style={{ opacity: 0.75 }}>— {log.errorCode}</span>}
+              {log.errorCode && <span className="fo-muted">— {log.errorCode}</span>}
             </li>
           ))}
         </ul>
