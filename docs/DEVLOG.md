@@ -386,6 +386,33 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - Browser smoke coverage for switching languages, repeated Stop/recovery cycles, export privacy, and theme persistence remains manual until a browser-level test suite is introduced.
 - The model catalog remains intentionally small.
 
+## Sprint 6.5 - v0.6.3-alpha mobile conversation navigation
+
+### Built
+
+- Replaced the mobile-only `.chat-sidebar` stacking behavior (a single `max-width: 720px` media query that stacked the history sidebar above the chat, added in Sprint 6.2) with an accessible off-canvas drawer: a menu button in the chat header (`history.openHistory`) opens a fixed overlay panel containing New chat, conversation history (select/rename/delete), and the export/import controls.
+- Added `apps/web/app/_lib/mobileHistoryDrawer.ts`, a small pure reducer covering the drawer's open/close transitions (`open`, `close`, `select-conversation`, `new-chat`, `escape`, `backdrop-click`, `viewport-desktop`), and `apps/web/app/_components/useMobileHistoryDrawer.ts`, a hook wiring that reducer to DOM behavior: Escape-to-close, backdrop-click-to-close, background scroll lock while open (mobile only), focus restoration to the trigger button on close, and automatic close when the viewport becomes desktop-sized.
+- Added `apps/web/app/_components/ChatHistoryDrawerPanel.tsx`, which wraps the existing, unmodified `ChatHistorySidebar` with a backdrop, dialog semantics (`role="dialog"`/`aria-modal`/`aria-label`, applied only at mobile viewport widths), a mobile-only close button, and `inert` on the closed off-canvas panel so it isn't keyboard-reachable while hidden.
+- Selecting a conversation or starting a new chat from the drawer closes it automatically; deleting a conversation continues to use the existing `handleDeleteConversation` logic unchanged, so deleting the active conversation still leaves the interface in a valid state.
+- On desktop (≥721px) the new wrapper renders as a plain pass-through block around the same sidebar markup, so desktop proportions, the fixed 240px sidebar width, and all existing selection/rename/delete/import/export behavior are unchanged.
+- Added `history.title` ("Conversations"), `history.openHistory` ("Open conversation history"), `history.closeHistory` ("Close conversation history"), `history.importConversations` ("Import conversations"), and `history.exportConversations` ("Export conversations") translation keys to both `en.ts` and `fr.ts`; the latter two also replace the export button group's and import file input's accessible labels for clarity.
+- Added CSS-only responsive behavior in `globals.css`: the trigger button, backdrop, and panel header are hidden by default and only enabled inside the existing `max-width: 720px` media query, so no JavaScript viewport polling drives the visual layout — a `matchMedia` listener is used only to correct ARIA semantics and force-close the drawer if the viewport crosses the breakpoint while open.
+
+### Privacy and architecture notes
+
+- The drawer is purely a presentation change: it reuses the existing `ChatHistorySidebar` and `ConversationExportImportControls` components and their existing local-only handlers unmodified, so no new network path, server endpoint, `fetch`, `sendBeacon`, Supabase, Google Drive, or cloud sync path was introduced.
+- No new local storage keys, telemetry fields, or local technical log events were added; the drawer's open/closed state is transient React state, not persisted.
+
+### Known limitations after Sprint 6.5
+
+- Drawer open/close/Escape/selection-closes behavior is covered by a pure-logic unit test (`_lib/mobileHistoryDrawer.test.ts`); there is no component-rendering or browser-level automated test for the drawer's DOM/focus/scroll-lock behavior, since the project does not use a DOM rendering test library yet. See `docs/RELEASE_CHECKLIST.md` for the corresponding manual mobile checks.
+- The drawer's width (`min(320px, 85vw)`) and breakpoint (720px) are fixed values chosen from manual testing on a Redmi Note 13 Pro 5G viewport; they are not yet configurable or verified across a wider device matrix.
+
+### Planned work (not implemented yet)
+
+- Broader browser/E2E coverage for the mobile drawer alongside the rest of the app (see "Cross-cutting remaining work" below).
+- Extending the same off-canvas drawer pattern to other panels if further mobile navigation needs arise.
+
 ## Cross-cutting remaining work
 
 - Expand and validate the model registry before adding more model records.

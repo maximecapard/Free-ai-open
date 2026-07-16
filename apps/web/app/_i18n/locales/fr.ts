@@ -158,6 +158,11 @@ export const fr: Dictionary = {
     storedLocally: "Stocké localement. Cette conversation reste sur votre appareil.",
     noConversationsYet: "Aucune conversation pour le moment.",
     clearingSiteData: "Effacer les données du site pour cette application supprimera cet historique.",
+    title: "Conversations",
+    openHistory: "Ouvrir l'historique des conversations",
+    closeHistory: "Fermer l'historique des conversations",
+    importConversations: "Importer des conversations",
+    exportConversations: "Exporter des conversations",
   },
   backup: {
     title: "Sauvegarde",
