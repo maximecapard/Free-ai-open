@@ -440,6 +440,43 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - The transcript is not virtualized. Very long imported conversations may still benefit from future windowing/virtualization, but no new dependency was added in this sprint.
 - Browser smoke testing is still required to validate perceived smoothness on real mobile devices.
 
+## Sprint 6.7 - v0.6.4-alpha mobile navigation fix and device tier accuracy
+
+### Built
+
+- Fixed the mobile "show previous conversations" control: it was still a normal-flow button inside the chat heading row, so scrolling down a long conversation scrolled it out of view. `.chat-history-trigger` is now `position: fixed` in the top-right corner on mobile (`max-width: 720px`), with `env(safe-area-inset-top/right)` offsets, a `z-index` above the drawer panel/backdrop, and a `padding-top` clearance added to `.chat-layout` so the fixed button never overlaps the chat heading row underneath it.
+- Enabled `viewport-fit: cover` via a new `viewport` export in `apps/web/app/layout.tsx` so `env(safe-area-inset-*)` actually resolves to non-zero values on notched/rounded-corner devices; without it the safe-area CSS was a silent no-op.
+- The trigger button now toggles (`mobileHistoryDrawerReducer` gained a `toggle` action) instead of only opening, its visible label switches between "Open conversation history" and "Close conversation history" to match `aria-expanded`, and it hides itself while the drawer is open (the drawer already has its own close button, backdrop, and Escape handling, and hiding the trigger avoids it visually colliding with the open panel's right edge on narrow viewports).
+- The drawer panel itself already lived outside the normal document flow, already overlaid the chat instead of pushing it down, and already supported all required close paths, full-height presentation, scroll locking, focus restoration, and reduced-motion — Sprint 6.5's implementation is unchanged; this sprint only fixes the trigger's positioning and adds safe-area padding to the panel.
+- Audited why a Redmi Note 13 Pro 5G (12 GB RAM) was classified `webgpu_high`/tier 3, identical to many desktop PCs: `getDeviceTier` derived the tier almost entirely from `estimatedMemoryGb` (`>=8 GB` alone was enough for tier 3) with no form-factor awareness at all.
+- Replaced that threshold ladder with a small scoring model in a new `packages/device-profiler/src/scoring.ts`: bounded points for coarse memory/CPU-concurrency/WebGPU-backend signals (2/2/1 max), a form-factor tier cap (mobile capped at 2, tablet at 3, unknown at 3, desktop uncapped) so RAM and core count alone can never place a phone alongside desktop-class hardware, and optional measured-tokens-per-second promotion / repeated-failure demotion that only ever move the tier when real data is supplied.
+- Added `packages/device-profiler/src/capabilities.ts` with the new coarse detectors: `detectFormFactor` (UA-CH mobile hint + user-agent heuristics, honestly documented as imperfect for cases like iPadOS Safari's desktop-flavored UA), `detectArchitectureClass` (Client Hints `getHighEntropyValues(["architecture"])`, never guessed from OS family since e.g. Apple Silicon Macs are ARM), `classifyMemory`, `classifyCpuConcurrency`, and `detectCpuConcurrency` (`navigator.hardwareConcurrency`).
+- `DeviceProfile` now includes `formFactor`, `architectureClass`, `memoryClass`, `cpuConcurrencyClass`, and an optional `measuredPerformance` echo of whatever was supplied to `buildDeviceProfile`. `deviceTier` stays a plain `0–4` `DeviceTier`, so `model-router` needed no logic changes — its legacy `routeModel()` tier-only input path now reports the new fields as `"unknown"` instead of guessing.
+
+### Privacy and architecture notes
+
+- Every new field is a coarse, bounded category (4 or fewer values) or an optional locally-supplied measurement — never a raw sensor value, a raw user-agent string, or anything unique enough to fingerprint a device. Nothing new is transmitted anywhere; `detectDeviceProfile()` remains a synchronous, local-only, no-network call.
+- `measuredPerformance` is a clean, tested interface, not a faked one: `buildDeviceProfile`/`getDeviceTier` accept it and promote/demote correctly when it's supplied, but no current caller (`apps/web`'s onboarding/chat flow) actually sources it from real `@free-ai-open/local-logs` history yet — see "Planned work" below and `docs/architecture.md`.
+
+### Tests
+
+- Added mobile-history-drawer reducer coverage for the new `toggle` action.
+- Rewrote `packages/device-profiler/src/index.test.ts`'s tier-related assertions for the new scoring model and added coverage for: WebGPU absence forcing tier 0 regardless of memory; memory alone never reaching tier 3; a 12 GB mobile phone staying at tier ≤2 from coarse signals; a 12 GB desktop reaching a higher tier than an identical-memory mobile device; a low-memory desktop staying conservative; a mobile device with WebGPU but high coarse scores still staying ≤2 without measurements; strong measured tokens/sec promoting a mobile device; weak measured performance not promoting; repeated failures demoting by one tier with a tier-1 floor; and safe `"unknown"` fallbacks when Client Hints/`hardwareConcurrency`/UA signals are unavailable.
+- Added a test asserting the profile never exposes raw `hardwareConcurrency`, `userAgent`, or `maxTouchPoints` values, only the coarse categories.
+- Updated `model-router` and `diagnostic-report` test fixtures for the new required `DeviceProfile` fields without changing any router/diagnostic-report assertions or behavior.
+
+### Known limitations after Sprint 6.7
+
+- `formFactor`/tablet detection is a best-effort heuristic. Most notably, iPadOS Safari reports a desktop-flavored Macintosh user agent by default, so a real iPad can be misclassified as `desktop` rather than `tablet`; this is a known, industry-wide UA-sniffing limitation, not specific to this implementation.
+- `architectureClass` depends on the Client Hints high-entropy API (`navigator.userAgentData.getHighEntropyValues`), which is Chromium-only today; other browsers will report `"unknown"`.
+- The scoring thresholds and tier caps were chosen from the mission's stated rules and manual reasoning about the Redmi Note 13 Pro 5G, not from a device benchmark corpus; they may need tuning once more real device data is available.
+- `measuredPerformance` is not yet wired to real `@free-ai-open/local-logs` history in the live app; no current call site promotes or demotes a device based on actual generation performance yet.
+
+### Planned work (not implemented yet)
+
+- v0.7: source `measuredPerformance` from a device's own recent local generation history (tokens/sec, load time, first-token time, recent stall/error count) before building the device profile used for model recommendations, so real performance can promote or demote a tier over time.
+- v0.7: use the refined tier (and eventually `formFactor`) in `model-router` to prefer mobile-compatible/lightweight models on capped-tier devices and performance-tier models on promoted ones, and to prefer French-capable/multilingual models when French is selected (see `docs/roadmap.md`).
+
 ## Cross-cutting remaining work
 
 - Expand and validate the model registry before adding more model records.

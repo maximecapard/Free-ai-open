@@ -63,6 +63,7 @@ export function useMobileHistoryDrawer() {
 
   const open = useCallback(() => dispatch({ type: "open" }), []);
   const close = useCallback(() => dispatch({ type: "close" }), []);
+  const toggle = useCallback(() => dispatch({ type: "toggle" }), []);
   const selectConversation = useCallback(() => dispatch({ type: "select-conversation" }), []);
   const startNewChat = useCallback(() => dispatch({ type: "new-chat" }), []);
   const dismissBackdrop = useCallback(() => dispatch({ type: "backdrop-click" }), []);
@@ -74,6 +75,7 @@ export function useMobileHistoryDrawer() {
     panelId,
     open,
     close,
+    toggle,
     selectConversation,
     startNewChat,
     dismissBackdrop,

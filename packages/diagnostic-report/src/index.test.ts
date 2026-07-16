@@ -200,6 +200,10 @@ describe("diagnostic report", () => {
           benchmark: { status: "skipped", score: null, reason: "placeholder" },
           deviceTier: 1,
           deviceTierLabel: "webgpu_low",
+          formFactor: "desktop",
+          architectureClass: "unknown",
+          memoryClass: "medium",
+          cpuConcurrencyClass: "medium",
         },
         routerResult: {
           selectedModel: { id: "sample-general-light" },

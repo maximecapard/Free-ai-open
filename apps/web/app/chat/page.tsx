@@ -547,9 +547,9 @@ function ChatContent() {
             aria-haspopup="dialog"
             aria-expanded={drawer.isOpen}
             aria-controls={drawer.panelId}
-            onClick={drawer.open}
+            onClick={drawer.toggle}
           >
-            {t("history.openHistory")}
+            {drawer.isOpen ? t("history.closeHistory") : t("history.openHistory")}
           </button>
           <h1 style={{ margin: 0 }}>{t("chat.heading")}</h1>
         </div>

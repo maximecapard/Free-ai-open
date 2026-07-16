@@ -89,6 +89,15 @@ Recovery events are allowlisted technical events only:
 
 These events may include runtime status and technical error codes, but must not include prompts, responses, documents, conversations, message arrays, hidden language instructions, local file paths, API keys, or tokens.
 
+## Device capability profiling
+
+`@free-ai-open/device-profiler` mitigates the "excessive fingerprinting" threat by construction:
+
+- every derived signal is a coarse, bounded category (`formFactor`, `architectureClass`, `memoryClass`, `cpuConcurrencyClass` each have 4 or fewer possible values), never a raw sensor reading, a raw user-agent string, or a combination precise enough to uniquely identify a device;
+- architecture detection uses the Client Hints high-entropy API only when available and only reads the single `architecture` hint, never broader high-entropy fingerprinting hints;
+- the profiler never calls `fetch`, `sendBeacon`, or any server endpoint — profiling stays entirely local and synchronous with the existing onboarding/`/debug` display paths;
+- an optional `measuredPerformance` input (tokens/sec, load/first-token time, recent failure count) is locally supplied only, never derived from remote data, and is not populated with real data by any current caller.
+
 ## Runtime language instruction
 
 The selected UI locale is converted to a hidden runtime-only system instruction before local inference. This instruction is allowed to enter the local WebLLM message list, but it must not be persisted in conversation history, exported in conversation backups, included in diagnostics, or written to local technical logs. Language adherence remains best effort and depends on the selected model.

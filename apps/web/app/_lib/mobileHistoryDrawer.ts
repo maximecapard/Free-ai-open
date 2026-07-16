@@ -1,6 +1,7 @@
 export type MobileHistoryDrawerAction =
   | { type: "open" }
   | { type: "close" }
+  | { type: "toggle" }
   | { type: "select-conversation" }
   | { type: "new-chat" }
   | { type: "escape" }
@@ -15,6 +16,8 @@ export function mobileHistoryDrawerReducer(isOpen: boolean, action: MobileHistor
   switch (action.type) {
     case "open":
       return true;
+    case "toggle":
+      return !isOpen;
     case "close":
     case "select-conversation":
     case "new-chat":

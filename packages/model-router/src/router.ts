@@ -37,6 +37,13 @@ function buildLegacyDeviceProfile(input: RouteModelInput): DeviceProfile {
     },
     deviceTier: input.deviceTier,
     deviceTierLabel: getDeviceTierLabel(input.deviceTier),
+    // The legacy routeModel() input only carries a device tier, not a full
+    // capability profile, so these coarse fields are unknown rather than
+    // guessed.
+    formFactor: "unknown",
+    architectureClass: "unknown",
+    memoryClass: "unknown",
+    cpuConcurrencyClass: "unknown",
   };
 }
 

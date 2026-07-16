@@ -27,6 +27,10 @@ function buildDeviceProfile(overrides: Partial<DeviceProfile> = {}): DeviceProfi
     },
     deviceTier: 3,
     deviceTierLabel: "webgpu_high",
+    formFactor: "desktop",
+    architectureClass: "x86",
+    memoryClass: "high",
+    cpuConcurrencyClass: "high",
   };
 
   return {
