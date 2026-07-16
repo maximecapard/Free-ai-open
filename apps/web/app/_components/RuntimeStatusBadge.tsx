@@ -21,19 +21,8 @@ export function RuntimeStatusBadge({ state }: { state: RuntimeState }) {
     state.status === "loading_model" ? `${t(statusKey)} ${Math.round(state.loadProgress * 100)}%` : t(statusKey);
 
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        fontSize: 13,
-        padding: "6px 12px",
-        borderRadius: 999,
-        border: "1px solid var(--color-border)",
-        opacity: 0.85,
-      }}
-    >
-      <span style={{ width: 8, height: 8, borderRadius: "50%", background: STATUS_COLOR_VAR[state.status] }} />
+    <span className="fo-badge">
+      <span className="fo-status-dot" style={{ background: STATUS_COLOR_VAR[state.status] }} />
       {label}
     </span>
   );

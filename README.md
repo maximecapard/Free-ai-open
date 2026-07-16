@@ -120,6 +120,7 @@ pnpm build
 - [Changelog](CHANGELOG.md)
 - [Development log](docs/DEVLOG.md)
 - [Architecture](docs/architecture.md)
+- [Brand guide](docs/brand.md)
 - [Roadmap](docs/roadmap.md)
 - [Privacy design](docs/privacy.md)
 - [Security design](docs/security.md)

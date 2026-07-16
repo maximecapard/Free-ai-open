@@ -2,16 +2,6 @@
 
 import { useTranslations } from "../_i18n/LocaleContext";
 
-const BUTTON_STYLE = {
-  padding: "8px 14px",
-  borderRadius: 10,
-  border: "1px solid var(--color-border)",
-  background: "transparent",
-  color: "inherit",
-  cursor: "pointer",
-  fontSize: 13,
-};
-
 export function DebugActions({
   onRefresh,
   onCopy,
@@ -30,16 +20,16 @@ export function DebugActions({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button style={BUTTON_STYLE} onClick={onRefresh}>
+        <button className="fo-button fo-button-secondary" onClick={onRefresh}>
           {t("debug.refresh")}
         </button>
-        <button style={BUTTON_STYLE} onClick={onCopy}>
+        <button className="fo-button fo-button-secondary" onClick={onCopy}>
           {t("debug.copyReport")}
         </button>
-        <button style={BUTTON_STYLE} onClick={onDownload}>
+        <button className="fo-button fo-button-secondary" onClick={onDownload}>
           {t("debug.downloadReport")}
         </button>
-        <button style={BUTTON_STYLE} onClick={onClear}>
+        <button className="fo-button fo-button-secondary" onClick={onClear}>
           {t("debug.clearLogs")}
         </button>
       </div>

@@ -45,6 +45,26 @@ Versions are alpha milestones while the MVP is still under active development.
 - Export/import has no browser end-to-end coverage yet (verified manually); encrypted export is not implemented.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
 
+## [0.6.5-alpha] - 2026-07-16
+
+### Added
+
+- Added the first FreeAI Open brand/design-system foundation based on the local brand guide: `--fo-*` color, typography, radius, spacing, focus, motion, surface, and semantic tokens in `apps/web/app/globals.css`.
+- Added production web logo assets under `apps/web/public/brand/`: `freeai-open-app-icon.png`, `favicon.png`, `apple-touch-icon.png`, `pwa-icon-192.png`, and `pwa-icon-512.png`, generated from the local square app-icon source.
+- Added `BrandMark`, a compact navigation brand component that uses the square symbol asset and renders "FreeAI Open" as real HTML text instead of embedding the large horizontal raster logo.
+- Added public brand documentation in `docs/brand.md`, covering logo usage, production asset locations, colors, typography, accent discipline, accessibility, and the remaining need for a true vector logo source.
+
+### Changed
+
+- Consolidated the visual foundation around semantic brand tokens while preserving the existing `--color-*` aliases so current screens continue to work during the gradual UI migration.
+- Updated the header, footer, language/theme toggles, status badges, privacy notice, debug sections/actions, and primary onboarding/home CTAs to use the shared token/classes foundation.
+- Updated Next.js metadata to reference the new favicon and Apple touch icon assets.
+
+### Security and Privacy
+
+- No application behavior, model routing, runtime behavior, telemetry, diagnostics, local logs, server endpoint, `fetch`, `sendBeacon`, Supabase, Google Drive, or cloud-sync path changed.
+- Local brand-source files under `.local/brand-source/` remain local-only and are not part of the public repository.
+
 ## [0.6.4-alpha] - 2026-07-16
 
 ### Fixed
@@ -226,7 +246,8 @@ Versions are alpha milestones while the MVP is still under active development.
 - Added a simple local chat flow using the browser runtime.
 - Added runtime error classification and privacy safety tests.
 
-[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.4-alpha...HEAD
+[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.5-alpha...HEAD
+[0.6.5-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.4-alpha...v0.6.5-alpha
 [0.6.4-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.3-alpha...v0.6.4-alpha
 [0.6.3-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.2-alpha...v0.6.3-alpha
 [0.6.2-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.1-alpha...v0.6.2-alpha

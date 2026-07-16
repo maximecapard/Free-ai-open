@@ -479,6 +479,29 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - v0.7: source `measuredPerformance` from a device's own recent local generation history (tokens/sec, load time, first-token time, recent stall/error count) before building the device profile used for model recommendations, so real performance can promote or demote a tier over time.
 - v0.7: use the refined tier (and eventually `formFactor`) in `model-router` to prefer mobile-compatible/lightweight models on capped-tier devices and performance-tier models on promoted ones, and to prefer French-capable/multilingual models when French is selected (see `docs/roadmap.md`).
 
+## Sprint 6.8 - v0.6.5-alpha brand foundation
+
+### Built
+
+- Added a first brand/design-system foundation in `apps/web/app/globals.css` using the FreeAI Open brand guide: source palette tokens, semantic `--fo-*` tokens, light/dark/system values, typography, spacing steps, radii, focus ring, motion durations, overlay shadow, and compatibility aliases for existing `--color-*` variables.
+- Generated production PNG web assets from the local square app-icon source into `apps/web/public/brand/`: `freeai-open-app-icon.png`, `favicon.png`, `apple-touch-icon.png`, `pwa-icon-192.png`, and `pwa-icon-512.png`.
+- Added a compact `BrandMark` component for navigation. It uses the square symbol asset and renders `FreeAI Open` as real HTML text; the large horizontal raster reference remains a local-only design reference and is not used in the interface.
+- Updated Next.js metadata to reference the public favicon and Apple touch icon assets.
+- Applied the foundation to shared/high-leverage surfaces only: header, footer, language/theme segmented controls, status badges, privacy notice, debug sections/actions, and primary home/onboarding CTAs. This sprint deliberately does not perform a full page-by-page redesign.
+- Added `docs/brand.md` as public brand guidance for logo usage, asset locations, colors, typography, accent discipline, accessibility, and the known lack of a true vector logo source.
+
+### Privacy and architecture notes
+
+- Brand-source files remain local-only under `.local/brand-source/`; the raw DOCX and large horizontal reference image are not committed.
+- The visual foundation does not change runtime behavior, model routing, local storage, telemetry, diagnostic reports, local technical logs, or server behavior.
+- No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, new endpoint, third-party font CDN, or third-party design service was added.
+
+### Known limitations after v0.6.5-alpha
+
+- The public assets are production-ready PNGs, not a true vector logo system. Proper vector reconstruction is still future brand work.
+- Many app surfaces still use local inline layout styles; they inherit the new tokens but have not been fully redesigned into shared components yet.
+- Browser-level visual regression coverage remains manual.
+
 ## Cross-cutting remaining work
 
 - Expand and validate the model registry before adding more model records.
