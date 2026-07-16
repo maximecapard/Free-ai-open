@@ -22,8 +22,9 @@ Browser LLM runtimes make local AI possible without a native app, but the produc
 
 Implemented in the current alpha:
 
+- A coherent application shell (compact desktop navigation rail, safe-area-aware mobile top bar) and a product-wide visual redesign based on the FreeAI Open brand system, with plain-language device/runtime status by default and technical detail available on demand.
 - Browser-local WebLLM runtime through a Web Worker.
-- Streaming chat UI.
+- Streaming chat UI with a multiline composer.
 - Stop generation recovery, including cancelling/recovering states, timeout handling, stalled-generation recovery, automatic runtime recycling, unstable-output detection, and reload model support.
 - Local conversation history in the `/chat` UI, with an accessible off-canvas navigation drawer for switching conversations on mobile, opened from a persistent button that stays reachable while scrolling.
 - IndexedDB conversation storage with an in-memory fallback when IndexedDB is unavailable.

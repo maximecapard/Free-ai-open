@@ -58,15 +58,19 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
       aria-label={t("history.storedLocally")}
       style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}
     >
-      <button type="button" onClick={onNewChat} disabled={disabled} style={{ padding: "10px 12px", borderRadius: 12 }}>
+      <button type="button" className="fo-button fo-button-primary" onClick={onNewChat} disabled={disabled}>
         {t("history.newChat")}
       </button>
 
-      <p style={{ fontSize: 12, opacity: 0.6, margin: 0 }}>{t("history.storedLocally")}</p>
+      <p className="fo-muted" style={{ fontSize: 12, margin: 0 }}>
+        {t("history.storedLocally")}
+      </p>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 6, overflowY: "auto", maxHeight: 420 }}>
         {conversations.length === 0 && (
-          <p style={{ fontSize: 13, opacity: 0.5, margin: 0 }}>{t("history.noConversationsYet")}</p>
+          <p className="fo-muted" style={{ fontSize: 13, margin: 0 }}>
+            {t("history.noConversationsYet")}
+          </p>
         )}
 
         {conversations.map((conversation) => {
@@ -78,10 +82,11 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
             <div
               key={conversation.id}
               style={{
-                border: "1px solid var(--color-border)",
-                borderRadius: 10,
+                border: "1px solid var(--fo-border)",
+                borderLeft: isActive ? "3px solid var(--fo-accent)" : "3px solid transparent",
+                borderRadius: "var(--fo-radius-control)",
                 padding: 8,
-                background: isActive ? "var(--color-bg-elevated)" : "transparent",
+                background: isActive ? "var(--fo-accent-soft)" : "transparent",
               }}
             >
               {isRenaming ? (
@@ -97,7 +102,7 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
                     value={renameValue}
                     onChange={(event) => setRenameValue(event.target.value)}
                     onBlur={() => commitRename(conversation.id)}
-                    style={{ width: "100%", padding: 4, borderRadius: 6 }}
+                    style={{ width: "100%", padding: 4 }}
                   />
                 </form>
               ) : (
@@ -110,11 +115,13 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
                   style={{
                     display: "block",
                     width: "100%",
+                    minHeight: "auto",
                     textAlign: "left",
                     background: "transparent",
                     border: "none",
                     padding: 0,
                     fontSize: 14,
+                    fontWeight: isActive ? 650 : 400,
                     cursor: disabled ? "default" : "pointer",
                     overflow: "hidden",
                     textOverflow: "ellipsis",
@@ -125,14 +132,22 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
                 </button>
               )}
 
-              <div style={{ display: "flex", gap: 8, marginTop: 6, fontSize: 12 }}>
+              <div style={{ display: "flex", gap: 12, marginTop: 6, fontSize: 12 }}>
                 {isPendingDelete ? (
                   <>
-                    <span style={{ opacity: 0.7 }}>{t("common.deleteConfirm")}</span>
-                    <button type="button" onClick={() => onDelete(conversation.id)}>
+                    <span className="fo-muted">{t("common.deleteConfirm")}</span>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(conversation.id)}
+                      style={{ minHeight: "auto", border: "none", background: "transparent", color: "var(--fo-danger)", textDecoration: "underline", padding: 0 }}
+                    >
                       {t("common.yes")}
                     </button>
-                    <button type="button" onClick={() => setPendingDeleteId(null)}>
+                    <button
+                      type="button"
+                      onClick={() => setPendingDeleteId(null)}
+                      style={{ minHeight: "auto", border: "none", background: "transparent", textDecoration: "underline", padding: 0 }}
+                    >
                       {t("common.cancel")}
                     </button>
                   </>
@@ -143,7 +158,8 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
                       disabled={disabled}
                       onClick={() => startRename(conversation)}
                       aria-label={`${t("common.rename")}: ${conversation.title}`}
-                      style={{ opacity: 0.7 }}
+                      className="fo-muted"
+                      style={{ minHeight: "auto", border: "none", background: "transparent", textDecoration: "underline", padding: 0 }}
                     >
                       {t("common.rename")}
                     </button>
@@ -152,7 +168,8 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
                       disabled={disabled}
                       onClick={() => setPendingDeleteId(conversation.id)}
                       aria-label={`${t("common.delete")}: ${conversation.title}`}
-                      style={{ opacity: 0.7 }}
+                      className="fo-muted"
+                      style={{ minHeight: "auto", border: "none", background: "transparent", textDecoration: "underline", padding: 0 }}
                     >
                       {t("common.delete")}
                     </button>
@@ -164,7 +181,9 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
         })}
       </div>
 
-      <p style={{ fontSize: 11, opacity: 0.5, margin: 0 }}>{t("history.clearingSiteData")}</p>
+      <p className="fo-muted" style={{ fontSize: 11, margin: 0 }}>
+        {t("history.clearingSiteData")}
+      </p>
 
       <ConversationExportImportControls
         disabled={disabled}

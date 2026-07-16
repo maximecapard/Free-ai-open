@@ -34,7 +34,7 @@ export function DebugActions({
         </button>
       </div>
       {statusMessage && (
-        <p role="status" aria-live="polite" style={{ fontSize: 13, opacity: 0.7, margin: 0 }}>
+        <p role="status" aria-live="polite" className="fo-muted" style={{ fontSize: 13, margin: 0 }}>
           {statusMessage}
         </p>
       )}

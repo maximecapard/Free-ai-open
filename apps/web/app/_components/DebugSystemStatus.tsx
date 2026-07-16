@@ -7,7 +7,6 @@ import { findModeLabelKey } from "../_lib/catalog";
 import type { LastRuntimeStatus } from "../_lib/debugDiagnostics";
 import { DebugField, DebugSection } from "./DebugSection";
 import { useTranslations } from "../_i18n/LocaleContext";
-import type { TranslationKey } from "../_i18n/dictionary";
 
 export function DebugSystemStatus({
   deviceProfile,
@@ -23,18 +22,22 @@ export function DebugSystemStatus({
   return (
     <DebugSection title={t("debug.systemStatus")}>
       {!deviceProfile ? (
-        <p style={{ opacity: 0.6, fontSize: 14 }}>{t("debug.checkingDevice")}</p>
+        <p className="fo-muted" style={{ fontSize: 14 }}>
+          {t("debug.checkingDevice")}
+        </p>
       ) : (
         <>
           <DebugField
             label={t("debug.webgpu")}
             value={deviceProfile.webgpuAvailable ? t("debug.available") : t("debug.notAvailable")}
           />
-          <DebugField label={t("debug.activeBackend")} value={deviceProfile.preferredBackend} />
+          <DebugField label={t("debug.activeBackend")} value={deviceProfile.preferredBackend} technical />
           <DebugField
             label={t("debug.deviceTier")}
             value={`${deviceProfile.deviceTier} (${getDeviceTierDisplayLabel(deviceProfile.deviceTierLabel, deviceProfile.preferredBackend)})`}
+            technical
           />
+          <DebugField label={t("debug.formFactor")} value={deviceProfile.formFactor} technical />
         </>
       )}
       <DebugField
@@ -46,11 +49,12 @@ export function DebugSystemStatus({
         value={
           lastRuntimeStatus
             ? t("debug.runtimeStatusAsOf", {
-                status: t(`runtimeStatus.${lastRuntimeStatus.status}` as TranslationKey),
+                status: lastRuntimeStatus.status,
                 timestamp: new Date(lastRuntimeStatus.timestamp).toLocaleString(),
               })
             : t("debug.noSessionRecorded")
         }
+        technical={Boolean(lastRuntimeStatus)}
       />
     </DebugSection>
   );

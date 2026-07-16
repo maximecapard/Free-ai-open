@@ -39,6 +39,8 @@ Use semantic tokens such as `--fo-bg`, `--fo-surface`, `--fo-text`, `--fo-text-m
 
 Use teal sparingly. It should indicate active/local/ready/confirmed states and focus, not every title, border, icon, or decorative element. Primary buttons use Ink backgrounds with Paper text; teal is reserved for focus, active state, or confirmed local state.
 
+**The 80/15/5 rule:** roughly 80% of any screen should be light or dark neutrals, 15% secondary surfaces (cards, panels), and no more than 5% teal. The accent stays rare on purpose — that scarcity is what gives it meaning.
+
 ## Typography
 
 Use:
@@ -47,6 +49,50 @@ Use:
 - Mono: `ui-monospace, SFMono-Regular, Consolas, monospace`
 
 No runtime third-party font CDN is used. If Inter is unavailable, the browser falls back to system fonts.
+
+| Level   | Font / weight       | Line height | Usage                              |
+| ------- | -------------------- | ----------- | ----------------------------------- |
+| Display | Inter Display 700    | 1.00–1.08   | Hero moments and strong announcements (`.fo-display`). |
+| H1      | Inter Display 700    | 1.10        | Main page title (`.fo-page-title`). |
+| H2      | Inter Display 650/700 | 1.15       | Sections and large panels.          |
+| H3      | Inter 600            | 1.25        | Cards and functional groups.        |
+| Body    | Inter 400            | 1.50–1.65   | Regular text and documentation.     |
+| Label   | Inter 600, uppercase | 1.20        | Over-titles, states, small categories (`.fo-kicker`, `.fo-technical-label`). |
+| Code    | Monospace 400        | 1.50        | Tokens, logs, model IDs, paths, timings (`.fo-technical-value`). |
+
+## Component Treatment
+
+- **Primary button:** Ink background, Paper text (`.fo-button-primary`). Teal is reserved for focus, active state, or a confirmed local action — never the default button fill.
+- **Secondary button:** light surface, Line/border-token border, Ink/text-token text (`.fo-button-secondary`).
+- **Field:** Paper/white background, a discreet border, and a 2px Open Teal 500 focus ring.
+- **Card:** `--fo-surface` or white, a light border, 16px radius, no decorative shadow (`.fo-card`). Shadows are reserved for real overlays — drawers, floating controls, dropdown menus (`--fo-shadow-float`).
+- **Active local state:** a Teal Soft chip or panel with Teal 700 text (`--fo-accent-soft` / `--fo-accent-strong`). Avoid a generic "success green" — teal carries this meaning on its own.
+- **Logs / diagnostic surfaces:** Ink 950 background, Paper-colored code, muted metadata, measured (not alarming) red for errors. See `.fo-ink-surface` for how this is implemented as a scoped token override so the rest of the design system keeps working inside it.
+
+## Imagery
+
+**Prefer:** clean product screenshots cropped to one identifiable action; sober photography of real devices (GPU, laptop, screen, desk); simple technical diagrams showing local data flow and user choices; light material textures (paper, matte aluminum, frosted glass) used only as background; readable charts with clear values, units, period, and source.
+
+**Exclude:** glowing/luminous brains, humanoid robots, synthetic faces, cybernetic eyes, decorative neural-network graphics, blue circuit patterns, galaxies, green "code matrix" effects, purple/blue gradients used as a visual shorthand for "AI", and any image implying a feature or performance level that isn't actually implemented or measured.
+
+Every image should add proof, an explanation, or context — a purely decorative "tech" image with no information weakens the brand rather than strengthening it.
+
+## Editorial Tone
+
+Direct, factual, and calm. Explain limits as readily as capabilities; no marketing superlatives, no dramatization, no anthropomorphizing the model.
+
+| Say | Avoid |
+| --- | --- |
+| "The model runs on this device." | "Your limitless intelligence." |
+| "Estimated memory: 5.2 GB." | "Revolutionary optimization." |
+| "No data sent." | "Absolute guaranteed privacy." |
+| "This model may be slower on your device." | "An ultra-fast experience for everyone." |
+| "Reload the model." | "Reset the AI's brain." |
+
+- Short sentences, concrete verbs.
+- Technical information is visible on demand, not hidden behind vague language.
+- Errors explain the probable cause and the next available action.
+- Browser, GPU, or model limits are stated as facts, never as something the user did wrong.
 
 ## Shape And Layout
 

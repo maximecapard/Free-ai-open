@@ -17,6 +17,8 @@ export const fr: Dictionary = {
     deleteConfirm: "Supprimer ?",
   },
   header: {
+    home: "Accueil",
+    chat: "Chat",
     settings: "Paramètres",
     debug: "Diagnostic",
     language: "Langue",
@@ -24,6 +26,9 @@ export const fr: Dictionary = {
     themeSystem: "Système",
     themeLight: "Clair",
     themeDark: "Sombre",
+    primaryNavigation: "Navigation principale",
+    openMenu: "Ouvrir le menu",
+    closeMenu: "Fermer le menu",
   },
   footer: {
     tagline: "FreeAI Open — IA locale et open-source.",
@@ -37,8 +42,20 @@ export const fr: Dictionary = {
   home: {
     kicker: "Assistant IA local et open-source",
     lead: "Choisissez ce que vous voulez faire, la rapidité ou la qualité souhaitée, et FreeAI Open recommande un modèle qui s'exécute entièrement sur votre appareil.",
+    useRecommended: "Démarrer avec les réglages recommandés",
     getStarted: "Commencer",
-    skipToChat: "Aller directement au chat",
+    statusHeading: "Cet appareil",
+    checkingDevice: "Vérification de cet appareil…",
+  },
+  deviceCapability: {
+    limited: "Compatibilité limitée",
+    lightweight: "Adapté aux modèles légers",
+    recommended: "Expérience recommandée",
+    highPerformance: "Appareil haute performance",
+    limitedDetail: "Ce navigateur ne prend pas encore en charge WebGPU : le modèle local ne peut pas s'exécuter ici. Essayez une version récente de Chrome, Edge ou un autre navigateur compatible WebGPU.",
+    lightweightDetail: "Cet appareil fonctionne mieux avec des modèles légers pour des réponses plus rapides. Nous sélectionnons une option plus légère par défaut.",
+    recommendedDetail: "Cet appareil exécute confortablement le modèle local recommandé.",
+    highPerformanceDetail: "Cet appareil peut exécuter des modèles locaux de meilleure qualité sans ralentissement.",
   },
   settings: {
     title: "Paramètres",
@@ -53,11 +70,6 @@ export const fr: Dictionary = {
     step2: "Étape 2 sur 3",
     step3WithTask: "Étape 3 sur 3 · {task}",
     deviceTitle: "Vérification de votre appareil",
-    runningDeviceCheck: "Vérification rapide et locale en cours…",
-    webgpuAvailable: "Disponible dans ce navigateur",
-    webgpuUnavailable: "Non disponible dans ce navigateur",
-    recommendedMode: "Mode recommandé",
-    recommendedModeBody: "{mode} — vous pourrez le changer à l'étape suivante.",
     advancedDetails: "Détails techniques avancés",
     deviceTier: "Niveau de l'appareil",
     wasmAvailable: "WASM disponible",
@@ -110,6 +122,7 @@ export const fr: Dictionary = {
     },
   },
   modes: {
+    recommendedBadge: "Recommandé pour cet appareil",
     fast: {
       label: "Rapide",
       description: "Modèle plus léger, réponses plus rapides.",
@@ -119,8 +132,8 @@ export const fr: Dictionary = {
       description: "Bon compromis qualité/vitesse. Recommandé pour la plupart des appareils.",
     },
     performance: {
-      label: "Performance",
-      description: "Meilleure qualité. Peut être plus lent sur votre appareil.",
+      label: "Qualité",
+      description: "De meilleures réponses quand votre appareil le permet. Peut être plus lent.",
     },
   },
   modelStatus: {
@@ -150,9 +163,14 @@ export const fr: Dictionary = {
     advancedNotUsed: "Avancé : {count} modèle{plural} non utilisé{plural}",
     localModelUnavailable: "Modèle local indisponible",
     reloadModel: "Recharger le modèle",
+    technicalDetails: "Détails techniques",
     askPlaceholder: "Posez votre question en local…",
     emptyTranscript: "Envoyez un message pour commencer à discuter avec le modèle local.",
     scrollToLatest: "Aller au dernier message",
+    youLabel: "Vous",
+    assistantLabel: "Assistant local",
+    composerLabel: "Message",
+    composerHint: "Entrée pour envoyer, Maj+Entrée pour un saut de ligne.",
   },
   history: {
     newChat: "+ Nouvelle conversation",
@@ -194,6 +212,15 @@ export const fr: Dictionary = {
     cancelling: "Arrêt en cours",
     recovering: "Récupération",
     error: "Erreur",
+  },
+  runtimeStatusPlain: {
+    idle: "Non démarré",
+    loading_model: "Préparation du modèle local",
+    ready: "Prêt sur cet appareil",
+    generating: "Rédaction d'une réponse",
+    cancelling: "Arrêt en cours",
+    recovering: "Nouvelle préparation du modèle",
+    error: "Un problème est survenu",
   },
   runtimeError: {
     webgpu_unavailable:
@@ -250,6 +277,7 @@ export const fr: Dictionary = {
     notAvailable: "Non disponible",
     activeBackend: "Moteur actif",
     deviceTier: "Niveau de l'appareil",
+    formFactor: "Type d'appareil",
     performanceModePreview: "Mode de performance (aperçu)",
     runtimeStatusLabel: "État du moteur",
     runtimeStatusAsOf: "{status} (au {timestamp})",

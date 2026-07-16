@@ -53,17 +53,33 @@ Versions are alpha milestones while the MVP is still under active development.
 - Added production web logo assets under `apps/web/public/brand/`: `freeai-open-app-icon.png`, `favicon.png`, `apple-touch-icon.png`, `pwa-icon-192.png`, and `pwa-icon-512.png`, generated from the local square app-icon source.
 - Added `BrandMark`, a compact navigation brand component that uses the square symbol asset and renders "FreeAI Open" as real HTML text instead of embedding the large horizontal raster logo.
 - Added public brand documentation in `docs/brand.md`, covering logo usage, production asset locations, colors, typography, accent discipline, accessibility, and the remaining need for a true vector logo source.
+- Completed the product-wide UX/visual redesign on top of the brand foundation: a responsive app shell (`apps/web/app/_components/Header.tsx`), a shared `DeviceCapabilitySummary` component, and a small hand-rolled line-icon set (`apps/web/app/_components/icons.tsx`, no new dependency).
+- Added a compact, always-Ink desktop navigation rail (brand icon, Home/Chat/Settings/Debug links, language/theme toggles) and a compact fixed, safe-area-aware mobile top bar with a small dropdown menu for the same links/toggles, both rendered from the same markup with the visibility split handled entirely by the existing 720px CSS breakpoint.
+- Added a plain-language device capability summary ("Limited compatibility" / "Suitable for lightweight models" / "Recommended experience" / "High-performance device") shown by default on the home page and the onboarding device-check step, with the raw device tier, backend, memory, and storage figures moved behind an "Advanced technical details" disclosure.
+- Added a "Use the recommended setup" primary action on the home page that links directly to a working `/chat?task=chat&mode=balanced` session, so a first-time visitor can start chatting without going through onboarding; "Get started" (onboarding) remains available as the customization path.
+- Highlighted the device-recommended performance mode on the onboarding mode-selection step with a "Recommended for this device" badge.
+- Renamed the "Performance" mode's display label to "Quality" (English) / "Qualité" (French) for the normal interface; the underlying `PerformanceMode` value and all routing logic are unchanged.
+- Added plain-language runtime status wording ("Preparing the local model", "Ready on this device", "Writing a response", "Preparing the model again", …) for the normal chat interface, with the existing raw-ish `runtimeStatus.*` labels reserved for technical/debug use.
+- Added a "Technical details" disclosure under the local-model-unavailable error, showing the raw runtime error code without changing the plain-language error message shown by default.
+- Converted the chat composer from a single-line input to a multiline `<textarea>` (Enter to send, Shift+Enter for a new line, `enterKeyHint="send"` for mobile keyboards), with a visible composer hint and safe-area bottom padding on mobile.
+- Added a screen-reader-only role label ("You" / "Local assistant") on each chat message bubble so user/assistant distinction does not rely on alignment or color alone for assistive technology.
+- Made the `/debug` dashboard predominantly Ink regardless of the selected theme, and applied the brand guide's monospace discipline throughout it: technical values (backend, device tier, form factor, model source/status/size/license, timings, tokens/sec, log events/error codes, `contentLogged`) render in monospace; explanatory text stays in the normal sans-serif font. The debug dashboard now also surfaces `formFactor` and the raw runtime status code (previously only shown as a translated word).
+- Extended `docs/brand.md` with the source brand guide's full color-usage rule (80% neutral / 15% secondary surface / 5% teal maximum), the complete typography scale, per-component treatment rules, imagery guidance (what to use, what to avoid), and editorial tone-of-voice examples.
 
 ### Changed
 
 - Consolidated the visual foundation around semantic brand tokens while preserving the existing `--color-*` aliases so current screens continue to work during the gradual UI migration.
 - Updated the header, footer, language/theme toggles, status badges, privacy notice, debug sections/actions, and primary onboarding/home CTAs to use the shared token/classes foundation.
 - Updated Next.js metadata to reference the new favicon and Apple touch icon assets.
+- Rewrote every remaining app surface (home, all four onboarding steps, chat, conversation history/import-export, debug, settings) to use the shared `--fo-*` tokens and `.fo-*`/`.app-shell__*` classes instead of local inline colors; no `--color-*` compatibility alias is referenced directly from component code anymore, though the aliases themselves remain defined for any future/external use.
+- Restyled the conversation history list: the active conversation now has an accent-soft background plus a left accent stripe (not color alone — the row is also bold and carries `aria-current`), and rename/delete actions are minimal underlined text controls instead of bordered buttons, reducing visual noise around the conversation list.
+- Restyled the shared export/import controls with the button/card token system; behavior, wiring, and the existing privacy note (readable JSON content, not encrypted, no cloud sync) are unchanged.
 
 ### Security and Privacy
 
 - No application behavior, model routing, runtime behavior, telemetry, diagnostics, local logs, server endpoint, `fetch`, `sendBeacon`, Supabase, Google Drive, or cloud-sync path changed.
 - Local brand-source files under `.local/brand-source/` remain local-only and are not part of the public repository.
+- The new `DeviceCapabilitySummary` component and the debug dashboard's `formFactor` field only ever display the same coarse `DeviceProfile` fields already covered by prior privacy review; no new device signal was added and nothing new is transmitted.
 
 ## [0.6.4-alpha] - 2026-07-16
 

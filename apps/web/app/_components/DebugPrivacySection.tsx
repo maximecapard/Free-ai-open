@@ -10,8 +10,10 @@ export function DebugPrivacySection({ contentLogged }: { contentLogged: boolean 
   return (
     <DebugSection title={t("debug.privacyTitle")}>
       <PrivacyNotice />
-      <p style={{ fontSize: 13, opacity: 0.75, margin: "8px 0" }}>{t("debug.privacyBody")}</p>
-      <DebugField label="contentLogged" value={contentLogged === null ? "—" : String(contentLogged)} />
+      <p className="fo-muted" style={{ fontSize: 13, margin: "8px 0" }}>
+        {t("debug.privacyBody")}
+      </p>
+      <DebugField label="contentLogged" value={contentLogged === null ? "—" : String(contentLogged)} technical />
     </DebugSection>
   );
 }

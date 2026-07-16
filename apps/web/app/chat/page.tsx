@@ -553,7 +553,9 @@ function ChatContent() {
           >
             {drawer.isOpen ? t("history.closeHistory") : t("history.openHistory")}
           </button>
-          <h1 style={{ margin: 0 }}>{t("chat.heading")}</h1>
+          <h1 className="fo-page-title" style={{ margin: 0, fontSize: 24 }}>
+            {t("chat.heading")}
+          </h1>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <ModelStatusPill taskLabel={taskLabel} modeLabel={modeLabel} modelName={routeResult?.selectedModel?.displayName} />
@@ -565,12 +567,11 @@ function ChatContent() {
         <section
           role="status"
           aria-live="polite"
+          className="fo-inline-notice"
           style={{
-            border: "1px solid var(--color-warning)",
-            borderRadius: 16,
-            padding: 12,
+            borderColor: "var(--fo-warning)",
+            background: "var(--fo-warning-soft)",
             marginBottom: 16,
-            background: "var(--color-warning-bg)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -579,16 +580,16 @@ function ChatContent() {
           }}
         >
           <span>{storageNotice}</span>
-          <button type="button" onClick={() => setStorageNotice(null)}>
+          <button type="button" className="fo-button fo-button-secondary" onClick={() => setStorageNotice(null)}>
             {t("common.dismiss")}
           </button>
         </section>
       )}
 
       {task && mode && routeResult && (
-        <section style={{ border: "1px solid var(--color-border)", borderRadius: 16, padding: 16, marginBottom: 16 }}>
+        <section className="fo-inline-notice" style={{ marginBottom: 16 }}>
           <strong>{routeResult.selectedModel ? t("chat.recommendedModel") : t("chat.noModelAvailable")}</strong>
-          <p style={{ margin: "8px 0 0", fontSize: 14, opacity: 0.85 }}>
+          <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>
             {t(routeDecisionKey(routeResult), {
               task: taskLabel ?? task ?? t("chat.noTaskSelected"),
               mode: modeLabel ?? mode ?? "",
@@ -597,10 +598,12 @@ function ChatContent() {
               count: routeResult.rejectedModels.length,
             })}
           </p>
-          <p style={{ margin: "8px 0 0", fontSize: 13, opacity: 0.6 }}>{t("chat.placeholderModelNote")}</p>
+          <p className="fo-muted" style={{ margin: "8px 0 0", fontSize: 13 }}>
+            {t("chat.placeholderModelNote")}
+          </p>
 
           {routeResult.rejectedModels.length > 0 && (
-            <details style={{ marginTop: 12, fontSize: 13, opacity: 0.75 }}>
+            <details className="fo-muted" style={{ marginTop: 12, fontSize: 13 }}>
               <summary style={{ cursor: "pointer" }}>
                 {t("chat.advancedNotUsed", {
                   count: routeResult.rejectedModels.length,
@@ -610,7 +613,7 @@ function ChatContent() {
               <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
                 {routeResult.rejectedModels.map((rejected) => (
                   <li key={rejected.modelId}>
-                    {rejected.modelId} — {t(rejectionReasonKey(rejected.reason))}
+                    <span className="fo-technical-value">{rejected.modelId}</span> — {t(rejectionReasonKey(rejected.reason))}
                   </li>
                 ))}
               </ul>
@@ -620,51 +623,67 @@ function ChatContent() {
       )}
 
       {runtimeState.status === "error" && runtimeState.error && (
-        <section
-          role="alert"
-          style={{
-            border: "1px solid var(--color-danger)",
-            borderRadius: 16,
-            padding: 16,
-            marginBottom: 16,
-            background: "var(--color-danger-bg)",
-          }}
-        >
+        <section role="alert" className="fo-inline-notice" style={{ borderColor: "var(--fo-danger)", background: "var(--fo-danger-soft)", marginBottom: 16 }}>
           <strong>{t("chat.localModelUnavailable")}</strong>
-          <p style={{ margin: "8px 0 0", fontSize: 14, opacity: 0.9 }}>{t(runtimeErrorKey(runtimeState.error.code))}</p>
-          <button type="button" onClick={() => void initializeRuntime()} style={{ marginTop: 8 }}>
+          <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>{t(runtimeErrorKey(runtimeState.error.code))}</p>
+          <button type="button" className="fo-button fo-button-secondary" onClick={() => void initializeRuntime()} style={{ marginTop: 8 }}>
             {t("chat.reloadModel")}
           </button>
+          <details className="fo-muted" style={{ marginTop: 8, fontSize: 12 }}>
+            <summary style={{ cursor: "pointer" }}>{t("chat.technicalDetails")}</summary>
+            <p className="fo-technical-value" style={{ margin: "6px 0 0" }}>
+              {runtimeState.error.code}
+            </p>
+          </details>
         </section>
       )}
 
-      <section style={{ border: "1px solid var(--color-border)", borderRadius: 16, padding: 16, minHeight: 320 }}>
+      <section className="fo-card" style={{ padding: 16, minHeight: 320 }}>
         <ChatTranscript messages={messages} />
       </section>
 
-      <form style={{ display: "flex", gap: 12, marginTop: 16 }} onSubmit={handleSubmit}>
-        <input
+      <form style={{ display: "flex", gap: 12, marginTop: 16, alignItems: "flex-end" }} onSubmit={handleSubmit}>
+        <textarea
           value={message}
           onChange={(event) => setMessage(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
           placeholder={t("chat.askPlaceholder")}
-          aria-label={t("chat.askPlaceholder")}
+          aria-label={t("chat.composerLabel")}
           disabled={runtimeState.status !== "ready"}
-          style={{ flex: 1, padding: 12, borderRadius: 12 }}
+          rows={2}
+          enterKeyHint="send"
+          style={{
+            flex: 1,
+            resize: "vertical",
+            minHeight: 44,
+            maxHeight: 220,
+            padding: "10px 14px",
+            fontFamily: "inherit",
+            lineHeight: 1.5,
+          }}
         />
         {runtimeState.status === "generating" ? (
-          <button type="button" onClick={() => runtimeRef.current?.stopGeneration()}>
+          <button type="button" className="fo-button fo-button-secondary" onClick={() => runtimeRef.current?.stopGeneration()}>
             {t("common.stop")}
           </button>
         ) : runtimeState.status === "cancelling" ? (
-          <button type="button" disabled aria-busy="true">
+          <button type="button" className="fo-button fo-button-secondary" disabled aria-busy="true">
             {t("common.stopping")}
           </button>
         ) : (
-          <button type="submit" disabled={!canSendChatMessage(runtimeState.status, message)}>
+          <button type="submit" className="fo-button fo-button-primary" disabled={!canSendChatMessage(runtimeState.status, message)}>
             {t("common.send")}
           </button>
         )}
       </form>
+      <p className="fo-muted" style={{ margin: "6px 0 0", fontSize: 12, paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        {t("chat.composerHint")}
+      </p>
 
       <div style={{ marginTop: 24 }}>
         <PrivacyNotice />

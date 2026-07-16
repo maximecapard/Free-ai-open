@@ -37,9 +37,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ThemeProvider>
           <LocaleProvider>
-            <Header />
-            {children}
-            <Footer />
+            <div className="app-shell">
+              <Header />
+              <div className="app-shell__content">
+                <div className="app-shell__main">{children}</div>
+                <Footer />
+              </div>
+            </div>
           </LocaleProvider>
         </ThemeProvider>
       </body>

@@ -53,24 +53,27 @@ export const ConversationExportImportControls = memo(function ConversationExport
         display: "flex",
         flexDirection: "column",
         gap: 8,
-        borderTop: "1px solid var(--color-border)",
+        borderTop: "1px solid var(--fo-border)",
         paddingTop: 12,
       }}
     >
-      <strong style={{ fontSize: 12, opacity: 0.75 }}>{t("backup.title")}</strong>
+      <p className="fo-technical-label" style={{ margin: 0 }}>
+        {t("backup.title")}
+      </p>
 
       <div role="group" aria-label={t("history.exportConversations")} style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-        <button type="button" onClick={onExportActive} disabled={disabled} style={{ fontSize: 12 }}>
+        <button type="button" className="fo-button fo-button-secondary" onClick={onExportActive} disabled={disabled} style={{ fontSize: 12, minHeight: 36, padding: "6px 12px" }}>
           {t("backup.exportCurrent")}
         </button>
-        <button type="button" onClick={onExportAll} disabled={disabled} style={{ fontSize: 12 }}>
+        <button type="button" className="fo-button fo-button-secondary" onClick={onExportAll} disabled={disabled} style={{ fontSize: 12, minHeight: 36, padding: "6px 12px" }}>
           {t("backup.exportAll")}
         </button>
         <button
           type="button"
+          className="fo-button fo-button-secondary"
           onClick={() => fileInputRef.current?.click()}
           disabled={disabled}
-          style={{ fontSize: 12 }}
+          style={{ fontSize: 12, minHeight: 36, padding: "6px 12px" }}
         >
           {t("backup.import")}
         </button>
@@ -84,29 +87,20 @@ export const ConversationExportImportControls = memo(function ConversationExport
         />
       </div>
 
-      <p style={{ fontSize: 11, opacity: 0.5, margin: 0 }}>{t("backup.privacyNote")}</p>
+      <p className="fo-muted" style={{ fontSize: 11, margin: 0 }}>
+        {t("backup.privacyNote")}
+      </p>
 
       {importSummary && (
-        <div
-          role="status"
-          style={{
-            border: "1px solid var(--color-border)",
-            borderRadius: 10,
-            padding: 8,
-            fontSize: 12,
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-          }}
-        >
+        <div role="status" className="fo-card" style={{ padding: 8, fontSize: 12, display: "flex", flexDirection: "column", gap: 4 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
             <span>{summaryText}</span>
-            <button type="button" onClick={onDismissImportSummary} style={{ fontSize: 11 }}>
+            <button type="button" onClick={onDismissImportSummary} style={{ fontSize: 11, minHeight: "auto", border: "none", background: "transparent", textDecoration: "underline", padding: 0 }}>
               {t("common.dismiss")}
             </button>
           </div>
           {importSummary.errors.length > 0 && (
-            <ul style={{ margin: 0, paddingLeft: 16, opacity: 0.75 }}>
+            <ul className="fo-muted" style={{ margin: 0, paddingLeft: 16 }}>
               {importSummary.errors.map((error, index) => (
                 <li key={index}>{error}</li>
               ))}
