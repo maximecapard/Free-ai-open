@@ -48,6 +48,8 @@ Conversations are sensitive local data. The conversation store must:
 
 Sprint 5.1 test coverage includes the real IndexedDB store through `fake-indexeddb`, no-IndexedDB memory fallback, active conversation ID pointer behavior, local-log rejection of conversation content fields, diagnostic-report exclusion of conversation-shaped input, and network isolation for conversation-store operations.
 
+The store's optional per-conversation `task` field is a plain string passed through unvalidated at the storage layer (the app layer, not the store, validates/narrows it against the `TaskCategory` catalog); it is never prompt or response content and carries no additional privacy risk beyond the existing title field.
+
 ## Local conversation export/import
 
 Conversation export files are sensitive local data because they can contain prompts and model responses. The export/import package must:
@@ -56,6 +58,7 @@ Conversation export files are sensitive local data because they can contain prom
 - avoid `fetch`, `sendBeacon`, Supabase, Google Drive, cloud storage, and server endpoints;
 - reject unsupported formats and versions;
 - reject invalid roles, invalid dates, oversized payloads, and unexpected fields;
+- reject a `task` field that isn't a bounded string, while still accepting a file where `task` is absent entirely (older exports);
 - assign fresh conversation IDs during import so existing conversations are not silently overwritten;
 - keep exported/imported conversation content out of local technical logs and diagnostic reports.
 

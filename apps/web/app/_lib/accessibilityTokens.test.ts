@@ -124,6 +124,41 @@ describe("brand semantic contrast tokens", () => {
   });
 });
 
+describe("selected segmented-control contrast", () => {
+  it("forces the rail's semantic tokens to dark-surface values, so a light site theme cannot leak a light accent-soft background under Paper-colored selected text", () => {
+    const railBlockMatch = globalsCss.match(/\.app-shell__rail\s*\{([^}]*)\}/);
+    expect(railBlockMatch).not.toBeNull();
+    const railBlock = railBlockMatch![1];
+
+    for (const token of ["--fo-text", "--fo-accent-soft", "--fo-accent-text", "--fo-border"]) {
+      expect(railBlock).toContain(`${token}:`);
+    }
+  });
+
+  it("no longer hardcodes Paper text on a theme-following accent-soft background in the rail footer", () => {
+    const footerPressedMatch = globalsCss.match(/\.app-shell__rail-footer \.fo-segmented button\[aria-pressed="true"\]\s*\{([^}]*)\}/);
+    expect(footerPressedMatch).toBeNull();
+  });
+
+  it("excludes the pressed state from the rail's unpressed-dimming rule, so it can't win the equal-specificity tie against the base pressed-state color", () => {
+    // Regression test: ".app-shell__rail-footer .fo-segmented button" and the
+    // base ".fo-segmented button[aria-pressed=true]" rule have identical CSS
+    // specificity; without :not([aria-pressed="true"]) here, this later rule
+    // silently re-dims the selected option's text back to muted, defeating
+    // the contrast fix even though no hardcoded color is present anymore.
+    expect(globalsCss).toContain('.app-shell__rail-footer .fo-segmented button:not([aria-pressed="true"]) {');
+  });
+
+  it("keeps the selected state visible through background, border, and bold text rather than color alone", () => {
+    const pressedBlockMatch = globalsCss.match(/\.fo-segmented button\[aria-pressed="true"\]\s*\{([^}]*)\}/);
+    expect(pressedBlockMatch).not.toBeNull();
+    const pressedBlock = pressedBlockMatch![1];
+
+    expect(pressedBlock).toContain("border-color:");
+    expect(pressedBlock).toContain("background:");
+  });
+});
+
 describe("mobile accessible controls", () => {
   it("defines 44px touch targets for mobile and coarse pointer controls", () => {
     const touchTargetMedia = globalsCss.slice(globalsCss.indexOf("@media (hover: none), (pointer: coarse), (max-width: 720px)"));

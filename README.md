@@ -22,7 +22,9 @@ Browser LLM runtimes make local AI possible without a native app, but the produc
 
 Implemented in the current alpha:
 
-- A coherent application shell (compact desktop navigation rail, safe-area-aware mobile top bar) and a product-wide visual redesign based on the FreeAI Open brand system, with plain-language device/runtime status by default and technical detail available on demand.
+- A coherent application shell (compact desktop navigation rail, safe-area-aware mobile top bar) and a product-wide visual redesign based on the FreeAI Open brand system, with plain-language device/runtime status by default and technical detail available on demand. On desktop, `/chat` is a fixed-height workspace with an independently scrolling conversation list and message transcript and an anchored composer.
+- A first-run "Getting Started" flow (device detection, performance mode confirmation) shown once and persisted locally, plus a `/settings` page to change performance mode, language, theme, re-check the device, or reset first-time setup.
+- Per-conversation usage selection: starting a new chat asks what it's for (general conversation, writing, rewriting, summarizing, translation, coding, or learning) instead of a single upfront choice, and the answer is preserved through local export/import.
 - Browser-local WebLLM runtime through a Web Worker.
 - Streaming chat UI with a multiline composer.
 - Stop generation recovery, including cancelling/recovering states, timeout handling, stalled-generation recovery, automatic runtime recycling, unstable-output detection, and reload model support.

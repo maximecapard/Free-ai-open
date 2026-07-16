@@ -27,6 +27,7 @@ function toExportData(conversations: Conversation[], exportedAt: string): Conver
         content: message.content,
         createdAt: message.createdAt,
       })),
+      ...(conversation.task ? { task: conversation.task } : {}),
     })),
   };
 }

@@ -40,9 +40,7 @@ export const en = {
   home: {
     kicker: "Open-source local AI assistant",
     lead: "Pick what you want to do, choose how fast or how capable you want it to be, and FreeAI Open recommends a model that runs entirely on your device.",
-    useRecommended: "Use the recommended setup",
-    checkingRecommendation: "Checking recommended setup…",
-    getStarted: "Get started",
+    openChat: "Open chat",
     statusHeading: "This device",
     checkingDevice: "Checking this device…",
   },
@@ -58,16 +56,29 @@ export const en = {
   },
   settings: {
     title: "Settings",
-    body:
-      "Manual model selection, storage management, and privacy controls will live here. This page is a placeholder for now — FreeAI Open picks a sensible model for you automatically.",
+    body: "Change how FreeAI Open runs on this device. These choices apply to every conversation and are saved on this device only.",
+    performanceHeading: "Performance mode",
+    performanceBody: "Controls how fast replies are versus how capable the local model is. You can change this anytime.",
+    performanceHint: "Changing this may reload the local model the next time you open Chat. It will not interrupt a reply that is currently being written.",
+    performanceSave: "Save performance mode",
+    performanceSaved: "Saved.",
+    languageHeading: "Language",
+    themeHeading: "Theme",
+    deviceHeading: "This device",
+    recheckDevice: "Re-check this device",
+    resetHeading: "First-time setup",
+    resetBody: "Resetting clears your saved performance mode and shows the first-time setup again next time you open the app.",
+    resetButton: "Reset first-time setup",
+    resetConfirm: "This clears your saved performance mode and shows first-time setup again. Continue?",
+    exactMode: "Exact mode",
+    modelId: "Model",
   },
   onboarding: {
     introTitle: "Let's set things up",
     introBody:
-      "FreeAI Open runs the AI model directly in your browser — nothing you type is sent anywhere. In a few short steps, we'll check what your device can run, then ask what you want to do and how you want it to feel, and suggest a model that fits.",
-    step1: "Step 1 of 3",
-    step2: "Step 2 of 3",
-    step3WithTask: "Step 3 of 3 · {task}",
+      "FreeAI Open runs the AI model directly in your browser — nothing you type is sent anywhere. In two short steps, we'll check what your device can run, then ask how you want it to feel, and suggest a setup that fits. You'll pick what each conversation is for later, right when you start it.",
+    step1: "Step 1 of 2",
+    step2: "Step 2 of 2",
     deviceTitle: "Checking your device",
     advancedDetails: "Advanced technical details",
     deviceTier: "Device tier",
@@ -79,12 +90,9 @@ export const en = {
     os: "OS",
     devicePrivacy:
       "This check runs entirely in your browser. Nothing about your device is sent to a server.",
-    taskTitle: "What do you want to do?",
-    chooseTaskFirst: "Please choose a task first.",
-    backToTaskSelection: "Back to task selection",
     modeTitle: "How should it feel?",
-    modeFooter:
-      "You can change this later. Manual model selection will also be available for advanced users.",
+    modeIntro: "This sets the default speed and quality for every conversation. You can change it anytime from Settings.",
+    modeFooter: "You can change this anytime from Settings. Manual model selection will also be available for advanced users.",
   },
   tasks: {
     chat: {
@@ -170,6 +178,10 @@ export const en = {
     assistantLabel: "Local assistant",
     composerLabel: "Message",
     composerHint: "Enter to send, Shift+Enter for a new line.",
+  },
+  newChatDialog: {
+    title: "What will this chat be for?",
+    body: "Pick what you'll mostly use this conversation for. You can start another conversation with a different purpose anytime with New chat.",
   },
   history: {
     newChat: "+ New chat",

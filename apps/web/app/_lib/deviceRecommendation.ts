@@ -1,7 +1,5 @@
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
-import type { DeviceTier, PerformanceMode, TaskCategory } from "@free-ai-open/types";
-
-export const DEFAULT_RECOMMENDED_TASK: TaskCategory = "chat";
+import type { DeviceTier, PerformanceMode } from "@free-ai-open/types";
 
 export function recommendPerformanceMode(deviceTier: DeviceTier): PerformanceMode {
   if (deviceTier <= 1) return "fast";
@@ -13,11 +11,6 @@ export function getRecommendedPerformanceModeForProfile(
   profile: Pick<DeviceProfile, "deviceTier">
 ): PerformanceMode {
   return recommendPerformanceMode(profile.deviceTier);
-}
-
-export function getRecommendedChatPath(profile: Pick<DeviceProfile, "deviceTier"> | null): string | null {
-  if (!profile) return null;
-  return `/chat?task=${DEFAULT_RECOMMENDED_TASK}&mode=${getRecommendedPerformanceModeForProfile(profile)}`;
 }
 
 export type DeviceCapabilityLevel = "limited" | "lightweight" | "recommended" | "highPerformance";

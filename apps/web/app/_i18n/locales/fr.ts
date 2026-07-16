@@ -42,9 +42,7 @@ export const fr: Dictionary = {
   home: {
     kicker: "Assistant IA local et open-source",
     lead: "Choisissez ce que vous voulez faire, la rapidité ou la qualité souhaitée, et FreeAI Open recommande un modèle qui s'exécute entièrement sur votre appareil.",
-    useRecommended: "Démarrer avec les réglages recommandés",
-    checkingRecommendation: "Recherche des réglages recommandés…",
-    getStarted: "Commencer",
+    openChat: "Ouvrir le chat",
     statusHeading: "Cet appareil",
     checkingDevice: "Vérification de cet appareil…",
   },
@@ -60,16 +58,29 @@ export const fr: Dictionary = {
   },
   settings: {
     title: "Paramètres",
-    body:
-      "La sélection manuelle du modèle, la gestion du stockage et les contrôles de confidentialité seront disponibles ici. Cette page est un placeholder pour le moment — FreeAI Open choisit automatiquement un modèle adapté.",
+    body: "Modifiez le fonctionnement de FreeAI Open sur cet appareil. Ces choix s'appliquent à toutes les conversations et sont enregistrés uniquement sur cet appareil.",
+    performanceHeading: "Mode de performance",
+    performanceBody: "Détermine la rapidité des réponses par rapport à la capacité du modèle local. Vous pouvez modifier ce choix à tout moment.",
+    performanceHint: "Ce changement peut recharger le modèle local la prochaine fois que vous ouvrez le Chat. Il n'interrompra pas une réponse en cours de rédaction.",
+    performanceSave: "Enregistrer le mode de performance",
+    performanceSaved: "Enregistré.",
+    languageHeading: "Langue",
+    themeHeading: "Thème",
+    deviceHeading: "Cet appareil",
+    recheckDevice: "Revérifier cet appareil",
+    resetHeading: "Configuration initiale",
+    resetBody: "Réinitialiser efface votre mode de performance enregistré et affiche à nouveau la configuration initiale la prochaine fois que vous ouvrez l'application.",
+    resetButton: "Réinitialiser la configuration initiale",
+    resetConfirm: "Cela efface votre mode de performance enregistré et affiche à nouveau la configuration initiale. Continuer ?",
+    exactMode: "Mode exact",
+    modelId: "Modèle",
   },
   onboarding: {
     introTitle: "Configurons l'application",
     introBody:
-      "FreeAI Open exécute le modèle d'IA directement dans votre navigateur — rien de ce que vous écrivez n'est envoyé ailleurs. En quelques étapes, nous vérifions ce que votre appareil peut exécuter, puis nous vous demandons ce que vous voulez faire et le niveau de performance souhaité, afin de suggérer un modèle adapté.",
-    step1: "Étape 1 sur 3",
-    step2: "Étape 2 sur 3",
-    step3WithTask: "Étape 3 sur 3 · {task}",
+      "FreeAI Open exécute le modèle d'IA directement dans votre navigateur — rien de ce que vous écrivez n'est envoyé ailleurs. En deux courtes étapes, nous vérifions ce que votre appareil peut exécuter, puis nous vous demandons le niveau de performance souhaité, afin de suggérer une configuration adaptée. Vous choisirez l'usage de chaque conversation plus tard, au moment de la démarrer.",
+    step1: "Étape 1 sur 2",
+    step2: "Étape 2 sur 2",
     deviceTitle: "Vérification de votre appareil",
     advancedDetails: "Détails techniques avancés",
     deviceTier: "Niveau de l'appareil",
@@ -81,12 +92,10 @@ export const fr: Dictionary = {
     os: "OS",
     devicePrivacy:
       "Cette vérification s'exécute entièrement dans votre navigateur. Aucune information sur votre appareil n'est envoyée à un serveur.",
-    taskTitle: "Que voulez-vous faire ?",
-    chooseTaskFirst: "Veuillez d'abord choisir une tâche.",
-    backToTaskSelection: "Retour au choix de tâche",
     modeTitle: "Quel comportement souhaitez-vous ?",
+    modeIntro: "Ce choix définit la vitesse et la qualité par défaut de chaque conversation. Vous pouvez le modifier à tout moment depuis les Paramètres.",
     modeFooter:
-      "Vous pourrez modifier ce choix plus tard. La sélection manuelle du modèle sera aussi disponible pour les utilisateurs avancés.",
+      "Vous pouvez modifier ce choix à tout moment depuis les Paramètres. La sélection manuelle du modèle sera aussi disponible pour les utilisateurs avancés.",
   },
   tasks: {
     chat: {
@@ -172,6 +181,10 @@ export const fr: Dictionary = {
     assistantLabel: "Assistant local",
     composerLabel: "Message",
     composerHint: "Entrée pour envoyer, Maj+Entrée pour un saut de ligne.",
+  },
+  newChatDialog: {
+    title: "À quoi servira cette discussion ?",
+    body: "Choisissez l'usage principal de cette conversation. Vous pouvez démarrer une autre conversation avec un usage différent à tout moment via Nouvelle conversation.",
   },
   history: {
     newChat: "+ Nouvelle conversation",

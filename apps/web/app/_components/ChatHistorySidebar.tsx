@@ -53,11 +53,7 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
   }
 
   return (
-    <aside
-      className="chat-sidebar"
-      aria-label={t("history.storedLocally")}
-      style={{ width: 240, flexShrink: 0, display: "flex", flexDirection: "column", gap: 12 }}
-    >
+    <aside className="chat-sidebar" aria-label={t("history.storedLocally")}>
       <button type="button" className="fo-button fo-button-primary" onClick={onNewChat} disabled={disabled}>
         {t("history.newChat")}
       </button>
@@ -66,7 +62,7 @@ export const ChatHistorySidebar = memo(function ChatHistorySidebar({
         {t("history.storedLocally")}
       </p>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, overflowY: "auto", maxHeight: 420 }}>
+      <div className="chat-history-list">
         {conversations.length === 0 && (
           <p className="fo-muted" style={{ fontSize: 13, margin: 0 }}>
             {t("history.noConversationsYet")}

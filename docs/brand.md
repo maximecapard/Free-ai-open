@@ -71,6 +71,8 @@ No runtime third-party font CDN is used. If Inter is unavailable, the browser fa
 - **Card:** `--fo-surface` or white, a light border, 16px radius, no decorative shadow (`.fo-card`). Shadows are reserved for real overlays — drawers, floating controls, dropdown menus (`--fo-shadow-float`).
 - **Active local state:** a Teal Soft chip or panel with accessible teal text (`--fo-accent-soft` / `--fo-accent-text`). Avoid a generic "success green" — teal carries this meaning on its own.
 - **Logs / diagnostic surfaces:** Ink 950 background, Paper-colored code, muted metadata, measured (not alarming) red for errors. See `.fo-ink-surface` for how this is implemented as a scoped token override so the rest of the design system keeps working inside it.
+- **Modal/dialog:** a centered `.fo-modal` panel (surface-elevated background, card radius, floating shadow) over a dimmed backdrop, following the theme normally rather than being forced dark. Options inside a modal (e.g. the New Chat usage picker) use the same card/button surface treatment as everywhere else — no separate modal-only palette.
+- **Always-dark chrome (rail, top bar, `.fo-ink-surface`):** any control placed inside a permanently-Ink surface (segmented controls, badges, selected states) must resolve its color through that surface's own forced token overrides, never a literal Paper/white value paired with the page's theme-following `--fo-accent-soft`. Mixing a hardcoded light-mode-safe color with a token that still follows the site theme is what caused the desktop rail's selected-control contrast bug (white text on light-mode's light teal) fixed in v0.6.6-alpha — see `.app-shell__rail`'s token overrides in `globals.css` for the pattern to copy.
 
 ## Imagery
 

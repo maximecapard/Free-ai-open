@@ -45,6 +45,37 @@ Versions are alpha milestones while the MVP is still under active development.
 - Export/import has no browser end-to-end coverage yet (verified manually); encrypted export is not implemented.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
 
+## [0.6.6-alpha] - 2026-07-16 (part 1)
+
+### Added
+
+- Added a first-run "Getting Started" flow, shown automatically only when no completed local setup exists: it explains that the model runs on this device, detects the device, recommends a performance mode, lets the user confirm Fast/Balanced/Quality (Quality is only offered when WebGPU is available), and then persists the choice and continues straight to `/chat`. It is not shown again on later visits unless site data is cleared or the user resets it from Settings.
+- Added `apps/web/app/_lib/gettingStartedPreference.ts`, a focused local `localStorage` preference store (schema-versioned) recording whether Getting Started is completed, the confirmed performance mode, and optional coarse device-recommendation metadata (tier, WebGPU availability, form factor) used to explain the choice later.
+- Added a per-conversation usage picker: selecting "New chat" now opens a small accessible modal (`NewChatTaskDialog`) asking what the conversation is for, backed by the existing `TaskCategory` catalog (General conversation, Writing help, Rewrite & improve, Summarize, Translate, Code helper, Learn something — document analysis is intentionally left out, since the product has no document upload entry point yet). The chosen task is stored on the conversation and never asked again for that conversation; the global performance mode is never re-asked here.
+- Added an optional `task` field to `@free-ai-open/conversation-store`'s `Conversation`/`ConversationMetadata` and to `@free-ai-open/conversation-export`'s export/import schema (still format `freeai-open-conversations` version `1`). Older conversations and older export files without a `task` field remain fully valid; the app defaults a missing/invalid task to general chat behavior rather than losing the conversation.
+- Redesigned `/settings` into a real settings page: change the performance mode (with plain-language explanation and an explicit "Save" step, so a change is never applied silently and can't interrupt a reply that's currently generating), change language and theme, re-check this device, and reset Getting Started — with device profile, exact mode value, and the local model ID available behind an "Advanced technical details" disclosure.
+- Added a dedicated desktop chat workspace layout (`apps/web/app/chat/layout.tsx` plus new `.chat-shell`/`.chat-main__*` rules in `globals.css`, scoped to `/chat` only): on desktop, the workspace fills the viewport height, the conversation sidebar and the message transcript scroll independently, and the composer stays anchored at the bottom, so switching conversations or scrolling history never moves the page back to the top. Mobile keeps the existing off-canvas drawer and normal page scrolling unchanged.
+
+### Fixed
+
+- Fixed a light-mode contrast bug where the desktop navigation rail's selected language/theme control could show white text on a very light teal background (unreadable for labels like "FR" and "Système"). The rail now forces its semantic color tokens to dark-surface values (the same technique already used by `.fo-ink-surface`), so the selected state always resolves to accessible text regardless of the site's light/dark theme, and stays visible through background, border, and bold text rather than color alone.
+
+### Changed
+
+- The home page now gates on Getting Started: if it isn't completed, the user is sent straight to `/onboarding` instead of being offered a "skip setup" shortcut. Once complete, home shows a single "Open chat" action plus the existing device-capability summary and privacy notice.
+- `/onboarding` no longer includes a separate task-selection step (`/onboarding/task` is removed); it now only detects the device and confirms a performance mode, then hands off to per-conversation task selection in `/chat`.
+- `/chat` no longer reads `task`/`mode` from the URL. The performance mode now comes from the Getting-Started preference store, and the active conversation's task comes from its own stored metadata (defaulting to general chat). The model-router recommendation panel updates automatically when the active conversation's task or the performance mode changes; the WebLLM worker/runtime lifecycle is unaffected by either, since this alpha always loads the same placeholder model regardless of the routing recommendation.
+
+### Security and Privacy
+
+- The new Getting Started preference store is a single `localStorage` key holding only a completion flag, the chosen performance mode, and coarse, already-reviewed device-profile fields (tier, WebGPU availability, form factor) — never raw sensor values, never sent to a server.
+- The per-conversation `task` field is a short catalog label (e.g. "coding", "writing"), never prompt or response content; it is included in local exports the same way the title already is, and is rejected by import validation if it isn't a bounded string.
+- No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, new server endpoint, or server-side WebLLM path was added. No model-router selection logic, WebLLM runtime behavior, telemetry, or diagnostics changed.
+
+### Tests
+
+- Added tests for the Getting Started preference store (completion, mode persistence, device snapshot, schema-version guard, reset), the New Chat task catalog (excludes document analysis, mirrors the shared `TaskCategory` list), conversation-task migration defaults, conversation-store/export round-tripping and backward compatibility for the new `task` field, the rail's forced-dark contrast tokens, and the desktop chat workspace's CSS layout structure (fixed height, independent scroll regions, anchored composer, route-scoped footer hiding).
+
 ## [0.6.5-alpha] - 2026-07-16
 
 ### Added
@@ -269,7 +300,8 @@ Versions are alpha milestones while the MVP is still under active development.
 - Added a simple local chat flow using the browser runtime.
 - Added runtime error classification and privacy safety tests.
 
-[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.5-alpha...HEAD
+[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.6-alpha...HEAD
+[0.6.6-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.5-alpha...v0.6.6-alpha
 [0.6.5-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.4-alpha...v0.6.5-alpha
 [0.6.4-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.3-alpha...v0.6.4-alpha
 [0.6.3-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.2-alpha...v0.6.3-alpha

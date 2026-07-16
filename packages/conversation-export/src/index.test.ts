@@ -170,6 +170,38 @@ describe("conversation export/import", () => {
     expect(prepared[0]?.messages.map((message) => message.id)).toEqual(["message-imported-1", "message-imported-2"]);
   });
 
+  it("preserves the task field through a build/parse/prepare round trip", () => {
+    const withTask: Conversation = { ...baseConversation, task: "coding" };
+    const exportData = buildConversationExport([withTask], { now });
+
+    expect(exportData.conversations[0]?.task).toBe("coding");
+
+    const parsed = parseConversationImport(serializeConversationExport(exportData, { now }));
+    expect(parsed.conversations[0]?.task).toBe("coding");
+
+    const prepared = prepareImportedConversations(parsed, { now, idFactory: (prefix) => `${prefix}-with-task` });
+    expect(prepared[0]?.task).toBe("coding");
+  });
+
+  it("remains a valid, importable export when task is absent (older export format)", () => {
+    const exportData = buildConversationExport([baseConversation], { now });
+    expect(exportData.conversations[0]?.task).toBeUndefined();
+    expect(JSON.stringify(exportData)).not.toContain('"task"');
+
+    const parsed = parseConversationImport(serializeConversationExport(exportData, { now }));
+    const prepared = prepareImportedConversations(parsed, { now, idFactory: (prefix) => `${prefix}-no-task` });
+
+    expect(prepared[0]?.task).toBeUndefined();
+  });
+
+  it("rejects a task value that is not a bounded string", () => {
+    const data = JSON.parse(validExportJson()) as Record<string, unknown>;
+    (data.conversations as Array<Record<string, unknown>>)[0]!.task = 12345;
+
+    const result = validateConversationExport(data);
+    expect(result).toMatchObject({ valid: false });
+  });
+
   it("does not add any network transport while exporting and importing", () => {
     const fetchSpy = vi.fn();
     const sendBeaconSpy = vi.fn();

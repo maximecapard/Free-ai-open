@@ -1,59 +1,72 @@
 "use client";
 
-import Link from "next/link";
-import { Suspense, useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { detectDeviceProfile } from "@free-ai-open/device-profiler";
-import { findTaskLabelKey, performanceModes } from "../../_lib/catalog";
+import type { DeviceProfile } from "@free-ai-open/device-profiler";
+import type { PerformanceMode } from "@free-ai-open/types";
+import { performanceModes } from "../../_lib/catalog";
 import { getRecommendedPerformanceModeForProfile } from "../../_lib/deviceRecommendation";
+import { completeGettingStarted } from "../../_lib/gettingStartedPreference";
 import { useTranslations } from "../../_i18n/LocaleContext";
 
-function OnboardingModeContent() {
+export default function OnboardingModePage() {
   const t = useTranslations();
-  const searchParams = useSearchParams();
-  const task = searchParams.get("task") ?? undefined;
-  const taskLabelKey = findTaskLabelKey(task);
-  const taskLabel = taskLabelKey ? t(taskLabelKey) : null;
-  const [recommendedModeId, setRecommendedModeId] = useState<string | null>(null);
+  const router = useRouter();
+  const [profile, setProfile] = useState<DeviceProfile | null>(null);
+  const [isConfirming, setIsConfirming] = useState<PerformanceMode | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    detectDeviceProfile().then((profile) => {
-      if (!cancelled) setRecommendedModeId(getRecommendedPerformanceModeForProfile(profile));
+    detectDeviceProfile().then((result) => {
+      if (!cancelled) setProfile(result);
     });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  if (!task || !taskLabel) {
-    return (
-      <main className="fo-container-narrow" style={{ padding: "48px 0" }}>
-        <p>{t("onboarding.chooseTaskFirst")}</p>
-        <Link href="/onboarding/task">{t("onboarding.backToTaskSelection")}</Link>
-      </main>
+  const recommendedModeId = profile ? getRecommendedPerformanceModeForProfile(profile) : null;
+  // Quality mode is only offered when WebGPU is available: on a WASM/CPU-only
+  // device it would not run acceptably, so it is left off rather than
+  // dangling a choice that can't work here.
+  const availableModes = performanceModes.filter((mode) => mode.id !== "performance" || profile?.webgpuAvailable);
+
+  function handleConfirm(mode: PerformanceMode) {
+    if (isConfirming) return;
+    setIsConfirming(mode);
+    completeGettingStarted(
+      mode,
+      profile
+        ? { deviceTier: profile.deviceTier, webgpuAvailable: profile.webgpuAvailable, formFactor: profile.formFactor }
+        : null
     );
+    router.push("/chat");
   }
 
   return (
     <main className="fo-container-narrow" style={{ padding: "48px 0" }}>
-      <p className="fo-technical-label">{t("onboarding.step3WithTask", { task: taskLabel })}</p>
+      <p className="fo-technical-label">{t("onboarding.step2")}</p>
       <h1 className="fo-page-title" style={{ marginTop: 8 }}>
         {t("onboarding.modeTitle")}
       </h1>
+      <p className="fo-muted" style={{ margin: "0 0 24px", fontSize: 15 }}>
+        {t("onboarding.modeIntro")}
+      </p>
 
       <div style={{ display: "grid", gap: 12 }}>
-        {performanceModes.map((mode) => {
+        {availableModes.map((mode) => {
           const isRecommended = mode.id === recommendedModeId;
           return (
-            <Link
+            <button
               key={mode.id}
-              href={`/chat?task=${task}&mode=${mode.id}`}
+              type="button"
               className="fo-card"
+              disabled={isConfirming !== null}
+              onClick={() => handleConfirm(mode.id)}
               style={{
                 padding: 16,
-                textDecoration: "none",
-                color: "inherit",
+                textAlign: "left",
                 borderColor: isRecommended ? "var(--fo-accent)" : undefined,
               }}
             >
@@ -68,7 +81,7 @@ function OnboardingModeContent() {
               <p className="fo-muted" style={{ margin: "6px 0 0", fontSize: 13 }}>
                 {t(mode.descriptionKey)}
               </p>
-            </Link>
+            </button>
           );
         })}
       </div>
@@ -77,13 +90,5 @@ function OnboardingModeContent() {
         {t("onboarding.modeFooter")}
       </p>
     </main>
-  );
-}
-
-export default function OnboardingModePage() {
-  return (
-    <Suspense fallback={null}>
-      <OnboardingModeContent />
-    </Suspense>
   );
 }

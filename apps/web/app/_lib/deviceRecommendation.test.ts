@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  getRecommendedChatPath,
   getRecommendedPerformanceModeForProfile,
   describeDeviceCapability,
   recommendPerformanceMode,
@@ -22,31 +21,11 @@ describe("recommendPerformanceMode", () => {
   });
 });
 
-describe("recommended chat path", () => {
-  it("resolves tier 0 and 1 devices to the fast chat destination", () => {
-    expect(getRecommendedChatPath({ deviceTier: 0 })).toBe("/chat?task=chat&mode=fast");
-    expect(getRecommendedChatPath({ deviceTier: 1 })).toBe("/chat?task=chat&mode=fast");
-  });
-
-  it("resolves ordinary supported devices to the balanced chat destination", () => {
-    expect(getRecommendedChatPath({ deviceTier: 2 })).toBe("/chat?task=chat&mode=balanced");
-    expect(getRecommendedChatPath({ deviceTier: 3 })).toBe("/chat?task=chat&mode=balanced");
-  });
-
-  it("resolves strong devices to the performance chat destination", () => {
-    expect(getRecommendedChatPath({ deviceTier: 4 })).toBe("/chat?task=chat&mode=performance");
-  });
-
-  it("does not hardcode balanced while profiling is pending", () => {
-    expect(getRecommendedChatPath(null)).toBeNull();
-  });
-
-  it("uses the same mode source as onboarding recommendations", () => {
+describe("getRecommendedPerformanceModeForProfile", () => {
+  it("delegates to recommendPerformanceMode using the profile's device tier", () => {
     const tiers: Array<0 | 1 | 2 | 3 | 4> = [0, 1, 2, 3, 4];
     for (const deviceTier of tiers) {
-      expect(getRecommendedChatPath({ deviceTier })).toBe(
-        `/chat?task=chat&mode=${getRecommendedPerformanceModeForProfile({ deviceTier })}`
-      );
+      expect(getRecommendedPerformanceModeForProfile({ deviceTier })).toBe(recommendPerformanceMode(deviceTier));
     }
   });
 });
