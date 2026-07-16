@@ -512,6 +512,8 @@ function ChatContent() {
         isOpen={drawer.isOpen}
         isDesktopViewport={drawer.isDesktopViewport}
         panelId={drawer.panelId}
+        panelRef={drawer.panelRef}
+        closeButtonRef={drawer.closeButtonRef}
         onClose={drawer.close}
         onBackdropClick={drawer.dismissBackdrop}
         conversations={conversations}
@@ -528,7 +530,7 @@ function ChatContent() {
         onDismissImportSummary={handleDismissImportSummary}
       />
 
-      <main style={{ flex: 1, minWidth: 0 }}>
+      <main ref={drawer.backgroundRef} style={{ flex: 1, minWidth: 0 }}>
       <div
         style={{
           display: "flex",

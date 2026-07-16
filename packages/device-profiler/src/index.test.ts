@@ -154,6 +154,19 @@ describe("detectFormFactor", () => {
     ).toBe("tablet");
   });
 
+  it("detects iPadOS Safari desktop-style user agents as tablets when touch signals support it", () => {
+    expect(
+      detectFormFactor(
+        buildNavigator({
+          userAgent:
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1",
+          userAgentData: undefined,
+          maxTouchPoints: 5,
+        })
+      )
+    ).toBe("tablet");
+  });
+
   it("detects desktop from a UA-CH non-mobile hint", () => {
     expect(
       detectFormFactor(buildNavigator({ userAgentData: { platform: "Windows", brands: [], mobile: false } }))
@@ -162,6 +175,31 @@ describe("detectFormFactor", () => {
 
   it("detects desktop from a known desktop OS family when UA-CH mobile hint is unavailable", () => {
     expect(detectFormFactor(buildNavigator({ userAgentData: undefined }))).toBe("desktop");
+  });
+
+  it("does not classify normal macOS desktops as tablets from zero or single-touch reports", () => {
+    const macUserAgent =
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Version/17.5 Safari/605.1.15";
+
+    expect(detectFormFactor(buildNavigator({ userAgent: macUserAgent, userAgentData: undefined, maxTouchPoints: 0 }))).toBe(
+      "desktop"
+    );
+    expect(detectFormFactor(buildNavigator({ userAgent: macUserAgent, userAgentData: undefined, maxTouchPoints: 1 }))).toBe(
+      "desktop"
+    );
+  });
+
+  it("falls back to unknown when a desktop-style iPad signal is contradicted by an explicit UA-CH desktop hint", () => {
+    expect(
+      detectFormFactor(
+        buildNavigator({
+          userAgent:
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1",
+          userAgentData: { platform: "macOS", brands: [], mobile: false },
+          maxTouchPoints: 5,
+        })
+      )
+    ).toBe("unknown");
   });
 
   it("falls back to unknown when no signal is available", () => {
@@ -270,6 +308,16 @@ describe("getDeviceTier", () => {
       formFactor: "mobile",
     });
     expect(result.tier).toBeLessThanOrEqual(2);
+  });
+
+  it("does not automatically classify a high-RAM tablet as tier 3 from memory alone", () => {
+    const result = getDeviceTier({
+      webgpuAvailable: true,
+      wasmAvailable: true,
+      estimatedMemoryGb: 16,
+      formFactor: "tablet",
+    });
+    expect(result.tier).toBeLessThan(3);
   });
 
   it("lets a 12 GB desktop reach a different, higher tier than an identical-memory mobile", () => {
@@ -479,6 +527,24 @@ describe("buildDeviceProfile", () => {
     expect(result.formFactor).toBe("mobile");
     expect(result.memoryClass).toBe("high");
     expect(result.deviceTier).toBeLessThanOrEqual(2);
+  });
+
+  it("treats a high-RAM iPadOS desktop-style browser as a tablet and avoids tier 3 from RAM alone", async () => {
+    const result = await buildDeviceProfile({
+      webAssemblyAvailable: true,
+      navigator: buildNavigator({
+        userAgent:
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Version/17.0 Mobile/15E148 Safari/604.1",
+        userAgentData: undefined,
+        maxTouchPoints: 5,
+        deviceMemory: 16,
+        gpu: { requestAdapter: async () => ({ name: "adapter" }) },
+      }),
+    });
+
+    expect(result.formFactor).toBe("tablet");
+    expect(result.memoryClass).toBe("high");
+    expect(result.deviceTier).toBeLessThan(3);
   });
 
   it("promotes a mobile device when the caller passes real measured performance", async () => {

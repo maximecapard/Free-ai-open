@@ -2,6 +2,12 @@
 
 import { useCallback, useEffect, useId, useReducer, useRef, useState } from "react";
 import { mobileHistoryDrawerReducer } from "../_lib/mobileHistoryDrawer";
+import {
+  focusMobileDrawer,
+  isolateMobileDrawerBackground,
+  restoreMobileDrawerTriggerFocus,
+  shouldRedirectFocusToDrawer,
+} from "../_lib/mobileDrawerAccessibility";
 
 // Must match the max-width breakpoint in globals.css that turns the history
 // panel from a static sidebar into an off-canvas drawer.
@@ -11,6 +17,9 @@ export function useMobileHistoryDrawer() {
   const [isOpen, dispatch] = useReducer(mobileHistoryDrawerReducer, false);
   const [isDesktopViewport, setIsDesktopViewport] = useState(true);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const backgroundRef = useRef<HTMLElement>(null);
   const wasOpenRef = useRef(false);
   const panelId = useId();
 
@@ -43,6 +52,11 @@ export function useMobileHistoryDrawer() {
   }, [isOpen, isDesktopViewport]);
 
   useEffect(() => {
+    if (!isOpen || isDesktopViewport) return;
+    return isolateMobileDrawerBackground(backgroundRef.current);
+  }, [isOpen, isDesktopViewport]);
+
+  useEffect(() => {
     if (!isOpen) return;
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") dispatch({ type: "escape" });
@@ -51,15 +65,27 @@ export function useMobileHistoryDrawer() {
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
-  // Restores focus to the trigger button whenever the drawer transitions
-  // from open to closed, so keyboard/screen-reader users land back where
-  // they started instead of losing their place.
   useEffect(() => {
-    if (wasOpenRef.current && !isOpen) {
-      triggerRef.current?.focus();
+    if (!isOpen || isDesktopViewport) return;
+    function handleFocusIn(event: FocusEvent) {
+      if (shouldRedirectFocusToDrawer(panelRef.current, event.target)) {
+        focusMobileDrawer(closeButtonRef.current, panelRef.current);
+      }
+    }
+    document.addEventListener("focusin", handleFocusIn);
+    return () => document.removeEventListener("focusin", handleFocusIn);
+  }, [isOpen, isDesktopViewport]);
+
+  // Moves focus into the opened mobile drawer, then restores focus to the
+  // trigger button whenever the drawer closes.
+  useEffect(() => {
+    if (isOpen && !isDesktopViewport) {
+      focusMobileDrawer(closeButtonRef.current, panelRef.current);
+    } else if (wasOpenRef.current && !isOpen) {
+      restoreMobileDrawerTriggerFocus(triggerRef.current);
     }
     wasOpenRef.current = isOpen;
-  }, [isOpen]);
+  }, [isOpen, isDesktopViewport]);
 
   const open = useCallback(() => dispatch({ type: "open" }), []);
   const close = useCallback(() => dispatch({ type: "close" }), []);
@@ -72,6 +98,9 @@ export function useMobileHistoryDrawer() {
     isOpen,
     isDesktopViewport,
     triggerRef,
+    closeButtonRef,
+    panelRef,
+    backgroundRef,
     panelId,
     open,
     close,

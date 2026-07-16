@@ -50,7 +50,8 @@ Versions are alpha milestones while the MVP is still under active development.
 ### Fixed
 
 - Fixed mobile conversation navigation: the "Open conversation history" control is now a persistent `position: fixed` button pinned to the top-right corner of the viewport on mobile, so it stays reachable while scrolling through a long conversation instead of scrolling away with the page. The button now toggles the drawer (its label and `aria-expanded` reflect open/closed state) and is hidden while the drawer itself is open, since the drawer already offers its own close button, backdrop, and Escape handling.
-- Fixed device tier overestimation on mobile hardware: `getDeviceTier` no longer derives the tier primarily from `navigator.deviceMemory`. A high-RAM phone (e.g. a 12 GB Redmi Note 13 Pro 5G) is no longer automatically classified the same as a desktop PC (tier 3/`webgpu_high`); it now lands at tier 1–2 unless real measured performance justifies promotion.
+- Fixed mobile drawer focus handling: opening the drawer now moves focus to the visible close button, closing it restores focus to the trigger when available, and the chat background is isolated with `inert` where supported plus a focus redirection guard so keyboard focus cannot move behind the overlay.
+- Fixed device tier overestimation on mobile/tablet hardware: `getDeviceTier` no longer derives the tier primarily from `navigator.deviceMemory`. A high-RAM phone (e.g. a 12 GB Redmi Note 13 Pro 5G) is no longer automatically classified the same as a desktop PC (tier 3/`webgpu_high`); iPadOS Safari desktop-style user agents (`Macintosh` plus multitouch) are treated conservatively as tablets before the generic macOS desktop fallback; high RAM alone is not enough to promote these devices to tier 3.
 
 ### Added
 
@@ -66,14 +67,15 @@ Versions are alpha milestones while the MVP is still under active development.
 
 ### Tests
 
-- Added device-profiler tests proving: WebGPU absence still forces tier 0 regardless of memory; a 12 GB mobile phone never reaches tier 3 from coarse signals alone; a 12 GB desktop reaches a different (higher) tier than an identical-memory mobile device; a low-memory desktop stays conservative; a mobile device with WebGPU but no measurements stays conservative even at high coarse scores; strong measured tokens/sec promotes a mobile device; weak measured performance does not promote; repeated recent failures demote a profile by one tier without going below tier 1; and unavailable browser capability APIs (Client Hints, `hardwareConcurrency`, UA hints) fall back safely to `"unknown"` instead of throwing.
+- Added device-profiler tests proving: WebGPU absence still forces tier 0 regardless of memory; a 12 GB mobile phone never reaches tier 3 from coarse signals alone; iPadOS Safari desktop-style user agents with multitouch classify as tablets; normal macOS desktops with zero/single-touch reports remain desktop; contradictory iPad-style signals fall back to `"unknown"`; high-RAM tablets do not reach tier 3 from memory alone; a 12 GB desktop reaches a different (higher) tier than an identical-memory mobile device; a low-memory desktop stays conservative; a mobile device with WebGPU but no measurements stays conservative even at high coarse scores; strong measured tokens/sec promotes a mobile device; weak measured performance does not promote; repeated recent failures demote a profile by one tier without going below tier 1; and unavailable browser capability APIs (Client Hints, `hardwareConcurrency`, UA hints) fall back safely to `"unknown"` instead of throwing.
 - Added a test asserting `DeviceProfile` only ever exposes the coarse category values (never a raw `hardwareConcurrency`, `userAgent`, or `maxTouchPoints` field), so it cannot act as a unique hardware fingerprint.
 - Updated `model-router` and `diagnostic-report` test fixtures for the new required `DeviceProfile` fields; router and diagnostic-report behavior itself is unchanged and their existing assertions still pass.
 - Added a mobile-history-drawer reducer test for the new toggle action.
+- Added mobile drawer accessibility helper tests for focus transfer to the close button, fallback focus to the panel, focus restoration to the trigger, `inert`/`aria-hidden` background isolation cleanup, and focus redirection when focus attempts to leave the drawer.
 
 ### Security and Privacy
 
-- All new device capability fields are coarse, bucketed categories (4 or fewer possible values each), never raw sensor values, a raw user agent string, or a combined hardware fingerprint. No new remote transmission, `fetch`, `sendBeacon`, Supabase, Google Drive, or server endpoint was added; device profiling remains entirely local and synchronous with the existing `/onboarding/device` and `/debug` display paths.
+- All new device capability fields are coarse, bucketed categories (4 or fewer possible values each), never raw sensor values, a raw user agent string, or a combined hardware fingerprint. The iPadOS desktop-style heuristic uses only local `userAgent`/`maxTouchPoints` signals to choose a coarse `tablet` bucket and never stores or transmits those raw values. No new remote transmission, `fetch`, `sendBeacon`, Supabase, Google Drive, or server endpoint was added; device profiling remains entirely local and synchronous with the existing `/onboarding/device` and `/debug` display paths.
 
 ## [0.6.3-alpha] - 2026-07-16
 
