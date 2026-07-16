@@ -150,6 +150,7 @@ export const en = {
     reloadModel: "Reload model",
     askPlaceholder: "Ask locally…",
     emptyTranscript: "Send a message to start chatting with the local model.",
+    scrollToLatest: "Scroll to latest",
   },
   history: {
     newChat: "+ New chat",

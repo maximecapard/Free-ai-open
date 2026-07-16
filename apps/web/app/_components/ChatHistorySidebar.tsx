@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import type { ConversationMetadata } from "@free-ai-open/conversation-store";
 import { ConversationExportImportControls } from "./ConversationExportImportControls";
 import type { ConversationImportSummary } from "./ConversationExportImportControls";
@@ -21,7 +21,7 @@ export interface ChatHistorySidebarProps {
   onDismissImportSummary: () => void;
 }
 
-export function ChatHistorySidebar({
+export const ChatHistorySidebar = memo(function ChatHistorySidebar({
   conversations,
   activeConversationId,
   disabled,
@@ -176,4 +176,4 @@ export function ChatHistorySidebar({
       />
     </aside>
   );
-}
+});

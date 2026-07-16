@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { ChatHistorySidebar } from "./ChatHistorySidebar";
 import type { ChatHistorySidebarProps } from "./ChatHistorySidebar";
 import { useTranslations } from "../_i18n/LocaleContext";
@@ -18,7 +19,7 @@ export interface ChatHistoryDrawerPanelProps extends ChatHistorySidebarProps {
 // drawer: a backdrop, dialog semantics, and a close button. On desktop
 // (isDesktopViewport) this renders as a plain pass-through wrapper — the
 // backdrop and dialog role are CSS-hidden and never applied.
-export function ChatHistoryDrawerPanel({
+export const ChatHistoryDrawerPanel = memo(function ChatHistoryDrawerPanel({
   isOpen,
   isDesktopViewport,
   panelId,
@@ -54,4 +55,4 @@ export function ChatHistoryDrawerPanel({
       </div>
     </>
   );
-}
+});

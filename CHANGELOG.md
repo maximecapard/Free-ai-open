@@ -53,15 +53,20 @@ Versions are alpha milestones while the MVP is still under active development.
 - The mobile drawer closes automatically when a conversation is selected or a new chat is started, and can also be closed via a close button, a backdrop click, or Escape; focus returns to the menu button after closing.
 - The drawer blocks background page scrolling while open, does not trap keyboard focus, marks its off-screen content `inert` when closed on mobile so it isn't keyboard-reachable, and respects `prefers-reduced-motion`.
 - Added `history.title` ("Conversations"), `history.openHistory` ("Open conversation history"), `history.closeHistory` ("Close conversation history"), `history.importConversations` ("Import conversations"), and `history.exportConversations` ("Export conversations") translation keys in English and French.
+- Added buffered chat transcript rendering for streamed WebLLM output, with a named `STREAM_RENDER_INTERVAL_MS` interval, so tiny runtime chunks no longer force a React render for every token.
+- Added near-bottom chat autoscroll that uses `requestAnimationFrame`, follows new output only while the user is already near the bottom, and exposes a translated "Scroll to latest" action when the user has scrolled up.
 
 ### Changed
 
 - Replaced the mobile `.chat-sidebar` stacking behavior (added in Sprint 6.2) with the drawer/overlay pattern described above. The desktop sidebar's layout, proportions, and behavior (selection, rename, delete, new chat, import, export) are unchanged, since the drawer reuses the existing `ChatHistorySidebar` component without modification.
 - The shared export/import controls now group the export buttons under a labelled ARIA group and use clearer accessible names ("Import conversations") for the hidden file input.
+- Reduced streaming-render pressure by batching visible assistant text updates while preserving every generated character for local completion handling and persistence decisions.
+- Memoized the history drawer/sidebar/export controls and individual message bubbles so unchanged UI regions do not rerender on each streamed text flush.
 
 ### Security and Privacy
 
 - The mobile drawer only re-presents existing local-only conversation history and export/import actions through the same unmodified handlers; no new server endpoint, `fetch`, `sendBeacon`, Supabase, Google Drive, or cloud sync path was added, and no new local storage keys or technical log events were introduced.
+- Streaming buffering is UI-only and in-memory. It does not change the WebLLM runtime stream, does not add logs or telemetry, and does not write generated content to local technical logs or diagnostic reports.
 
 ## [0.6.2-alpha] - 2026-07-15
 

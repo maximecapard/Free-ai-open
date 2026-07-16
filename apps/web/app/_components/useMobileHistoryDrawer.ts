@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useReducer, useRef, useState } from "react";
 import { mobileHistoryDrawerReducer } from "../_lib/mobileHistoryDrawer";
 
 // Must match the max-width breakpoint in globals.css that turns the history
@@ -61,15 +61,21 @@ export function useMobileHistoryDrawer() {
     wasOpenRef.current = isOpen;
   }, [isOpen]);
 
+  const open = useCallback(() => dispatch({ type: "open" }), []);
+  const close = useCallback(() => dispatch({ type: "close" }), []);
+  const selectConversation = useCallback(() => dispatch({ type: "select-conversation" }), []);
+  const startNewChat = useCallback(() => dispatch({ type: "new-chat" }), []);
+  const dismissBackdrop = useCallback(() => dispatch({ type: "backdrop-click" }), []);
+
   return {
     isOpen,
     isDesktopViewport,
     triggerRef,
     panelId,
-    open: () => dispatch({ type: "open" }),
-    close: () => dispatch({ type: "close" }),
-    selectConversation: () => dispatch({ type: "select-conversation" }),
-    startNewChat: () => dispatch({ type: "new-chat" }),
-    dismissBackdrop: () => dispatch({ type: "backdrop-click" }),
+    open,
+    close,
+    selectConversation,
+    startNewChat,
+    dismissBackdrop,
   };
 }

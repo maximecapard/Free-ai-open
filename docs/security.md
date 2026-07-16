@@ -75,6 +75,8 @@ The WebLLM runtime includes alpha safeguards for unstable model output:
 
 When these safeguards fire, partial assistant output is not stored as a completed assistant message. Technical events, local logs, and diagnostic reports must contain only technical metadata such as error codes, runtime status, lengths where applicable, and timing metrics, never prompt or generated response text.
 
+The chat transcript renderer may batch generated text briefly in memory before updating React state. This is a UI-only performance buffer, not a logging or diagnostic path, and must not be connected to telemetry, local technical logs, diagnostic reports, or server endpoints.
+
 ## Cancellation recovery
 
 After a Stop request, the interrupted runtime must not be trusted as ready for the next generation merely because the stream returned an abort confirmation. The app now treats the old worker as unsafe after cancellation, enters `recovering`, tears down the old worker using bounded termination, creates a replacement runtime, and returns to `ready` only after the model reload succeeds.

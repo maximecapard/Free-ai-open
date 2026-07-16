@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { memo, useRef } from "react";
 import { useTranslations } from "../_i18n/LocaleContext";
 
 export interface ConversationImportSummary {
@@ -18,7 +18,7 @@ export interface ConversationExportImportControlsProps {
   onDismissImportSummary: () => void;
 }
 
-export function ConversationExportImportControls({
+export const ConversationExportImportControls = memo(function ConversationExportImportControls({
   disabled,
   onExportActive,
   onExportAll,
@@ -116,4 +116,4 @@ export function ConversationExportImportControls({
       )}
     </div>
   );
-}
+});

@@ -86,6 +86,18 @@ Stop/cancel is handled as a runtime lifecycle transition, not just a UI interrup
 
 Late chunks or confirmations from an abandoned generation must not overwrite newer runtime state.
 
+## Streaming render responsiveness
+
+The WebLLM worker stream is not throttled or modified. Streaming responsiveness is handled at the UI boundary in `/chat`:
+
+- `apps/web/app/_lib/streamingBuffer.ts` batches visible assistant-text updates with `STREAM_RENDER_INTERVAL_MS` so very small token chunks do not trigger a React render for every chunk.
+- `apps/web/app/chat/page.tsx` still accumulates the full assistant text in memory for completion handling and local persistence decisions. The buffer controls only when the transcript receives visible text.
+- Pending buffered text is flushed on normal completion, cancellation, runtime error, or disposal so no characters are lost and no timer updates a stale assistant bubble after the generation path finishes.
+- `apps/web/app/_lib/chatAutoscroll.ts` keeps scroll-follow behavior based on "near bottom" metrics. The transcript schedules scroll work through `requestAnimationFrame` and stops forcing scroll when the user has moved away from the bottom.
+- The history drawer/sidebar/export controls and individual message bubbles are memoized so unchanged regions do not rerender for each buffered transcript update; language and theme still flow through React context.
+
+The buffering layer is in-memory UI state only. It does not write generated text to local technical logs, diagnostic reports, telemetry, or any server path. Transcript virtualization remains future work for very long imported conversations.
+
 ## Mobile navigation
 
 Below a 720px viewport width, the `/chat` history panel (new chat, conversation list, rename/delete, export/import) is presented as an off-canvas drawer instead of a permanent block in the document flow:

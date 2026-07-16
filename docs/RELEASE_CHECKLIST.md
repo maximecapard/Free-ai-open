@@ -12,6 +12,8 @@ Run through this list before cutting an alpha release. All boxes should be check
 ## Manual smoke tests (browser)
 
 - [ ] Chat: onboarding leads to `/chat`, the local model loads, and a prompt gets a streamed reply.
+- [ ] Streaming responsiveness: start a long reply and confirm visible text updates smoothly without making the history drawer/sidebar, composer, language toggle, or theme toggle feel blocked on desktop and mobile.
+- [ ] Streaming autoscroll: while a reply streams at the bottom, confirm the transcript follows the latest message; then scroll upward during streaming and confirm the page does not force-scroll back down until "Scroll to latest" is clicked.
 - [ ] Stop / reload: `Stop` interrupts an in-progress reply, and after a `cancel_timeout` or `generation_stalled` error, `Reload model` recovers the runtime without a page refresh.
 - [ ] Stop / automatic recovery: press `Stop` during a long generation, observe `Stopping`/`Recovering`/`Ready`, then send another message without refreshing. Repeat at least twice.
 - [ ] Generation safety: stopped, stalled, timed-out, or unstable partial assistant output is removed from the transcript and is not saved/exported as a completed answer.
@@ -31,6 +33,7 @@ Run through this list before cutting an alpha release. All boxes should be check
 ## Future automated coverage
 
 - [ ] Add browser-level tests for persisted chat refresh and delete confirmation once the project deliberately adopts a browser/E2E test framework. Do not add Playwright or another heavy framework only for this checklist item.
+- [ ] Add browser-level tests for streaming autoscroll/follow behavior and mobile streaming responsiveness once the project has a browser test layer.
 
 ## Privacy and diagnostics
 
