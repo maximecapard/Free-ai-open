@@ -34,6 +34,16 @@ Phase 0 adds types, package boundaries, and local persistence/migration only —
 - [ ] Confirm the active UI still does not silently select or download models from Registry v2; adaptive router scoring and explicit download UX remain later phases.
 - [ ] Confirm no registry field, log, or diagnostic contains prompt/response/conversation/document content and no registry production module adds `fetch`, `sendBeacon`, or server-side WebLLM.
 
+## v0.7.0-alpha Phase 2 (Local Benchmark v1)
+
+- [ ] Complete onboarding in a WebGPU browser; confirm the local capability check settles once and a refresh reuses the cached result.
+- [ ] Cancel the check and confirm setup can continue without an error or page refresh.
+- [ ] Rerun the check from Settings and confirm the previous result is replaced only after a non-cancelled result.
+- [ ] Background the tab during a run and confirm the Worker is stopped and the throttled measurement is not trusted.
+- [ ] Confirm mobile/tablet uses the reduced workload and the page remains responsive.
+- [ ] Export `/debug` diagnostics and confirm only benchmark version/status/timings/score/stability/confidence are present; no coarse profile key, raw GPU identifier, or user content is included.
+- [ ] Confirm no benchmark starts while generation/cancellation/recovery is active in Settings and that the WebLLM runtime remains loaded and usable afterward.
+
 ## Manual smoke tests (browser)
 
 - [ ] Chat: onboarding leads to `/chat`, the local model loads, and a prompt gets a streamed reply.

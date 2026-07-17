@@ -103,10 +103,10 @@ The iPadOS desktop-style heuristic uses local browser signals only to choose the
 
 ## v0.7.0-alpha adaptive router inputs (Phases 0-1B)
 
-Phase 0 defined local storage shapes. Phase 1A populates only the static capability profile. Phase 1B adds static public model metadata; benchmark and model-observation records are still future behavior.
+Phase 0 defined local storage shapes. Phase 1A populates the static capability profile, Phase 1B adds static public model metadata, and Phase 2 populates the local benchmark result. Model-observation records remain future behavior.
 
 - **Static capability profile:** a device's coarse, non-benchmarked capability signals (form factor, architecture class, approximate memory, WebGPU/WASM availability, and coarse GPU classes). Raw GPU adapter strings and exact high-entropy limit maps may be read momentarily by the profiler to derive these coarse classes, but must never be written to local storage, logs, diagnostics, or sent anywhere.
-- **Local benchmark result:** the outcome of a short, local, privacy-safe microbenchmark (status, coarse compute score, stability, confidence). Stored locally with an expiry so a stale result is treated as absent rather than trusted indefinitely. Never transmitted.
+- **Local benchmark result:** the outcome of a short, local, privacy-safe WebGPU microbenchmark (technical timings, bounded compute score, responsiveness bucket, stability, confidence, and technical error code). It is stored locally for up to seven days and invalidated when its schema, benchmark version, expiry, or coarse capability-profile key changes. It is never transmitted and contains no raw adapter/device identifier.
 - **Model performance observations:** technical timings and an outcome code (e.g. completed, stalled, out of memory) from a real local model load/generation attempt — never the prompt or response involved. Kept as a capped local history (200 most recent) so future routing can weigh real observed behavior alongside static signals.
 - **Model registry records:** public technical metadata such as exact WebLLM model ID, source/license URLs, coarse suitability scores, estimates, requirements, and known issues. Registry code does not collect user/device data, persist a profile, log content, or perform a network request.
 

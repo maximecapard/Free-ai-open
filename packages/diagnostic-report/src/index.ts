@@ -8,6 +8,7 @@ export type {
   DiagnosticCacheState,
   DiagnosticError,
   DiagnosticLog,
+  DiagnosticLocalBenchmark,
   DiagnosticMetrics,
   DiagnosticReport,
   DiagnosticReportInput,

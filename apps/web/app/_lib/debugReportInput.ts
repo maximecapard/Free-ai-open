@@ -2,7 +2,7 @@ import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import type { DiagnosticMetrics, DiagnosticReportInput } from "@free-ai-open/diagnostic-report";
 import type { LocalLogRecord } from "@free-ai-open/local-logs";
 import type { ModelRouterResult } from "@free-ai-open/model-router";
-import type { PerformanceMode, TaskCategory } from "@free-ai-open/types";
+import type { LocalBenchmarkResult, PerformanceMode, TaskCategory } from "@free-ai-open/types";
 import {
   findGenerationMetrics,
   findLastRuntimeStatus,
@@ -19,6 +19,7 @@ export interface BuildDebugDiagnosticReportInputOptions {
   routeResult: ModelRouterResult | null;
   mode: PerformanceMode;
   logs: LocalLogRecord[];
+  localBenchmark?: LocalBenchmarkResult | null;
 }
 
 function buildMetrics(logs: readonly LocalLogRecord[]): DiagnosticMetrics | undefined {
@@ -42,6 +43,7 @@ export function buildDebugDiagnosticReportInput({
   routeResult,
   mode,
   logs,
+  localBenchmark,
 }: BuildDebugDiagnosticReportInputOptions): DiagnosticReportInput {
   return {
     appVersion,
@@ -54,5 +56,6 @@ export function buildDebugDiagnosticReportInput({
     recentErrors: toRecentErrors(logs),
     localLogs: logs,
     metrics: buildMetrics(logs),
+    localBenchmark: localBenchmark ?? undefined,
   };
 }

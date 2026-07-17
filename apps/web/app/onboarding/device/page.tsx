@@ -4,12 +4,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import { DeviceCapabilitySummary } from "../../_components/DeviceCapabilitySummary";
+import { LocalBenchmarkPanel } from "../../_components/LocalBenchmarkPanel";
 import { detectAndStoreDeviceProfile } from "../../_lib/deviceProfileDetection";
 import { useTranslations } from "../../_i18n/LocaleContext";
 
 export default function OnboardingDevicePage() {
   const t = useTranslations();
   const [profile, setProfile] = useState<DeviceProfile | null>(null);
+  const [benchmarkSettled, setBenchmarkSettled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,7 +36,13 @@ export default function OnboardingDevicePage() {
         <DeviceCapabilitySummary profile={profile} />
       </div>
 
-      {profile && (
+      {profile?.staticCapabilityProfile && (
+        <div className="fo-card" style={{ padding: 20, maxWidth: 480, marginTop: 16 }}>
+          <LocalBenchmarkPanel profile={profile.staticCapabilityProfile} autoRun onSettled={() => setBenchmarkSettled(true)} />
+        </div>
+      )}
+
+      {profile && (!profile.staticCapabilityProfile || benchmarkSettled) && (
         <Link href="/onboarding/mode" className="fo-button fo-button-primary" style={{ marginTop: 32 }}>
           {t("common.continue")}
         </Link>

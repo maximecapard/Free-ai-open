@@ -733,6 +733,26 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - The active v0.6 recommendation UI still reads `sampleModels`. The local benchmark, adaptive router core, runtime decision integration, explicit download UX, and router UI remain future phases.
 - Browser cache eviction, model-host availability, and model/library compatibility can change; WebLLM or artifact updates require re-verification.
 
+## Sprint 6.16 - v0.7.0-alpha Phase 2: Local Benchmark v1
+
+### Built
+
+- Added `@free-ai-open/local-benchmark` with a deterministic bounded WebGPU compute workload, reduced mobile/tablet profile, warmup, repeated wall-clock samples, median scoring, output validation, timeout/cancellation handling, and unconditional GPU resource cleanup.
+- Runs the workload in a dedicated browser Worker so it does not reuse or interfere with the persistent WebLLM runtime.
+- Added strict schema/version/expiry/coarse-profile cache invalidation. Setup runs once when no valid cached result exists; Settings provides an explicit rerun action.
+- Added technical-only benchmark lifecycle logs and allowlisted benchmark fields in `/debug` diagnostic exports while keeping `contentLogged: false`.
+
+### Tests
+
+- Added scoring, workload selection, median/stability/responsiveness, success, unsupported WebGPU, cancellation, timeout, invalid samples, device loss, deterministic output validation, and GPU cleanup coverage.
+- Added browser-coordinator tests for cache reuse, forced replacement, and privacy-safe logs, plus strict store migration/profile invalidation and diagnostic privacy tests.
+
+### Known limitations after Phase 2
+
+- The v1 score uses wall-clock timing and is project-specific, not a portable hardware benchmark. Browser power-saving and scheduling can affect it.
+- Backgrounding the page cancels the run rather than trusting a throttled result. GPU timestamp queries are not used in v1.
+- The result does not choose or download a model. Adaptive scoring and real model performance observations remain later phases.
+
 ## Cross-cutting remaining work
 
 - Re-verify and expand Model Registry v2 only when an exact artifact, source, license, and supported-device case can be substantiated.

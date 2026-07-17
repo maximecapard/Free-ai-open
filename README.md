@@ -33,6 +33,7 @@ Implemented in the current alpha:
 - IndexedDB conversation storage with an in-memory fallback when IndexedDB is unavailable.
 - Local conversation export/import in the `/chat` history sidebar: export the current conversation, export all conversations, or import a JSON export file, entirely on-device.
 - Local technical logs stored in the browser.
+- A short, optional local WebGPU capability check during setup, cached for seven days and rerunnable from Settings; results remain on-device and do not select a model yet.
 - Privacy-safe diagnostic report generation and export.
 - `/debug` dashboard for runtime status, device information, technical logs, and diagnostics.
 - Device profiling and model routing groundwork, with a local static capability profile based on coarse signals and a five-model Registry v2 whose exact WebLLM artifacts, sources, licenses, compatibility metadata, and basic browser behavior are documented. Adaptive runtime selection is not connected yet.

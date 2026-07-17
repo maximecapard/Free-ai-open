@@ -75,23 +75,46 @@ export interface StaticCapabilityProfile {
   confidence: CapabilityConfidence;
 }
 
-// Result of a short, local, privacy-safe microbenchmark. Never transmitted;
-// `expiresAt` lets a caller treat a stale result as absent rather than
-// re-running a benchmark on every visit. No benchmark workload exists yet —
-// this is the contract a future @free-ai-open/local-benchmark package (or
-// equivalent module) will produce.
+export type LocalBenchmarkStatus = "completed" | "cancelled" | "failed" | "unsupported";
+export type LocalBenchmarkStability = "unknown" | "stable" | "degraded" | "failed";
+export type LocalBenchmarkResponsiveness = "unknown" | "responsive" | "degraded" | "poor";
+export type LocalBenchmarkTimingMethod = "wall-clock" | "gpu-timestamp";
+export type LocalBenchmarkStage = "initialization" | "warmup" | "compute" | "validation" | "complete";
+export type LocalBenchmarkErrorCode =
+  | "webgpu_unavailable"
+  | "adapter_request_failed"
+  | "device_request_failed"
+  | "invalid_compute_result"
+  | "out_of_memory"
+  | "device_lost"
+  | "timeout"
+  | "cancelled"
+  | "background_throttled"
+  | "worker_failed"
+  | "unknown";
+
+// Result of a short, local, privacy-safe microbenchmark. It contains only
+// bounded technical measurements and a coarse profile key. It is never a
+// hardware identifier and must never be transmitted.
 export interface LocalBenchmarkResult {
   schemaVersion: number;
   benchmarkVersion: string;
+  capabilityProfileKey: string;
   measuredAt: string;
   expiresAt: string;
-  status: "completed" | "cancelled" | "failed" | "unsupported";
+  status: LocalBenchmarkStatus;
+  stage: LocalBenchmarkStage;
   webgpuInitMs?: number;
   computeScore?: number;
+  medianComputeMs?: number;
+  sampleCount?: number;
   mainThreadDelayMs?: number;
-  stability: "unknown" | "stable" | "degraded" | "failed";
+  durationMs?: number;
+  timingMethod?: LocalBenchmarkTimingMethod;
+  responsiveness: LocalBenchmarkResponsiveness;
+  stability: LocalBenchmarkStability;
   confidence: CapabilityConfidence;
-  errorCode?: string;
+  errorCode?: LocalBenchmarkErrorCode;
 }
 
 // A single real, locally-observed model load/generation outcome. This is the

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   clearStoredLocalBenchmarkResult,
   getStoredLocalBenchmarkResult,
+  getStoredLocalBenchmarkForProfile,
   isLocalBenchmarkResultExpired,
   migrateLocalBenchmarkResult,
   setStoredLocalBenchmarkResult,
@@ -28,14 +29,24 @@ function installWindow(localStorage: MemoryLocalStorage): void {
 }
 
 const exampleResult = {
-  schemaVersion: 1,
-  benchmarkVersion: "v1",
+  schemaVersion: 2,
+  benchmarkVersion: "1.0.0",
+  capabilityProfileKey: "desktop:balanced:webgpu:native",
   measuredAt: "2026-07-17T10:00:00.000Z",
   expiresAt: "2026-07-24T10:00:00.000Z",
   status: "completed" as const,
+  stage: "complete" as const,
+  responsiveness: "responsive" as const,
   stability: "stable" as const,
-  confidence: "high" as const,
+  confidence: "medium" as const,
 };
+
+const profile = {
+  formFactor: "desktop",
+  capabilityClass: "balanced",
+  webgpuAvailable: true,
+  fallbackAdapter: false,
+} as Parameters<typeof getStoredLocalBenchmarkForProfile>[0];
 
 describe("local benchmark result store", () => {
   afterEach(() => {
@@ -67,12 +78,27 @@ describe("local benchmark result store", () => {
   });
 
   it("migrates away a payload with the wrong schema version", () => {
-    expect(migrateLocalBenchmarkResult({ ...exampleResult, schemaVersion: 2 })).toBeNull();
+    expect(migrateLocalBenchmarkResult({ ...exampleResult, schemaVersion: 1 })).toBeNull();
+  });
+
+  it("invalidates a result when the coarse capability profile changes", () => {
+    installWindow(new MemoryLocalStorage());
+    setStoredLocalBenchmarkResult(exampleResult);
+    const now = () => new Date("2026-07-18T00:00:00.000Z");
+    expect(getStoredLocalBenchmarkForProfile(profile, now)).toEqual(exampleResult);
+    expect(getStoredLocalBenchmarkForProfile({ ...profile, formFactor: "tablet" }, now)).toBeNull();
   });
 
   it("accepts a failed/unsupported result without numeric fields", () => {
     const failed = { ...exampleResult, status: "unsupported" as const, stability: "unknown" as const, confidence: "low" as const };
     expect(migrateLocalBenchmarkResult(failed)).toEqual(failed);
+  });
+
+  it("drops unexpected content-shaped fields during migration", () => {
+    const migrated = migrateLocalBenchmarkResult({ ...exampleResult, prompt: "private text", response: "private output" });
+    expect(migrated).toEqual(exampleResult);
+    expect(migrated).not.toHaveProperty("prompt");
+    expect(migrated).not.toHaveProperty("response");
   });
 
   it("clears the stored result", () => {

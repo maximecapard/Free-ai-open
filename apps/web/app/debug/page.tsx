@@ -10,6 +10,7 @@ import type { LocalLogRecord } from "@free-ai-open/local-logs";
 import { buildDiagnosticReport, copyDiagnosticReportToClipboardData, exportDiagnosticReportAsJson } from "@free-ai-open/diagnostic-report";
 import type { DiagnosticReport } from "@free-ai-open/diagnostic-report";
 import type { PerformanceMode } from "@free-ai-open/types";
+import { getStoredLocalBenchmarkResult } from "../_lib/benchmarkResultStore";
 import { recommendPerformanceMode } from "../_lib/deviceRecommendation";
 import { detectAndStoreDeviceProfile } from "../_lib/deviceProfileDetection";
 import {
@@ -40,6 +41,7 @@ function buildReportInput(deviceProfile: DeviceProfile | null, routeResult: Mode
     routeResult,
     mode,
     logs,
+    localBenchmark: getStoredLocalBenchmarkResult(),
   });
 }
 

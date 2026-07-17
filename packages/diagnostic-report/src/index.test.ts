@@ -452,4 +452,33 @@ describe("diagnostic report", () => {
       { event: "model.load.started", severity: "info", timestamp: "2026-07-04T11:00:00.000Z" },
     ]);
   });
+
+  it("exports only allowlisted local benchmark measurements", () => {
+    const report = buildDiagnosticReport({
+      localBenchmark: {
+        schemaVersion: 2,
+        benchmarkVersion: "1.0.0",
+        capabilityProfileKey: "desktop:balanced:webgpu:native",
+        measuredAt: "2026-07-17T10:00:00.000Z",
+        expiresAt: "2026-07-24T10:00:00.000Z",
+        status: "completed",
+        stage: "complete",
+        webgpuInitMs: 12,
+        computeScore: 72,
+        medianComputeMs: 21,
+        sampleCount: 5,
+        mainThreadDelayMs: 4,
+        durationMs: 140,
+        timingMethod: "wall-clock",
+        responsiveness: "responsive",
+        stability: "stable",
+        confidence: "medium",
+      },
+    }, { now });
+
+    expect(report.contentLogged).toBe(false);
+    expect(report.localBenchmark).toMatchObject({ benchmarkVersion: "1.0.0", computeScore: 72, sampleCount: 5 });
+    expect(report.localBenchmark).not.toHaveProperty("capabilityProfileKey");
+    expect(JSON.stringify(report)).not.toMatch(/"(?:prompt|response|conversation|document|message)s?"/i);
+  });
 });
