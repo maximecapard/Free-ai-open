@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { detectDeviceProfile } from "@free-ai-open/device-profiler";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import { sampleModels } from "@free-ai-open/model-registry";
 import { selectRecommendedModel } from "@free-ai-open/model-router";
@@ -12,6 +11,7 @@ import { buildDiagnosticReport, copyDiagnosticReportToClipboardData, exportDiagn
 import type { DiagnosticReport } from "@free-ai-open/diagnostic-report";
 import type { PerformanceMode } from "@free-ai-open/types";
 import { recommendPerformanceMode } from "../_lib/deviceRecommendation";
+import { detectAndStoreDeviceProfile } from "../_lib/deviceProfileDetection";
 import {
   findGenerationMetrics,
   findLastRuntimeStatus,
@@ -60,7 +60,7 @@ export default function DebugPage() {
     const available = isIndexedDbAvailable();
     setLogsAvailable(available);
 
-    const profile = await detectDeviceProfile();
+    const profile = await detectAndStoreDeviceProfile();
     const previewMode = recommendPerformanceMode(profile.deviceTier);
     const result = selectRecommendedModel({
       task: DEBUG_PREVIEW_TASK,

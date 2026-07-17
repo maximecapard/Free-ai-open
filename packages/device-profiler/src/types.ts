@@ -1,4 +1,18 @@
-import type { ArchitectureClass, Backend, DeviceTier, FormFactor } from "@free-ai-open/types";
+import type {
+  ArchitectureClass,
+  Backend,
+  CapabilityClass,
+  DeviceTier,
+  ExperimentalMemoryClass,
+  FormFactor,
+  GpuArchitectureClass,
+  GpuDescriptionClass,
+  GpuLimitClass,
+  GpuVendorClass,
+  LogicalProcessorClass,
+  MemoryClass,
+  StaticCapabilityProfile,
+} from "@free-ai-open/types";
 
 export type DeviceTierLabel = "cpu_only" | "webgpu_low" | "webgpu_medium" | "webgpu_high" | "desktop_power";
 
@@ -10,8 +24,58 @@ export type DeviceTierLabel = "cpu_only" | "webgpu_low" | "webgpu_medium" | "web
 // so the profile can never act as a unique hardware fingerprint. See
 // docs/privacy.md.
 export type { ArchitectureClass, FormFactor };
-export type MemoryClass = "low" | "medium" | "high" | "unknown";
-export type CpuConcurrencyClass = "low" | "medium" | "high" | "unknown";
+export type {
+  CapabilityClass,
+  ExperimentalMemoryClass,
+  GpuArchitectureClass,
+  GpuDescriptionClass,
+  GpuLimitClass,
+  GpuVendorClass,
+  LogicalProcessorClass,
+  MemoryClass,
+  StaticCapabilityProfile,
+};
+export type CpuConcurrencyClass = LogicalProcessorClass;
+
+export type GpuFeatureClass =
+  | "shader-f16"
+  | "timestamp-query"
+  | "texture-compression-bc"
+  | "texture-compression-etc2"
+  | "texture-compression-astc"
+  | "subgroups"
+  | "storage-textures"
+  | "unknown";
+
+export interface GpuInfoLike {
+  vendor?: unknown;
+  architecture?: unknown;
+  device?: unknown;
+  description?: unknown;
+  memoryHeaps?: unknown;
+  memoryHeapSize?: unknown;
+  memorySize?: unknown;
+}
+
+export interface GpuAdapterLike {
+  info?: GpuInfoLike;
+  requestAdapterInfo?: () => Promise<GpuInfoLike>;
+  isFallbackAdapter?: boolean;
+  features?: Iterable<unknown> | { forEach?: (callback: (value: unknown) => void) => void };
+  limits?: Record<string, unknown>;
+  memoryInfo?: unknown;
+}
+
+export interface NormalizedGpuProfile {
+  vendorClass: GpuVendorClass;
+  architectureClass: GpuArchitectureClass;
+  descriptionClass: GpuDescriptionClass;
+  featureClasses: GpuFeatureClass[];
+  limitClasses: Record<string, GpuLimitClass>;
+  fallbackAdapter?: boolean;
+  experimentalMemoryClass?: ExperimentalMemoryClass;
+  experimentalMemoryConfidence?: "low";
+}
 
 export interface StorageEstimateLike {
   quota?: number;
@@ -77,6 +141,10 @@ export interface DeviceTierInput {
   storageQuotaGb?: number;
   formFactor?: FormFactor;
   cpuConcurrency?: number;
+  fallbackAdapter?: boolean;
+  gpuFeatureClasses?: string[];
+  gpuLimitClasses?: Record<string, GpuLimitClass>;
+  experimentalMemoryClass?: ExperimentalMemoryClass;
   measuredPerformance?: MeasuredPerformanceSample;
 }
 
@@ -100,5 +168,7 @@ export interface DeviceProfile {
   architectureClass: ArchitectureClass;
   memoryClass: MemoryClass;
   cpuConcurrencyClass: CpuConcurrencyClass;
+  capabilityClass: CapabilityClass;
+  staticCapabilityProfile?: StaticCapabilityProfile;
   measuredPerformance?: MeasuredPerformanceSample;
 }

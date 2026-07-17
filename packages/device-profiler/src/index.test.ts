@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDeviceProfile,
+  buildStaticCapabilityProfile,
   classifyCpuConcurrency,
+  classifyExperimentalMemory,
   classifyMemory,
   detectArchitectureClass,
   detectBrowserInfo,
@@ -12,6 +14,9 @@ import {
   estimateStorageQuota,
   getDeviceTier,
   getDeviceTierDisplayLabel,
+  normalizeGpuFeatureClasses,
+  normalizeGpuLimitClasses,
+  normalizeGpuProfile,
   runLightweightBenchmark,
 } from "./index";
 import type { NavigatorLike } from "./index";
@@ -452,7 +457,7 @@ describe("buildDeviceProfile", () => {
       }),
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       webgpuAvailable: true,
       wasmAvailable: true,
       preferredBackend: "webgpu",
@@ -471,7 +476,26 @@ describe("buildDeviceProfile", () => {
       architectureClass: "unknown",
       memoryClass: "high",
       cpuConcurrencyClass: "unknown",
+      capabilityClass: "balanced",
     });
+    expect(result.staticCapabilityProfile).toMatchObject({
+      schemaVersion: 2,
+      formFactor: "desktop",
+      memoryClass: "high",
+      webgpuAvailable: true,
+      wasmAvailable: true,
+      capabilityClass: "balanced",
+      deviceTier: 2,
+      gpu: {
+        vendorClass: "unknown",
+        architectureClass: "unknown",
+        descriptionClass: "unknown",
+        featureClasses: [],
+        limitClasses: {},
+      },
+    });
+    expect(result.staticCapabilityProfile?.detectedAt).toEqual(expect.any(String));
+    expect(result.staticCapabilityProfile?.expiresAt).toEqual(expect.any(String));
   });
 
   it("returns a conservative fallback profile when browser APIs are unavailable", async () => {
@@ -479,7 +503,7 @@ describe("buildDeviceProfile", () => {
       webAssemblyAvailable: false,
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       webgpuAvailable: false,
       wasmAvailable: false,
       preferredBackend: "cpu",
@@ -496,6 +520,14 @@ describe("buildDeviceProfile", () => {
       architectureClass: "unknown",
       memoryClass: "unknown",
       cpuConcurrencyClass: "unknown",
+      capabilityClass: "compatibility",
+    });
+    expect(result.staticCapabilityProfile).toMatchObject({
+      schemaVersion: 2,
+      webgpuAvailable: false,
+      wasmAvailable: false,
+      capabilityClass: "compatibility",
+      deviceTier: 0,
     });
   });
 
@@ -588,5 +620,215 @@ describe("buildDeviceProfile", () => {
     expect(result).not.toHaveProperty("hardwareConcurrency");
     expect(result).not.toHaveProperty("userAgent");
     expect(result).not.toHaveProperty("maxTouchPoints");
+    expect(JSON.stringify(result.staticCapabilityProfile)).not.toContain("NVIDIA GeForce");
+  });
+});
+
+describe("GPU normalization", () => {
+  it("normalizes adapter info without persisting raw GPU strings", () => {
+    const profile = normalizeGpuProfile(
+      {
+        info: {
+          vendor: "NVIDIA Corporation",
+          architecture: "Ada Lovelace",
+          device: "NVIDIA GeForce RTX 4090 Laptop GPU",
+          description: "Driver 999.123 unique string",
+        },
+        features: new Set(["shader-f16", "texture-compression-bc", "vendor-private-feature"]),
+        limits: {
+          maxBufferSize: 2 * GB,
+          maxStorageBufferBindingSize: 512 * 1024 ** 2,
+          maxComputeWorkgroupStorageSize: 32768,
+          maxComputeInvocationsPerWorkgroup: 256,
+          maxBindGroups: 4,
+        },
+      },
+      {
+        vendor: "NVIDIA Corporation",
+        architecture: "Ada Lovelace",
+        device: "NVIDIA GeForce RTX 4090 Laptop GPU",
+        description: "Driver 999.123 unique string",
+      }
+    );
+
+    expect(profile).toEqual({
+      vendorClass: "nvidia",
+      architectureClass: "nvidia-modern",
+      descriptionClass: "discrete",
+      featureClasses: ["shader-f16", "texture-compression-bc"],
+      limitClasses: {
+        maxBufferSize: "very_high",
+        maxStorageBufferBindingSize: "high",
+        maxComputeWorkgroupStorageSize: "high",
+        maxComputeInvocationsPerWorkgroup: "high",
+        maxBindGroups: "medium",
+      },
+    });
+    expect(JSON.stringify(profile)).not.toContain("4090");
+    expect(JSON.stringify(profile)).not.toContain("Driver");
+  });
+
+  it("detects fallback adapters and keeps tiering conservative", () => {
+    const gpu = normalizeGpuProfile(
+      {
+        isFallbackAdapter: true,
+        features: new Set(["shader-f16"]),
+        limits: { maxBufferSize: 2 * GB },
+      },
+      { vendor: "Google SwiftShader", description: "software fallback" }
+    );
+    const tier = getDeviceTier({
+      webgpuAvailable: true,
+      wasmAvailable: true,
+      estimatedMemoryGb: 16,
+      cpuConcurrency: 16,
+      formFactor: "desktop",
+      fallbackAdapter: gpu.fallbackAdapter,
+      gpuFeatureClasses: gpu.featureClasses,
+      gpuLimitClasses: gpu.limitClasses,
+      measuredPerformance: { tokensPerSecond: 100 },
+    });
+
+    expect(gpu.descriptionClass).toBe("software");
+    expect(gpu.fallbackAdapter).toBe(true);
+    expect(tier.tier).toBe(1);
+  });
+
+  it("normalizes features, selected limits, and optional memory heaps into coarse buckets", () => {
+    expect(normalizeGpuFeatureClasses(new Set(["shader-f16", "timestamp-query", "unknown-feature"]))).toEqual([
+      "shader-f16",
+      "timestamp-query",
+    ]);
+    expect(
+      normalizeGpuLimitClasses({
+        maxBufferSize: 96 * 1024 ** 2,
+        maxStorageBufferBindingSize: 900 * 1024 ** 2,
+        maxComputeInvocationsPerWorkgroup: 64,
+        uniqueRawLimit: 123456789,
+      })
+    ).toEqual({
+      maxBufferSize: "low",
+      maxStorageBufferBindingSize: "high",
+      maxComputeInvocationsPerWorkgroup: "low",
+    });
+    expect(classifyExperimentalMemory(undefined)).toBeUndefined();
+    expect(classifyExperimentalMemory(9 * GB)).toBe("8gb_plus");
+  });
+});
+
+describe("buildStaticCapabilityProfile", () => {
+  it("builds a static v2 capability profile with coarse GPU classes", async () => {
+    const result = await buildStaticCapabilityProfile(
+      {
+        webAssemblyAvailable: true,
+        navigator: buildNavigator({
+          deviceMemory: 12,
+          hardwareConcurrency: 10,
+          gpu: {
+            requestAdapter: async () => ({
+              info: {
+                vendor: "Apple",
+                architecture: "Apple M",
+                device: "Apple M2 private string",
+                memoryHeaps: [{ size: 6 * GB }],
+              },
+              features: new Set(["shader-f16"]),
+              limits: { maxBufferSize: 1024 ** 3, maxStorageBufferBindingSize: 512 * 1024 ** 2 },
+            }),
+          },
+        }),
+      },
+      { now: () => new Date("2026-07-17T10:00:00.000Z") }
+    );
+
+    expect(result).toMatchObject({
+      schemaVersion: 2,
+      detectedAt: "2026-07-17T10:00:00.000Z",
+      expiresAt: "2026-07-24T10:00:00.000Z",
+      formFactor: "desktop",
+      approximateMemoryGB: 16,
+      logicalProcessors: 12,
+      memoryClass: "high",
+      logicalProcessorClass: "high",
+      webgpuAvailable: true,
+      wasmAvailable: true,
+      capabilityClass: "performance",
+      gpu: {
+        vendorClass: "apple",
+        architectureClass: "apple",
+        descriptionClass: "integrated",
+        featureClasses: ["shader-f16"],
+        limitClasses: {
+          maxBufferSize: "very_high",
+          maxStorageBufferBindingSize: "high",
+        },
+        experimentalMemoryClass: "4_to_8gb",
+        experimentalMemoryConfidence: "low",
+      },
+    });
+    const serialized = JSON.stringify(result);
+    expect(serialized).not.toContain("Apple M2 private string");
+    expect(serialized).not.toContain(String(6 * GB));
+  });
+
+  it("handles missing navigator.gpu, adapter request failures, and missing adapter info", async () => {
+    await expect(
+      buildStaticCapabilityProfile(
+        { webAssemblyAvailable: true, navigator: buildNavigator() },
+        { now: () => new Date("2026-07-17T10:00:00.000Z") }
+      )
+    ).resolves.toMatchObject({
+      webgpuAvailable: false,
+      capabilityClass: "compatibility",
+      gpu: { vendorClass: "unknown", featureClasses: [], limitClasses: {} },
+    });
+
+    await expect(
+      buildStaticCapabilityProfile({
+        webAssemblyAvailable: true,
+        navigator: buildNavigator({
+          gpu: {
+            requestAdapter: async () => {
+              throw new Error("adapter failure");
+            },
+          },
+        }),
+      })
+    ).resolves.toMatchObject({ webgpuAvailable: false });
+
+    await expect(
+      buildStaticCapabilityProfile({
+        webAssemblyAvailable: true,
+        navigator: buildNavigator({
+          gpu: { requestAdapter: async () => ({ features: new Set(["shader-f16"]) }) },
+        }),
+      })
+    ).resolves.toMatchObject({
+      webgpuAvailable: true,
+      gpu: { vendorClass: "unknown", architectureClass: "unknown", featureClasses: ["shader-f16"] },
+    });
+  });
+
+  it("does not let a large experimental memory heap alone promote to performance", async () => {
+    const result = await buildStaticCapabilityProfile({
+      webAssemblyAvailable: true,
+      navigator: buildNavigator({
+        userAgent:
+          "Mozilla/5.0 (Linux; Android 14; Redmi Note 13 Pro 5G) AppleWebKit/537.36 Chrome/125 Mobile Safari/537.36",
+        userAgentData: undefined,
+        deviceMemory: 2,
+        hardwareConcurrency: 4,
+        gpu: {
+          requestAdapter: async () => ({
+            info: { vendor: "Qualcomm Adreno", memoryHeaps: [{ size: 16 * GB }] },
+          }),
+        },
+      }),
+    });
+
+    expect(result.formFactor).toBe("mobile");
+    expect(result.gpu.experimentalMemoryClass).toBe("8gb_plus");
+    expect(result.capabilityClass).not.toBe("performance");
+    expect(result.deviceTier).toBeLessThan(3);
   });
 });

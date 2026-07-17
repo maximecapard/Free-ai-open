@@ -21,6 +21,13 @@ function getDeviceTierLabel(deviceTier: DeviceTier): DeviceTierLabel {
   return "desktop_power";
 }
 
+function getLegacyCapabilityClass(deviceTier: DeviceTier): DeviceProfile["capabilityClass"] {
+  if (deviceTier === 0) return "compatibility";
+  if (deviceTier === 1) return "light";
+  if (deviceTier === 2) return "balanced";
+  return "performance";
+}
+
 function buildLegacyDeviceProfile(input: RouteModelInput): DeviceProfile {
   const availableBackends = input.availableBackends;
 
@@ -44,6 +51,7 @@ function buildLegacyDeviceProfile(input: RouteModelInput): DeviceProfile {
     architectureClass: "unknown",
     memoryClass: "unknown",
     cpuConcurrencyClass: "unknown",
+    capabilityClass: getLegacyCapabilityClass(input.deviceTier),
   };
 }
 

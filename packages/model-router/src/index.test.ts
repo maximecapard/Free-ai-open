@@ -31,6 +31,7 @@ function buildDeviceProfile(overrides: Partial<DeviceProfile> = {}): DeviceProfi
     architectureClass: "x86",
     memoryClass: "high",
     cpuConcurrencyClass: "high",
+    capabilityClass: "performance",
   };
 
   return {

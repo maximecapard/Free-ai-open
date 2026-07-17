@@ -20,7 +20,6 @@ import {
   updateConversationTitle,
 } from "@free-ai-open/conversation-store";
 import type { ConversationId, ConversationMetadata } from "@free-ai-open/conversation-store";
-import { detectDeviceProfile } from "@free-ai-open/device-profiler";
 import { createLogEvent, logEvent } from "@free-ai-open/logger";
 import { sampleModels } from "@free-ai-open/model-registry";
 import { selectRecommendedModel } from "@free-ai-open/model-router";
@@ -34,6 +33,7 @@ import {
   setStoredActiveConversationId,
 } from "../_lib/activeConversationStorage";
 import { deriveConversationTitle, toChatMessageItems } from "../_lib/conversationMessages";
+import { detectAndStoreDeviceProfile } from "../_lib/deviceProfileDetection";
 import {
   generationNoticeKey,
   shouldDiscardPartialAssistantOutput,
@@ -328,7 +328,7 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     if (!performanceMode) return;
     let cancelled = false;
 
-    detectDeviceProfile().then((deviceProfile) => {
+    detectAndStoreDeviceProfile().then((deviceProfile) => {
       if (cancelled) return;
 
       const result = selectRecommendedModel({

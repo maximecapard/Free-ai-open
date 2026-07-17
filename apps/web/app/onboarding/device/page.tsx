@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { detectDeviceProfile } from "@free-ai-open/device-profiler";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import { DeviceCapabilitySummary } from "../../_components/DeviceCapabilitySummary";
+import { detectAndStoreDeviceProfile } from "../../_lib/deviceProfileDetection";
 import { useTranslations } from "../../_i18n/LocaleContext";
 
 export default function OnboardingDevicePage() {
@@ -14,7 +14,7 @@ export default function OnboardingDevicePage() {
   useEffect(() => {
     let cancelled = false;
 
-    detectDeviceProfile().then((result) => {
+    detectAndStoreDeviceProfile().then((result) => {
       if (!cancelled) setProfile(result);
     });
 

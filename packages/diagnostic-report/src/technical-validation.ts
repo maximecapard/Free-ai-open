@@ -1,4 +1,13 @@
-import { taskCategories, type Backend, type DeviceTier, type PerformanceMode, type TaskCategory } from "@free-ai-open/types";
+import {
+  taskCategories,
+  type Backend,
+  type CapabilityClass,
+  type CapabilityConfidence,
+  type DeviceTier,
+  type FormFactor,
+  type PerformanceMode,
+  type TaskCategory,
+} from "@free-ai-open/types";
 import type { RuntimeStatus } from "@free-ai-open/local-logs";
 import type { DiagnosticSeverity } from "./types";
 
@@ -12,6 +21,10 @@ const ISO_TIMESTAMP_PATTERN =
 const BACKENDS = new Set<Backend>(["webgpu", "wasm", "cpu"]);
 const DEVICE_TIERS = new Set<DeviceTier>([0, 1, 2, 3, 4]);
 const PERFORMANCE_MODES = new Set<PerformanceMode>(["fast", "balanced", "performance"]);
+const FORM_FACTORS = new Set<FormFactor>(["mobile", "tablet", "desktop", "unknown"]);
+const CAPABILITY_CLASSES = new Set<CapabilityClass>(["compatibility", "light", "balanced", "performance"]);
+const CAPABILITY_CONFIDENCES = new Set<CapabilityConfidence>(["low", "medium", "high"]);
+const COARSE_CLASSES = new Set(["low", "medium", "high", "very_high", "unknown"]);
 const TASKS = new Set<TaskCategory>(taskCategories);
 const SEVERITIES = new Set<DiagnosticSeverity>(["debug", "info", "warn", "error", "critical"]);
 const ERROR_SEVERITIES = new Set<DiagnosticSeverity>(["warn", "error", "critical"]);
@@ -63,6 +76,26 @@ export function asPerformanceMode(value: unknown): PerformanceMode | undefined {
   return typeof value === "string" && PERFORMANCE_MODES.has(value as PerformanceMode)
     ? (value as PerformanceMode)
     : undefined;
+}
+
+export function asFormFactor(value: unknown): FormFactor | undefined {
+  return typeof value === "string" && FORM_FACTORS.has(value as FormFactor) ? (value as FormFactor) : undefined;
+}
+
+export function asCapabilityClass(value: unknown): CapabilityClass | undefined {
+  return typeof value === "string" && CAPABILITY_CLASSES.has(value as CapabilityClass)
+    ? (value as CapabilityClass)
+    : undefined;
+}
+
+export function asCapabilityConfidence(value: unknown): CapabilityConfidence | undefined {
+  return typeof value === "string" && CAPABILITY_CONFIDENCES.has(value as CapabilityConfidence)
+    ? (value as CapabilityConfidence)
+    : undefined;
+}
+
+export function asCoarseClass(value: unknown): string | undefined {
+  return typeof value === "string" && COARSE_CLASSES.has(value) ? value : undefined;
 }
 
 export function asTask(value: unknown): TaskCategory | undefined {

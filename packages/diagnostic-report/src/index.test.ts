@@ -204,6 +204,7 @@ describe("diagnostic report", () => {
           architectureClass: "unknown",
           memoryClass: "medium",
           cpuConcurrencyClass: "medium",
+          capabilityClass: "light",
         },
         routerResult: {
           selectedModel: { id: "sample-general-light" },
@@ -224,6 +225,74 @@ describe("diagnostic report", () => {
       },
       contentLogged: false,
     });
+  });
+
+  it("includes only coarse static capability profile fields in diagnostics", () => {
+    const report = buildDiagnosticReport(
+      {
+        capabilityProfile: {
+          schemaVersion: 2,
+          detectedAt: "2026-07-17T10:00:00.000Z",
+          expiresAt: "2026-07-24T10:00:00.000Z",
+          formFactor: "desktop",
+          architectureClass: "x86",
+          browserFamily: "chromium",
+          osFamily: "windows",
+          memoryClass: "high",
+          logicalProcessorClass: "high",
+          approximateMemoryGB: 16,
+          logicalProcessors: 12,
+          webgpuAvailable: true,
+          wasmAvailable: true,
+          fallbackAdapter: false,
+          capabilityClass: "performance",
+          deviceTier: 4,
+          gpu: {
+            vendorClass: "nvidia",
+            architectureClass: "nvidia-modern",
+            descriptionClass: "discrete",
+            featureClasses: ["shader-f16"],
+            limitClasses: { maxBufferSize: "very_high" },
+            experimentalMemoryClass: "8gb_plus",
+            experimentalMemoryConfidence: "low",
+            vendorString: "NVIDIA GeForce RTX 4090 raw driver text",
+          },
+          confidence: "high",
+          rawDescription: "NVIDIA GeForce RTX 4090 raw driver text",
+        } as unknown as DiagnosticReportInput["capabilityProfile"],
+      },
+      { now }
+    );
+
+    expect(report.capabilityProfile).toEqual({
+      schemaVersion: 2,
+      detectedAt: "2026-07-17T10:00:00.000Z",
+      expiresAt: "2026-07-24T10:00:00.000Z",
+      formFactor: "desktop",
+      architectureClass: "x86",
+      browserFamily: "chromium",
+      osFamily: "windows",
+      memoryClass: "high",
+      logicalProcessorClass: "high",
+      webgpuAvailable: true,
+      wasmAvailable: true,
+      fallbackAdapter: false,
+      capabilityClass: "performance",
+      deviceTier: 4,
+      confidence: "high",
+      gpu: {
+        vendorClass: "nvidia",
+        architectureClass: "nvidia-modern",
+        descriptionClass: "discrete",
+        featureClasses: ["shader-f16"],
+        limitClasses: { maxBufferSize: "very_high" },
+        experimentalMemoryClass: "8gb_plus",
+        experimentalMemoryConfidence: "low",
+      },
+    });
+    expect(JSON.stringify(report)).not.toContain("4090");
+    expect(JSON.stringify(report)).not.toContain("raw driver");
+    expect(validateDiagnosticReportPrivacy(report)).toEqual({ valid: true, violations: [] });
   });
 
   it("does not include prompt, response, document, messages, or user text fields", () => {

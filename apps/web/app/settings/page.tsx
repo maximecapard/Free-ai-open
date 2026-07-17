@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_MODEL_ID } from "@free-ai-open/ai-runtime";
-import { detectDeviceProfile } from "@free-ai-open/device-profiler";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import type { PerformanceMode } from "@free-ai-open/types";
 import { DeviceCapabilitySummary } from "../_components/DeviceCapabilitySummary";
 import { performanceModes } from "../_lib/catalog";
+import { detectAndStoreDeviceProfile } from "../_lib/deviceProfileDetection";
 import { resetGettingStarted } from "../_lib/gettingStartedPreference";
 import { isPerformanceModeChangeBlockedStatus } from "../_lib/performanceModeRuntimePolicy";
 import { LanguageToggle } from "../_i18n/LanguageToggle";
@@ -26,7 +26,7 @@ export default function SettingsPage() {
   const [isResetConfirming, setIsResetConfirming] = useState(false);
 
   useEffect(() => {
-    detectDeviceProfile().then(setProfile);
+    detectAndStoreDeviceProfile().then(setProfile);
   }, []);
 
   const availableModes = performanceModes.filter((mode) => mode.id !== "performance" || profile?.webgpuAvailable);
@@ -56,7 +56,7 @@ export default function SettingsPage() {
 
   function handleRecheckDevice() {
     setProfile(null);
-    detectDeviceProfile().then(setProfile);
+    detectAndStoreDeviceProfile().then(setProfile);
   }
 
   function handleResetGettingStarted() {
