@@ -2,7 +2,16 @@ import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import type { LocalLogRecord, RuntimeStatus } from "@free-ai-open/local-logs";
 import type { ModelRecord } from "@free-ai-open/model-registry";
 import type { ModelRouterResult } from "@free-ai-open/model-router";
-import type { Backend, DeviceTier, PerformanceMode, TaskCategory } from "@free-ai-open/types";
+import type {
+  Backend,
+  CapabilityClass,
+  CapabilityConfidence,
+  DeviceTier,
+  FormFactor,
+  PerformanceMode,
+  TaskCategory,
+} from "@free-ai-open/types";
+import type { StaticCapabilityProfile } from "@free-ai-open/types";
 
 export type DiagnosticSeverity = "debug" | "info" | "warn" | "error" | "critical";
 
@@ -24,6 +33,33 @@ export interface DiagnosticMetrics {
 export interface DiagnosticBrowserInfo {
   browserFamily?: string;
   osFamily?: string;
+}
+
+export interface DiagnosticCapabilityProfile {
+  schemaVersion?: number;
+  detectedAt?: string;
+  expiresAt?: string;
+  formFactor?: FormFactor;
+  architectureClass?: string;
+  browserFamily?: string;
+  osFamily?: string;
+  memoryClass?: string;
+  logicalProcessorClass?: string;
+  webgpuAvailable?: boolean;
+  wasmAvailable?: boolean;
+  fallbackAdapter?: boolean;
+  capabilityClass?: CapabilityClass;
+  deviceTier?: DeviceTier;
+  confidence?: CapabilityConfidence;
+  gpu?: {
+    vendorClass?: string;
+    architectureClass?: string;
+    descriptionClass?: string;
+    featureClasses: string[];
+    limitClasses: Record<string, string>;
+    experimentalMemoryClass?: string;
+    experimentalMemoryConfidence?: "low";
+  };
 }
 
 export interface DiagnosticError {
@@ -64,6 +100,7 @@ export interface DiagnosticReportInput {
   metrics?: DiagnosticMetrics;
   browserInfo?: DiagnosticBrowserInfo;
   deviceProfile?: DeviceProfile;
+  capabilityProfile?: StaticCapabilityProfile;
   routerResult?: Pick<ModelRouterResult, "selectedModel" | "fallbackModel"> | null;
 }
 
@@ -84,6 +121,7 @@ export interface DiagnosticReport {
   localLogs: DiagnosticLog[];
   metrics?: DiagnosticMetrics;
   browserInfo?: DiagnosticBrowserInfo;
+  capabilityProfile?: DiagnosticCapabilityProfile;
 }
 
 export interface DiagnosticReportOptions {

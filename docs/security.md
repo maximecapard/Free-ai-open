@@ -111,14 +111,16 @@ These events may include runtime status and technical error codes, but must not 
 
 `@free-ai-open/device-profiler` mitigates the "excessive fingerprinting" threat by construction:
 
-- every derived signal is a coarse, bounded category (`formFactor`, `architectureClass`, `memoryClass`, `cpuConcurrencyClass` each have 4 or fewer possible values), never a raw sensor reading, a raw user-agent string, or a combination precise enough to uniquely identify a device;
+- every persisted signal is a coarse, bounded category (`formFactor`, `architectureClass`, `memoryClass`, `cpuConcurrencyClass`, `capabilityClass`, GPU vendor/architecture/description classes, feature classes, and selected limit buckets), never a raw sensor reading, a raw user-agent string, or a combination precise enough to uniquely identify a device;
 - architecture detection uses the Client Hints high-entropy API only when available and only reads the single `architecture` hint, never broader high-entropy fingerprinting hints;
+- WebGPU adapter info may be read ephemerally to derive coarse GPU classes, but raw GPU names, device IDs, vendor/device strings, driver strings, exact high-entropy limits, exact VRAM, and fingerprint hashes must not be stored, logged, exported, or transmitted;
+- fallback/software adapters are capped conservatively, and browser-reported experimental memory heaps are optional low-confidence buckets, not authoritative VRAM;
 - the profiler never calls `fetch`, `sendBeacon`, or any server endpoint — profiling stays entirely local and synchronous with the existing onboarding/`/debug` display paths;
 - an optional `measuredPerformance` input (tokens/sec, load/first-token time, recent failure count) is locally supplied only, never derived from remote data, and is not populated with real data by any current caller.
 
 ## v0.7.0-alpha adaptive router contracts (Phase 0)
 
-Contracts and local persistence shapes only — no detector, benchmark, or router logic exists yet, so none of this is active. Recorded here so the eventual implementation phases inherit the right constraints from the start:
+Contracts and local persistence shapes exist, and Phase 1A now implements the static capability detector. Benchmark and router logic remain future work. Recorded here so the eventual implementation phases inherit the right constraints from the start:
 
 - Hard compatibility gates must run before any scoring (an unverified model, an unavailable backend, a missing required WebGPU feature/limit, clearly insufficient memory, a known incompatibility, or repeated recent OOM/device-loss failures excludes a model outright).
 - RAM alone must never determine model selection; exact VRAM must remain optional and never required.

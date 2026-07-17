@@ -73,6 +73,14 @@ export function classifyMemory(estimatedMemoryGb: number | undefined): MemoryCla
   return "high";
 }
 
+export function coarsenApproximateMemoryGb(estimatedMemoryGb: number | undefined): number | undefined {
+  if (estimatedMemoryGb === undefined) return undefined;
+  if (estimatedMemoryGb <= 2) return 2;
+  if (estimatedMemoryGb <= 4) return 4;
+  if (estimatedMemoryGb <= 8) return 8;
+  return 16;
+}
+
 // Thresholds are set so common 8-core mobile SoCs land in "medium" while
 // higher-core-count desktop/laptop CPUs land in "high" — hardwareConcurrency
 // alone does not reliably separate phones from desktops otherwise.
@@ -81,4 +89,11 @@ export function classifyCpuConcurrency(cores: number | undefined): CpuConcurrenc
   if (cores <= 4) return "low";
   if (cores <= 8) return "medium";
   return "high";
+}
+
+export function coarsenCpuConcurrency(cores: number | undefined): number | undefined {
+  if (cores === undefined) return undefined;
+  if (cores <= 4) return 4;
+  if (cores <= 8) return 8;
+  return 12;
 }

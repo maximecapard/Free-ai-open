@@ -3,10 +3,10 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { detectDeviceProfile } from "@free-ai-open/device-profiler";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import { PrivacyNotice } from "./_components/PrivacyNotice";
 import { DeviceCapabilitySummary } from "./_components/DeviceCapabilitySummary";
+import { detectAndStoreDeviceProfile } from "./_lib/deviceProfileDetection";
 import { isGettingStartedCompleted } from "./_lib/gettingStartedPreference";
 import { useTranslations } from "./_i18n/LocaleContext";
 
@@ -26,7 +26,7 @@ export default function HomePage() {
 
   useEffect(() => {
     let cancelled = false;
-    detectDeviceProfile().then((result) => {
+    detectAndStoreDeviceProfile().then((result) => {
       if (!cancelled) setProfile(result);
     });
     return () => {

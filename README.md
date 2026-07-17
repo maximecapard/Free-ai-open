@@ -35,7 +35,7 @@ Implemented in the current alpha:
 - Local technical logs stored in the browser.
 - Privacy-safe diagnostic report generation and export.
 - `/debug` dashboard for runtime status, device information, technical logs, and diagnostics.
-- Device profiling and model routing groundwork, with a device capability tier based on multiple coarse signals (form factor, memory, CPU concurrency, WebGPU/backend) rather than RAM alone.
+- Device profiling and model routing groundwork, with a local static capability profile based on coarse signals (form factor, memory bucket, CPU-concurrency bucket, WebGPU/WASM, fallback adapter, and normalized GPU feature/limit classes) rather than RAM alone.
 - Strict schemas and redaction utilities for privacy-sensitive telemetry and logs.
 - English/French UI language toggle (defaults to the browser's language, persisted locally) across the public app surfaces.
 - Best-effort local model response language based on the selected UI locale through a hidden runtime-only instruction. Actual language quality depends on the selected model.

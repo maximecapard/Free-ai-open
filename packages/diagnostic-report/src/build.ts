@@ -2,10 +2,14 @@ import { redactDiagnosticInput, validateDiagnosticReportPrivacy } from "./privac
 import {
   asBackend,
   asBoolean,
+  asCapabilityClass,
+  asCapabilityConfidence,
+  asCoarseClass,
   asDeviceTier,
   asErrorCode,
   asErrorSeverity,
   asEvent,
+  asFormFactor,
   asIsoTimestamp,
   asModelId,
   asNonNegativeNumber,
@@ -19,6 +23,7 @@ import {
 import type {
   DiagnosticBrowserInfo,
   DiagnosticCacheState,
+  DiagnosticCapabilityProfile,
   DiagnosticError,
   DiagnosticLog,
   DiagnosticMetrics,
@@ -80,6 +85,74 @@ function sanitizeCacheState(value: unknown): DiagnosticCacheState | undefined {
   return cacheState;
 }
 
+function sanitizeCapabilityProfile(value: unknown): DiagnosticCapabilityProfile | undefined {
+  if (!isRecord(value)) return undefined;
+
+  const profile: DiagnosticCapabilityProfile = {};
+  const schemaVersion = asNonNegativeNumber(value.schemaVersion);
+  if (schemaVersion !== undefined) profile.schemaVersion = schemaVersion;
+  const detectedAt = asIsoTimestamp(value.detectedAt);
+  if (detectedAt) profile.detectedAt = detectedAt;
+  const expiresAt = asIsoTimestamp(value.expiresAt);
+  if (expiresAt) profile.expiresAt = expiresAt;
+  const formFactor = asFormFactor(value.formFactor);
+  if (formFactor) profile.formFactor = formFactor;
+  const architectureClass = asShortTechnicalText(value.architectureClass, 40);
+  if (architectureClass) profile.architectureClass = architectureClass;
+  const browserFamily = asShortTechnicalText(value.browserFamily, 80);
+  if (browserFamily) profile.browserFamily = browserFamily;
+  const osFamily = asShortTechnicalText(value.osFamily, 80);
+  if (osFamily) profile.osFamily = osFamily;
+  const memoryClass = asCoarseClass(value.memoryClass);
+  if (memoryClass) profile.memoryClass = memoryClass;
+  const logicalProcessorClass = asCoarseClass(value.logicalProcessorClass);
+  if (logicalProcessorClass) profile.logicalProcessorClass = logicalProcessorClass;
+  const webgpuAvailable = asBoolean(value.webgpuAvailable);
+  if (webgpuAvailable !== undefined) profile.webgpuAvailable = webgpuAvailable;
+  const wasmAvailable = asBoolean(value.wasmAvailable);
+  if (wasmAvailable !== undefined) profile.wasmAvailable = wasmAvailable;
+  const fallbackAdapter = asBoolean(value.fallbackAdapter);
+  if (fallbackAdapter !== undefined) profile.fallbackAdapter = fallbackAdapter;
+  const capabilityClass = asCapabilityClass(value.capabilityClass);
+  if (capabilityClass) profile.capabilityClass = capabilityClass;
+  const deviceTier = asDeviceTier(value.deviceTier);
+  if (deviceTier !== undefined) profile.deviceTier = deviceTier;
+  const confidence = asCapabilityConfidence(value.confidence);
+  if (confidence) profile.confidence = confidence;
+
+  if (isRecord(value.gpu)) {
+    const featureClasses = Array.isArray(value.gpu.featureClasses)
+      ? value.gpu.featureClasses.filter((item): item is string => typeof item === "string" && item.length <= 80).sort()
+      : [];
+    const limitClasses: Record<string, string> = {};
+    if (isRecord(value.gpu.limitClasses)) {
+      for (const [key, limitClass] of Object.entries(value.gpu.limitClasses)) {
+        const safeKey = asShortTechnicalText(key, 80);
+        const safeValue = asCoarseClass(limitClass);
+        if (safeKey && safeValue) limitClasses[safeKey] = safeValue;
+      }
+    }
+
+    profile.gpu = {
+      ...(asShortTechnicalText(value.gpu.vendorClass, 40) ? { vendorClass: asShortTechnicalText(value.gpu.vendorClass, 40) } : {}),
+      ...(asShortTechnicalText(value.gpu.architectureClass, 40)
+        ? { architectureClass: asShortTechnicalText(value.gpu.architectureClass, 40) }
+        : {}),
+      ...(asShortTechnicalText(value.gpu.descriptionClass, 40)
+        ? { descriptionClass: asShortTechnicalText(value.gpu.descriptionClass, 40) }
+        : {}),
+      featureClasses,
+      limitClasses,
+      ...(asShortTechnicalText(value.gpu.experimentalMemoryClass, 40)
+        ? { experimentalMemoryClass: asShortTechnicalText(value.gpu.experimentalMemoryClass, 40) }
+        : {}),
+      ...(value.gpu.experimentalMemoryConfidence === "low" ? { experimentalMemoryConfidence: "low" as const } : {}),
+    };
+  }
+
+  return Object.keys(profile).length > 0 ? profile : undefined;
+}
+
 function sanitizeError(value: unknown): DiagnosticError | null {
   if (!isRecord(value)) return null;
   const severity = asErrorSeverity(value.severity);
@@ -137,6 +210,12 @@ export function buildDiagnosticReport(
   const redacted = redactDiagnosticInput(input);
   const source = isRecord(redacted) ? redacted : {};
   const deviceProfile = isRecord(source.deviceProfile) ? source.deviceProfile : undefined;
+  const capabilityProfileSource =
+    isRecord(source.capabilityProfile)
+      ? source.capabilityProfile
+      : isRecord(deviceProfile?.staticCapabilityProfile)
+        ? deviceProfile.staticCapabilityProfile
+        : undefined;
   const routerResult = isRecord(source.routerResult) ? source.routerResult : undefined;
   const selectedModel = routerResult && isRecord(routerResult.selectedModel) ? routerResult.selectedModel : undefined;
   const fallbackModel = routerResult && isRecord(routerResult.fallbackModel) ? routerResult.fallbackModel : undefined;
@@ -185,6 +264,9 @@ export function buildDiagnosticReport(
 
   const browserInfo = sanitizeBrowserInfo(source.browserInfo) ?? sanitizeBrowserInfo(deviceProfile);
   if (browserInfo) report.browserInfo = browserInfo;
+
+  const capabilityProfile = sanitizeCapabilityProfile(capabilityProfileSource);
+  if (capabilityProfile) report.capabilityProfile = capabilityProfile;
 
   if (hasKey(source, "contentLogged")) {
     report.contentLogged = false;

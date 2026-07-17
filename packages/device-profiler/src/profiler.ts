@@ -1,7 +1,8 @@
 import type { Backend } from "@free-ai-open/types";
-import { classifyCpuConcurrency, classifyMemory, detectArchitectureClass, detectCpuConcurrency, detectFormFactor } from "./capabilities";
+import { classifyCpuConcurrency, classifyMemory, detectCpuConcurrency } from "./capabilities";
 import { detectBrowserInfo } from "./families";
-import { getDeviceTier } from "./scoring";
+import { buildStaticCapabilityProfile } from "./static-profile";
+import { getCapabilityClass, getDeviceTier } from "./scoring";
 import type { DeviceProfile, DeviceProfilerEnvironment, LightweightBenchmarkResult, NavigatorLike } from "./types";
 
 const BYTES_PER_GB = 1024 ** 3;
@@ -70,14 +71,15 @@ export function runLightweightBenchmark(): LightweightBenchmarkResult {
 export async function buildDeviceProfile(environment: DeviceProfilerEnvironment = {}): Promise<DeviceProfile> {
   const navigatorLike = environment.navigator;
   const wasmAvailable = environment.webAssemblyAvailable ?? readWebAssemblyAvailability();
-  const [webgpuAvailable, storageQuotaGb, architectureClass] = await Promise.all([
-    detectWebGPUAvailability(navigatorLike),
+  const [staticCapabilityProfile, storageQuotaGb] = await Promise.all([
+    buildStaticCapabilityProfile({ ...environment, navigator: navigatorLike, webAssemblyAvailable: wasmAvailable }),
     estimateStorageQuota(navigatorLike),
-    detectArchitectureClass(navigatorLike),
   ]);
+  const webgpuAvailable = staticCapabilityProfile.webgpuAvailable;
   const estimatedMemoryGb = estimateDeviceMemory(navigatorLike);
   const cpuConcurrency = detectCpuConcurrency(navigatorLike);
-  const formFactor = detectFormFactor(navigatorLike);
+  const formFactor = staticCapabilityProfile.formFactor;
+  const architectureClass = staticCapabilityProfile.architectureClass;
   const measuredPerformance = environment.measuredPerformance;
   const deviceTierInfo = getDeviceTier({
     webgpuAvailable,
@@ -86,6 +88,10 @@ export async function buildDeviceProfile(environment: DeviceProfilerEnvironment 
     storageQuotaGb,
     formFactor,
     cpuConcurrency,
+    fallbackAdapter: staticCapabilityProfile.fallbackAdapter,
+    gpuFeatureClasses: staticCapabilityProfile.gpu.featureClasses,
+    gpuLimitClasses: staticCapabilityProfile.gpu.limitClasses,
+    experimentalMemoryClass: staticCapabilityProfile.gpu.experimentalMemoryClass,
     measuredPerformance,
   });
   const preferredBackend: Backend = webgpuAvailable ? "webgpu" : wasmAvailable ? "wasm" : "cpu";
@@ -105,6 +111,8 @@ export async function buildDeviceProfile(environment: DeviceProfilerEnvironment 
     architectureClass,
     memoryClass: classifyMemory(estimatedMemoryGb),
     cpuConcurrencyClass: classifyCpuConcurrency(cpuConcurrency),
+    capabilityClass: getCapabilityClass(deviceTierInfo.tier),
+    staticCapabilityProfile,
     ...(measuredPerformance ? { measuredPerformance } : {}),
   };
 }

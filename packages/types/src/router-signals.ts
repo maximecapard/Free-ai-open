@@ -1,7 +1,7 @@
-// v0.7.0-alpha "Adaptive Model Router v1" contracts (Phase 0: contracts and
-// architecture only). These types are additive and not yet wired to any
-// detector, benchmark workload, or router implementation — see
-// docs/roadmap.md for the phased rollout. They live in this zero-dependency
+// v0.7.0-alpha "Adaptive Model Router v1" contracts. These types are additive:
+// StaticCapabilityProfile is produced by Capability Profiler v2, while the
+// benchmark workload and adaptive router implementation remain future phases
+// — see docs/roadmap.md for the phased rollout. They live in this zero-dependency
 // leaf package (rather than device-profiler/local-benchmark/ai-runtime/
 // model-router individually) so every future producer and consumer package
 // can share one contract without any of them depending on each other,
@@ -10,8 +10,28 @@
 // Coarse, non-identifying capability categories, matching the bucketing
 // already used by @free-ai-open/device-profiler's v0.6 DeviceProfile (which
 // re-exports these two from here for backward compatibility).
+import type { DeviceTier } from "./core";
+
 export type FormFactor = "mobile" | "tablet" | "desktop" | "unknown";
 export type ArchitectureClass = "arm" | "x86" | "unknown";
+export type MemoryClass = "low" | "medium" | "high" | "unknown";
+export type LogicalProcessorClass = "low" | "medium" | "high" | "unknown";
+export type CapabilityClass = "compatibility" | "light" | "balanced" | "performance";
+export type GpuVendorClass = "nvidia" | "amd" | "intel" | "apple" | "qualcomm" | "arm" | "unknown";
+export type GpuArchitectureClass =
+  | "apple"
+  | "adreno"
+  | "mali"
+  | "nvidia-modern"
+  | "nvidia-legacy"
+  | "amd-rdna"
+  | "amd-legacy"
+  | "intel-xe"
+  | "intel-legacy"
+  | "unknown";
+export type GpuDescriptionClass = "integrated" | "discrete" | "software" | "unknown";
+export type GpuLimitClass = "low" | "medium" | "high" | "very_high" | "unknown";
+export type ExperimentalMemoryClass = "lt_1gb" | "1_to_2gb" | "2_to_4gb" | "4_to_8gb" | "8gb_plus" | "unknown";
 
 // How much a producer trusts its own signal. Used by capability profiles,
 // benchmark results, and router decisions alike, so a caller can weigh a
@@ -27,24 +47,29 @@ export type CapabilityConfidence = "low" | "medium" | "high";
 export interface StaticCapabilityProfile {
   schemaVersion: number;
   detectedAt: string;
+  expiresAt: string;
   formFactor: FormFactor;
   architectureClass: ArchitectureClass;
   browserFamily: string;
   osFamily: string;
+  memoryClass: MemoryClass;
+  logicalProcessorClass: LogicalProcessorClass;
   approximateMemoryGB?: number;
   logicalProcessors?: number;
   webgpuAvailable: boolean;
   wasmAvailable: boolean;
   fallbackAdapter?: boolean;
+  capabilityClass: CapabilityClass;
+  deviceTier: DeviceTier;
   gpu: {
-    vendorClass?: string;
-    architectureClass?: string;
-    descriptionClass?: string;
+    vendorClass?: GpuVendorClass;
+    architectureClass?: GpuArchitectureClass;
+    descriptionClass?: GpuDescriptionClass;
     featureClasses: string[];
-    limitClasses: Record<string, number | string>;
-    // Bonus-only signal: an experimental, browser-reported memory heap size.
+    limitClasses: Record<string, GpuLimitClass>;
+    // Bonus-only signal: an experimental, browser-reported memory heap bucket.
     // Never required and never treated as an exact VRAM figure.
-    experimentalMemoryBytes?: number;
+    experimentalMemoryClass?: ExperimentalMemoryClass;
     experimentalMemoryConfidence?: "low";
   };
   confidence: CapabilityConfidence;

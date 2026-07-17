@@ -5,12 +5,17 @@ import { selectRecommendedModel } from "./router";
 const exampleCapability: RouterInput["capability"] = {
   schemaVersion: 1,
   detectedAt: "2026-07-17T10:00:00.000Z",
+  expiresAt: "2026-07-24T10:00:00.000Z",
   formFactor: "desktop",
   architectureClass: "x86",
   browserFamily: "chrome",
   osFamily: "windows",
+  memoryClass: "medium",
+  logicalProcessorClass: "medium",
   webgpuAvailable: true,
   wasmAvailable: true,
+  capabilityClass: "balanced",
+  deviceTier: 2,
   gpu: { featureClasses: [], limitClasses: {} },
   confidence: "medium",
 };
@@ -66,6 +71,7 @@ describe("RouterInput contract", () => {
         architectureClass: "x86",
         memoryClass: "medium",
         cpuConcurrencyClass: "medium",
+        capabilityClass: "balanced",
       },
       modelRegistry: [],
     });

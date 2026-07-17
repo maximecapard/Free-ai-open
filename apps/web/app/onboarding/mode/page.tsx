@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { detectDeviceProfile } from "@free-ai-open/device-profiler";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import type { PerformanceMode } from "@free-ai-open/types";
 import { performanceModes } from "../../_lib/catalog";
+import { detectAndStoreDeviceProfile } from "../../_lib/deviceProfileDetection";
 import { getRecommendedPerformanceModeForProfile } from "../../_lib/deviceRecommendation";
 import { completeGettingStarted } from "../../_lib/gettingStartedPreference";
 import { useTranslations } from "../../_i18n/LocaleContext";
@@ -18,7 +18,7 @@ export default function OnboardingModePage() {
 
   useEffect(() => {
     let cancelled = false;
-    detectDeviceProfile().then((result) => {
+    detectAndStoreDeviceProfile().then((result) => {
       if (!cancelled) setProfile(result);
     });
     return () => {

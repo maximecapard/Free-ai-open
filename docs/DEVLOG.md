@@ -8,7 +8,7 @@ FreeAI Open is an alpha-stage, local-first browser AI assistant. The current cod
 
 - a Next.js app shell and basic chat UI;
 - local WebLLM runtime integration through a Web Worker;
-- device profiling and task-based model routing;
+- device profiling, Capability Profiler v2 static capability detection, and task-based model routing;
 - privacy redaction, structured technical logging, and telemetry schema validation;
 - local technical logs in IndexedDB;
 - a debug dashboard and privacy-safe diagnostic report export;
@@ -637,7 +637,7 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 
 ### Built
 
-- Defined the "Adaptive Model Router v1" contracts in `@free-ai-open/types`: `StaticCapabilityProfile` (static device/GPU capability), `LocalBenchmarkResult` (short local microbenchmark outcome, with an `expiresAt`), `ModelPerformanceObservation` (a single observed model load/generation outcome), and `CapabilityConfidence` (shared low/medium/high trust level). All four are additive, unwired types — no detector, benchmark workload, or observation recorder exists yet.
+- Defined the "Adaptive Model Router v1" contracts in `@free-ai-open/types`: `StaticCapabilityProfile` (static device/GPU capability), `LocalBenchmarkResult` (short local microbenchmark outcome, with an `expiresAt`), `ModelPerformanceObservation` (a single observed model load/generation outcome), and `CapabilityConfidence` (shared low/medium/high trust level). At the Phase 0 point in time, all four were additive, unwired types.
 - Added `RouterInput`/`RouterDecision` to `@free-ai-open/model-router` (`adaptiveRouterContracts.ts`), and `ModelRegistryRecord` (plus `ModelStatus`, `LanguageSupport`, `Suitability`, `Estimate`, `ContextPreset`) to `@free-ai-open/model-registry` (`schema-v2.ts`), matching `14_MODEL_REGISTRY_SCHEMA.md`. Both coexist with, and leave completely unchanged, the active v0.6 router (`ModelRouterInput`/`ModelRouterResult`/`selectRecommendedModel()`) and registry (`ModelRecord`/`sampleModels`) that `AppRuntimeProvider` still uses today.
 - Chose package boundaries for the new contracts by centralizing them in `@free-ai-open/types` — a zero-workspace-dependency leaf every other v0.7-relevant package (`device-profiler`, `model-registry`, `model-router`) already depends on or can depend on without new edges. This avoids `model-router` (meant to stay pure eligibility/scoring/fallback logic) needing a dependency on the much heavier `ai-runtime` (which pulls in `@mlc-ai/web-llm`) just to reference `ModelPerformanceObservation`. `RouterInput`/`RouterDecision` and `ModelRegistryRecord` stay in their natural owning packages (`model-router`, `model-registry`) since nothing else needs to import them.
 - Moved `FormFactor`/`ArchitectureClass` from `device-profiler` into `types` (re-exported from `device-profiler` for full backward compatibility) so `StaticCapabilityProfile` reuses the exact same coarse categories as the existing v0.6 `DeviceProfile` instead of a duplicate parallel definition.
@@ -659,17 +659,48 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 
 ### Known limitations after Sprint 6.13
 
-- No detector, benchmark, or router implementation exists yet — every new type and store is unwired. `docs/roadmap.md`'s Phase 1A/1B/2/3 pick this up next.
+- At the Phase 0 point in time, no detector, benchmark, or router implementation existed yet — every new type and store was unwired. Later v0.7 phases pick this up.
 - `ModelRegistryRecord` has no real records yet; `sampleModels` (the active v0.6 registry) is what routing actually uses today.
 
 ### Planned work (not implemented yet)
 
-- Phase 1A: Capability Profiler v2 (real `StaticCapabilityProfile` detection).
+- Phase 1A: Capability Profiler v2 (real `StaticCapabilityProfile` detection; now documented in the next section).
 - Phase 1B: Model Registry v2 (real `ModelRegistryRecord` entries, verified).
 - Phase 2: Local Benchmark v1 (real `LocalBenchmarkResult` measurement).
 - Phase 3: Adaptive Router Core (real `RouterInput` → `RouterDecision` scoring, per `15_ROUTER_SCORING_SPEC.md`).
 - Phase 4: wiring the above into `AppRuntimeProvider` so real observations/capability/benchmark data replace today's placeholder-model routing.
 - Phase 5: public router UI and advanced settings.
+
+## Sprint 6.14 - v0.7.0-alpha Phase 1A: Capability Profiler v2
+
+### Built
+
+- Implemented real `StaticCapabilityProfile` detection in `@free-ai-open/device-profiler`, using browser-visible signals only: form factor, architecture class, browser/OS family, approximate memory bucket, logical-processor bucket, WebGPU/WASM availability, fallback-adapter status, coarse GPU vendor/architecture/description classes, allowlisted WebGPU feature classes, selected WebGPU limit buckets, and optional experimental memory heap buckets with low confidence.
+- Added `capabilityClass` (`compatibility`, `light`, `balanced`, `performance`) alongside the existing technical `deviceTier` values. The existing v0.6 router still consumes the technical tier only; the adaptive router is not complete yet.
+- Updated `buildDeviceProfile()` so the legacy `DeviceProfile` is derived from the new static capability profile and carries the product-facing `capabilityClass`.
+- Wired app device detection through a small `detectAndStoreDeviceProfile()` helper so Home, onboarding, Settings, Debug, and the runtime provider persist only the normalized static profile locally.
+- Updated `capabilityProfileStore` to schema version 2 with expiry handling, browser/OS re-detection checks, safe migration from schema version 1, and rejection of raw GPU identifier fields.
+- Updated diagnostic reports to include only coarse static capability fields when available.
+
+### Privacy and architecture notes
+
+- Raw GPU adapter strings, raw device names, driver strings, raw user-agent strings, exact CPU model/frequency, exact VRAM, exact high-entropy WebGPU limits, and unique fingerprint hashes are not persisted, logged, exported, or sent anywhere.
+- GPU adapter info may be read in memory to derive coarse classes such as `nvidia`, `apple`, `integrated`, or `software`, then discarded.
+- `navigator.deviceMemory` is treated as approximate and bucketed; it is not described as free browser memory.
+- Browser-reported memory heaps are optional, non-standard, low-confidence inputs and are stored only as coarse buckets. A large heap cannot by itself promote a device to the performance class.
+- No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, new server endpoint, server-side WebLLM, benchmark workload, or full adaptive router was added.
+
+### Tests
+
+- Added/updated device-profiler tests for WebGPU absence, adapter request failure, missing adapter info, fallback/software adapters, high-memory mobile/tablet conservatism, high-memory desktop differentiation, iPadOS desktop-style tablet classification, normal macOS desktop classification, ARM/x86/unknown architecture fallback, feature allowlisting, selected-limit bucketing, optional memory heap bucketing, large experimental memory non-promotion, privacy-safe serialized profiles, and static profile construction.
+- Added store tests for schema version 2 persistence, schema version 1 migration, expiry, re-detection policy, and raw GPU field rejection.
+- Added diagnostic-report tests proving coarse capability profile fields are accepted while raw GPU strings are ignored.
+
+### Known limitations after Phase 1A
+
+- Static detection is still an estimate. It cannot know exact CPU model, CPU frequency, exact VRAM, or sustained local model performance.
+- The local benchmark, model registry v2 data, adaptive router core, runtime model-selection integration, and router UI remain future v0.7 phases.
+- Current model loading behavior remains the same placeholder-model path; capability profiler v2 does not yet select a different model.
 
 ## Cross-cutting remaining work
 

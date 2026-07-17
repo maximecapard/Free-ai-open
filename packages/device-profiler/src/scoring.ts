@@ -1,6 +1,15 @@
 import type { DeviceTier } from "@free-ai-open/types";
 import { classifyCpuConcurrency, classifyMemory } from "./capabilities";
-import type { CpuConcurrencyClass, DeviceTierInfo, DeviceTierInput, DeviceTierLabel, FormFactor, MemoryClass } from "./types";
+import type {
+  CapabilityClass,
+  CpuConcurrencyClass,
+  DeviceTierInfo,
+  DeviceTierInput,
+  DeviceTierLabel,
+  FormFactor,
+  GpuLimitClass,
+  MemoryClass,
+} from "./types";
 
 const DEVICE_TIER_LABELS: Record<DeviceTier, DeviceTierLabel> = {
   0: "cpu_only",
@@ -18,6 +27,7 @@ const DEVICE_TIER_LABELS: Record<DeviceTier, DeviceTierLabel> = {
 const MEMORY_SCORE: Record<MemoryClass, number> = { low: 0, medium: 1, high: 2, unknown: 0 };
 const CPU_SCORE: Record<CpuConcurrencyClass, number> = { low: 0, medium: 1, high: 2, unknown: 0 };
 const WEBGPU_BASELINE_SCORE = 1;
+const HIGH_LIMIT_CLASSES = new Set<GpuLimitClass>(["high", "very_high"]);
 
 // Mobile/tablet/unknown form factors cap the *coarse-signal* tier so RAM and
 // core count alone can never place a phone alongside desktop-class hardware
@@ -56,10 +66,14 @@ function scoreToUncappedTier(score: number): DeviceTier {
 function computeCapabilityScore(input: DeviceTierInput): number {
   const memoryScore = MEMORY_SCORE[classifyMemory(input.estimatedMemoryGb)];
   const cpuScore = CPU_SCORE[classifyCpuConcurrency(input.cpuConcurrency)];
-  return memoryScore + cpuScore + WEBGPU_BASELINE_SCORE;
+  const featureScore = input.gpuFeatureClasses?.includes("shader-f16") ? 1 : 0;
+  const limitValues = Object.values(input.gpuLimitClasses ?? {});
+  const limitScore = limitValues.some((value) => HIGH_LIMIT_CLASSES.has(value)) ? 1 : 0;
+  return memoryScore + cpuScore + WEBGPU_BASELINE_SCORE + featureScore + limitScore;
 }
 
 function applyMeasuredPromotion(cappedTier: DeviceTier, uncappedTier: DeviceTier, input: DeviceTierInput): DeviceTier {
+  if (input.fallbackAdapter) return cappedTier;
   const tokensPerSecond = input.measuredPerformance?.tokensPerSecond;
   if (tokensPerSecond === undefined) return cappedTier;
 
@@ -86,10 +100,19 @@ export function getDeviceTier(input: DeviceTierInput): DeviceTierInfo {
   const score = computeCapabilityScore(input);
   const uncappedTier = scoreToUncappedTier(score);
   const cap = FORM_FACTOR_TIER_CAP[input.formFactor ?? "unknown"];
-  const cappedTier = (cap === null ? uncappedTier : Math.min(uncappedTier, cap)) as DeviceTier;
+  const fallbackCap: DeviceTier | null = input.fallbackAdapter ? 1 : null;
+  const effectiveCap = fallbackCap === null ? cap : cap === null ? fallbackCap : Math.min(cap, fallbackCap);
+  const cappedTier = (effectiveCap === null ? uncappedTier : Math.min(uncappedTier, effectiveCap)) as DeviceTier;
 
   const promotedTier = applyMeasuredPromotion(cappedTier, uncappedTier, input);
   const finalTier = applyStabilityDemotion(promotedTier, input);
 
   return { tier: finalTier, label: DEVICE_TIER_LABELS[finalTier] };
+}
+
+export function getCapabilityClass(deviceTier: DeviceTier): CapabilityClass {
+  if (deviceTier === 0) return "compatibility";
+  if (deviceTier === 1) return "light";
+  if (deviceTier === 2) return "balanced";
+  return "performance";
 }

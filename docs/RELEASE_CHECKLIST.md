@@ -11,7 +11,17 @@ Run through this list before cutting an alpha release. All boxes should be check
 
 ## v0.7.0-alpha Phase 0 (contracts and architecture)
 
-Phase 0 adds types, package boundaries, and local persistence/migration only — there is no new or changed UI behavior, so no new manual browser check applies. Automated checks above cover this phase's verification surface; `packageDependencyBoundaries.test.ts` additionally guards against a circular dependency between `model-router`, `ai-runtime`, `model-registry`, and `device-profiler`. Future v0.7 phases (Capability Profiler v2, Model Registry v2, Local Benchmark v1, Adaptive Router Core, runtime integration, router UI) will add real manual checks here as they land — see `docs/roadmap.md`.
+Phase 0 adds types, package boundaries, and local persistence/migration only — there is no new or changed UI behavior, so no new manual browser check applies. Automated checks above cover this phase's verification surface; `packageDependencyBoundaries.test.ts` additionally guards against a circular dependency between `model-router`, `ai-runtime`, `model-registry`, and `device-profiler`. Later v0.7 phases (Model Registry v2, Local Benchmark v1, Adaptive Router Core, runtime integration, router UI) will add real manual checks here as they land — see `docs/roadmap.md`.
+
+## v0.7.0-alpha Phase 1A (Capability Profiler v2)
+
+- [ ] Open Home, onboarding device, Settings, and Debug; confirm device detection completes locally and shows the same plain-language capability class/tier boundaries as before.
+- [ ] In Settings, use "Re-check this device" and confirm the profile refreshes without navigation, network calls, or errors.
+- [ ] Export a diagnostic report from `/debug` and confirm it may contain coarse capability fields but no raw GPU adapter string, device ID, driver string, exact VRAM, raw user-agent, or prompt/response/conversation/document content.
+- [ ] On a high-memory mobile device or mobile emulation, confirm memory alone does not grant a performance-class recommendation.
+- [ ] On iPadOS Safari desktop-style mode (`Macintosh` user agent plus multitouch), confirm the form factor remains tablet/conservative, not normal desktop.
+- [ ] On a normal macOS desktop, confirm the form factor remains desktop.
+- [ ] If the browser reports a fallback/software WebGPU adapter, confirm the capability stays conservative.
 
 ## Manual smoke tests (browser)
 
