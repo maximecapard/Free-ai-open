@@ -1,12 +1,15 @@
-import type { Backend, DeviceTier } from "@free-ai-open/types";
+import type { ArchitectureClass, Backend, DeviceTier, FormFactor } from "@free-ai-open/types";
 
 export type DeviceTierLabel = "cpu_only" | "webgpu_low" | "webgpu_medium" | "webgpu_high" | "desktop_power";
 
-// Coarse, non-identifying capability categories. These are deliberately
-// bucketed (not raw sensor/API values) so the profile can never act as a
-// unique hardware fingerprint. See docs/privacy.md.
-export type FormFactor = "mobile" | "tablet" | "desktop" | "unknown";
-export type ArchitectureClass = "arm" | "x86" | "unknown";
+// FormFactor/ArchitectureClass now live in @free-ai-open/types (v0.7's
+// StaticCapabilityProfile contract needs them too) and are re-exported here
+// so every existing `import type { FormFactor } from "@free-ai-open/device-
+// profiler"` call site keeps working unchanged. Coarse, non-identifying
+// capability categories, deliberately bucketed (not raw sensor/API values)
+// so the profile can never act as a unique hardware fingerprint. See
+// docs/privacy.md.
+export type { ArchitectureClass, FormFactor };
 export type MemoryClass = "low" | "medium" | "high" | "unknown";
 export type CpuConcurrencyClass = "low" | "medium" | "high" | "unknown";
 

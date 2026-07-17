@@ -97,6 +97,16 @@ FreeAI Open estimates a coarse device capability tier (`0`–`4`) locally to pic
 
 The profile only ever contains coarse, bounded categories: a form factor (`mobile`/`tablet`/`desktop`/`unknown`), an architecture class (`arm`/`x86`/`unknown`), a memory class and a CPU-concurrency class (each `low`/`medium`/`high`/`unknown`), WebGPU availability, and the preferred backend. The iPadOS desktop-style heuristic uses local browser signals only to choose the coarse `tablet` bucket when a `Macintosh`/`Mac OS` user agent is paired with multitouch support; raw user-agent and touch-point values are not exposed in the profile, logs, diagnostics, telemetry, or any server request. None of these profile fields are raw sensor values, a raw user-agent string, or a combination specific enough to uniquely identify a device — they cannot be used as a device fingerprint. An optional, locally-supplied measured-performance value (tokens per second, load time, first-token time, recent failure count) can adjust the tier, but nothing populates it with real data yet, and it is never sent anywhere.
 
+## v0.7.0-alpha adaptive router contracts (Phase 0)
+
+This phase defines local storage shapes only; no detector, benchmark, or router populates them with real data yet, so nothing below is active behavior today.
+
+- **Static capability profile:** a device's coarse, non-benchmarked capability signals (form factor, architecture class, approximate memory, WebGPU/WASM availability, and coarse GPU classes). Raw GPU adapter strings and exact high-entropy limit maps may be read momentarily by a future detector to derive these coarse classes, but must never be written to local storage, logs, diagnostics, or sent anywhere.
+- **Local benchmark result:** the outcome of a short, local, privacy-safe microbenchmark (status, coarse compute score, stability, confidence). Stored locally with an expiry so a stale result is treated as absent rather than trusted indefinitely. Never transmitted.
+- **Model performance observations:** technical timings and an outcome code (e.g. completed, stalled, out of memory) from a real local model load/generation attempt — never the prompt or response involved. Kept as a capped local history (200 most recent) so future routing can weigh real observed behavior alongside static signals.
+
+None of these three records are session-only conversation content, and none may ever be sent to a server, Supabase, or Google Drive. A future router decision (also not implemented yet) will only ever include coarse categories, a benchmark status/score bucket, the selected model ID, and reason codes in any diagnostic export — never capability profile GPU classes verbatim beyond what `/debug` already documents for existing device fields.
+
 ## Cancellation recovery
 
 After Stop, the interrupted WebLLM worker is treated as potentially unsafe. FreeAI Open discards the partial assistant response, moves through a local `recovering` state, terminates the old worker, and reloads the cached model in a new runtime before enabling the next send action. Recovery events are local technical metadata only (`runtime.recovery.started`, `runtime.recovery.completed`, `runtime.recovery.failed`) and must not contain prompts, model replies, conversations, documents, or hidden language instructions.

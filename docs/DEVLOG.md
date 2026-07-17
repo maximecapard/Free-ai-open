@@ -633,6 +633,44 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - Background execution is not guaranteed by FreeAI Open. Browsers and mobile operating systems may throttle or suspend background tabs, so generation can slow or pause even though the app does not intentionally unload the model.
 - The v0.7 router/model replacement path remains future work; this branch still runs the same placeholder WebLLM model for every performance mode and task recommendation.
 
+## Sprint 6.13 - v0.7.0-alpha Phase 0: adaptive router contracts
+
+### Built
+
+- Defined the "Adaptive Model Router v1" contracts in `@free-ai-open/types`: `StaticCapabilityProfile` (static device/GPU capability), `LocalBenchmarkResult` (short local microbenchmark outcome, with an `expiresAt`), `ModelPerformanceObservation` (a single observed model load/generation outcome), and `CapabilityConfidence` (shared low/medium/high trust level). All four are additive, unwired types — no detector, benchmark workload, or observation recorder exists yet.
+- Added `RouterInput`/`RouterDecision` to `@free-ai-open/model-router` (`adaptiveRouterContracts.ts`), and `ModelRegistryRecord` (plus `ModelStatus`, `LanguageSupport`, `Suitability`, `Estimate`, `ContextPreset`) to `@free-ai-open/model-registry` (`schema-v2.ts`), matching `14_MODEL_REGISTRY_SCHEMA.md`. Both coexist with, and leave completely unchanged, the active v0.6 router (`ModelRouterInput`/`ModelRouterResult`/`selectRecommendedModel()`) and registry (`ModelRecord`/`sampleModels`) that `AppRuntimeProvider` still uses today.
+- Chose package boundaries for the new contracts by centralizing them in `@free-ai-open/types` — a zero-workspace-dependency leaf every other v0.7-relevant package (`device-profiler`, `model-registry`, `model-router`) already depends on or can depend on without new edges. This avoids `model-router` (meant to stay pure eligibility/scoring/fallback logic) needing a dependency on the much heavier `ai-runtime` (which pulls in `@mlc-ai/web-llm`) just to reference `ModelPerformanceObservation`. `RouterInput`/`RouterDecision` and `ModelRegistryRecord` stay in their natural owning packages (`model-router`, `model-registry`) since nothing else needs to import them.
+- Moved `FormFactor`/`ArchitectureClass` from `device-profiler` into `types` (re-exported from `device-profiler` for full backward compatibility) so `StaticCapabilityProfile` reuses the exact same coarse categories as the existing v0.6 `DeviceProfile` instead of a duplicate parallel definition.
+- Added three schema-versioned local preference stores in `apps/web/app/_lib/`, matching the existing `gettingStartedPreference.ts` convention exactly (window-guarded, try/catch, pure migrate function returning null/empty on any mismatch): `capabilityProfileStore.ts`, `benchmarkResultStore.ts` (treats an expired result as absent via a caller-supplied clock for testability), and `modelObservationStore.ts` (capped at 200 entries, oldest dropped first, mirroring `conversation-store`'s own pruning). None are called from any production code path yet — Phase 4 ("Intégration au runtime persistant") wires real writers.
+- Added `packageDependencyBoundaries.test.ts`, a workspace dependency-graph test that reads the real `package.json` files (the same source `pnpm -r` uses) and walks the graph rather than asserting a fixed edge list, so it keeps working as later v0.7 phases add real edges.
+
+### Privacy and architecture notes
+
+- `StaticCapabilityProfile` only ever exposes coarse GPU *classes* and bounded feature/limit maps, never a raw adapter string; a contract test documents that no field name in `gpu` contains "string" as a guard against a future edit accidentally adding one back.
+- `LocalBenchmarkResult`/`ModelPerformanceObservation` carry only technical timings, status/outcome codes, and confidence — never prompt, response, or conversation content. Neither is transmitted anywhere; both stores are local-only, `fetch`/`sendBeacon`-free.
+- This is explicitly Phase 0 of a ten-phase pipeline (see `docs/roadmap.md`): contracts and architecture only. The capability profiler, local benchmark, and adaptive router itself are not implemented, and no current routing/runtime behavior changed.
+
+### Tests
+
+- Added contract-shape tests for every new type (`StaticCapabilityProfile`, `LocalBenchmarkResult`, `ModelPerformanceObservation`, `RouterInput`, `RouterDecision`, `ModelRegistryRecord`), each including a "no prompt/response/conversation-shaped fields" assertion.
+- Added full migration coverage for the three new stores (valid round-trip, wrong schema version, malformed/missing fields, corrupted JSON; benchmark-specific expiry) and the observation store's append/cap/prune behavior.
+- Added a test proving the active v0.6 `selectRecommendedModel()` is untouched and does not accept the new `RouterInput` shape.
+- Added the package-boundary dependency-graph test described above.
+
+### Known limitations after Sprint 6.13
+
+- No detector, benchmark, or router implementation exists yet — every new type and store is unwired. `docs/roadmap.md`'s Phase 1A/1B/2/3 pick this up next.
+- `ModelRegistryRecord` has no real records yet; `sampleModels` (the active v0.6 registry) is what routing actually uses today.
+
+### Planned work (not implemented yet)
+
+- Phase 1A: Capability Profiler v2 (real `StaticCapabilityProfile` detection).
+- Phase 1B: Model Registry v2 (real `ModelRegistryRecord` entries, verified).
+- Phase 2: Local Benchmark v1 (real `LocalBenchmarkResult` measurement).
+- Phase 3: Adaptive Router Core (real `RouterInput` → `RouterDecision` scoring, per `15_ROUTER_SCORING_SPEC.md`).
+- Phase 4: wiring the above into `AppRuntimeProvider` so real observations/capability/benchmark data replace today's placeholder-model routing.
+- Phase 5: public router UI and advanced settings.
+
 ## Cross-cutting remaining work
 
 - Expand and validate the model registry before adding more model records.

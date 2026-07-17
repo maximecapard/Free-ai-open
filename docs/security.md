@@ -116,6 +116,20 @@ These events may include runtime status and technical error codes, but must not 
 - the profiler never calls `fetch`, `sendBeacon`, or any server endpoint — profiling stays entirely local and synchronous with the existing onboarding/`/debug` display paths;
 - an optional `measuredPerformance` input (tokens/sec, load/first-token time, recent failure count) is locally supplied only, never derived from remote data, and is not populated with real data by any current caller.
 
+## v0.7.0-alpha adaptive router contracts (Phase 0)
+
+Contracts and local persistence shapes only — no detector, benchmark, or router logic exists yet, so none of this is active. Recorded here so the eventual implementation phases inherit the right constraints from the start:
+
+- Hard compatibility gates must run before any scoring (an unverified model, an unavailable backend, a missing required WebGPU feature/limit, clearly insufficient memory, a known incompatibility, or repeated recent OOM/device-loss failures excludes a model outright).
+- RAM alone must never determine model selection; exact VRAM must remain optional and never required.
+- An experimental browser-reported GPU memory heap size is bonus data only, never authoritative.
+- A future router must be deterministic for the same normalized input and registry version, and must return human-readable reason codes/messages for every decision — never a silent choice.
+- Manual model override is allowed only for eligible models unless an explicitly designed advanced/unsafe override is added later.
+- `StaticCapabilityProfile`'s `gpu` shape exposes only coarse classes and bounded feature/limit maps; there is no field for a raw adapter string, and a test in `packages/types/src/router-signals.test.ts` guards against one being added silently.
+- `LocalBenchmarkResult`/`ModelPerformanceObservation` must stay technical-only (timings, status/outcome codes, confidence) — never prompt, response, or conversation content — matching the existing local-log/diagnostic-report allowlist discipline elsewhere in this document.
+- The three new local stores (`apps/web/app/_lib/capabilityProfileStore.ts`, `benchmarkResultStore.ts`, `modelObservationStore.ts`) must stay `fetch`/`sendBeacon`-free, matching every other local-only store in this codebase.
+- No new inter-package dependency edge was introduced while adding these contracts; `apps/web/app/_lib/packageDependencyBoundaries.test.ts` asserts `@free-ai-open/types` stays dependency-free and that `model-router`/`ai-runtime`/`model-registry`/`device-profiler` do not form a cycle, so a later phase that wires real logic gets an early test failure if it accidentally creates one.
+
 ## Runtime language instruction
 
 The selected UI locale is converted to a hidden runtime-only system instruction before local inference. This instruction is allowed to enter the local WebLLM message list, but it must not be persisted in conversation history, exported in conversation backups, included in diagnostics, or written to local technical logs. Language adherence remains best effort and depends on the selected model.
