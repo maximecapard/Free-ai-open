@@ -28,9 +28,19 @@ describe("desktop chat workspace layout", () => {
     expect(chatLayout).toContain('className="chat-shell"');
   });
 
-  it("sizes the chat shell to the viewport height on desktop", () => {
+  it("lets the root shell own the viewport height on desktop", () => {
+    const appShellBlock = ruleBody(".app-shell:has(.chat-shell)", desktopMediaBlock());
+    const appMainBlock = ruleBody(".app-shell__main:has(> .chat-shell)", desktopMediaBlock());
+
+    expect(appShellBlock).toContain("height: 100dvh");
+    expect(appShellBlock).toContain("overflow: hidden");
+    expect(appMainBlock).toContain("min-height: 0");
+    expect(appMainBlock).toContain("overflow: hidden");
+  });
+
+  it("sizes the chat shell to the remaining app-main height on desktop", () => {
     const block = ruleBody(".chat-shell", desktopMediaBlock());
-    expect(block).toContain("height: 100dvh");
+    expect(block).toContain("height: 100%");
   });
 
   it("marks every nested flex region min-height: 0, the standard fix for flexbox children refusing to shrink and scroll", () => {
@@ -65,5 +75,6 @@ describe("desktop chat workspace layout", () => {
     expect(chatPage).toContain('className="chat-main__header"');
     expect(chatPage).toContain('className="chat-main__scroll"');
     expect(chatPage).toContain('className="chat-main__composer"');
+    expect(chatPage).toContain("scrollContainerRef={transcriptScrollRef}");
   });
 });

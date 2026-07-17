@@ -66,6 +66,8 @@ Versions are alpha milestones while the MVP is still under active development.
 - Fixed internal navigation cancelling the local runtime: leaving `/chat` no longer calls runtime disposal, no longer terminates/unloads the worker/model, and no longer cancels an active generation solely because the route component unmounted.
 - Fixed Settings performance changes so they go through the runtime provider. A mode change is blocked while a generation, cancellation, or recovery is active, and this alpha persists the new preference without replacing the runtime because all modes still use the same placeholder model.
 - Fixed the previous root cause where `ChatPage` owned `runtimeRef`, `workerRef`, generation refs, and an effect cleanup that disposed the runtime whenever the chat route unmounted.
+- Fixed the desktop chat workspace so the app-level runtime status strip no longer makes `/chat` taller than the viewport; the chat shell now fills the remaining app-main height and keeps transcript/sidebar scrolling internal.
+- Fixed transcript auto-follow logic to read the independently scrolling transcript container on desktop, while keeping page-scroll fallback for mobile.
 
 ### Changed
 

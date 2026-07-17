@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { CHAT_AUTOSCROLL_BOTTOM_THRESHOLD_PX, isNearScrollEnd } from "./chatAutoscroll";
+import {
+  CHAT_AUTOSCROLL_BOTTOM_THRESHOLD_PX,
+  getElementScrollMetrics,
+  isNearScrollEnd,
+  isScrollableOverflow,
+} from "./chatAutoscroll";
 
 describe("chat autoscroll", () => {
   it("follows the latest message when the viewport is near the bottom", () => {
@@ -50,5 +55,28 @@ describe("chat autoscroll", () => {
       })
     ).toBe(true);
     expect(CHAT_AUTOSCROLL_BOTTOM_THRESHOLD_PX).toBeGreaterThanOrEqual(80);
+  });
+
+  it("reads scroll metrics from an independently scrolling transcript container", () => {
+    const element = {
+      scrollTop: 360,
+      clientHeight: 500,
+      scrollHeight: 900,
+    } as HTMLElement;
+
+    expect(getElementScrollMetrics(element)).toEqual({
+      scrollTop: 360,
+      viewportHeight: 500,
+      scrollHeight: 900,
+    });
+    expect(isNearScrollEnd(getElementScrollMetrics(element))).toBe(true);
+  });
+
+  it("detects element overflow modes that can own transcript scrolling", () => {
+    expect(isScrollableOverflow("auto")).toBe(true);
+    expect(isScrollableOverflow("scroll")).toBe(true);
+    expect(isScrollableOverflow("overlay")).toBe(true);
+    expect(isScrollableOverflow("visible")).toBe(false);
+    expect(isScrollableOverflow("hidden")).toBe(false);
   });
 });
