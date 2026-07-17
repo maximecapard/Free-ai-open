@@ -45,6 +45,34 @@ Versions are alpha milestones while the MVP is still under active development.
 - Export/import has no browser end-to-end coverage yet (verified manually); encrypted export is not implemented.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
 
+## [0.7.0-alpha] - 2026-07-17 (Phase 0: contracts and architecture)
+
+This phase defines types, package boundaries, local persistence/migration, and documentation for the "Adaptive Model Router v1." It intentionally does not implement the capability profiler, local benchmark, or router itself — see `docs/roadmap.md` for the remaining phases. No existing runtime, routing, or persistence behavior changed.
+
+### Added
+
+- Added the v0.7.0-alpha router-input contract types in `@free-ai-open/types`: `CapabilityConfidence`, `StaticCapabilityProfile` (static device/GPU capability signals), `LocalBenchmarkResult` (short local microbenchmark outcome), and `ModelPerformanceObservation` (a single observed model load/generation outcome). All four are additive and not yet produced by any detector, benchmark, or runtime code.
+- Added `RouterInput`/`RouterDecision` in `@free-ai-open/model-router` (`adaptiveRouterContracts.ts`): the future adaptive router's input (task, locale, performance mode, capability, optional benchmark, observation history, cached/manual model IDs) and output (selected/fallback model IDs, confidence, human-readable reasons/warnings, recommended context/output token budgets, a decision version). Coexists with, and does not change, the active v0.6 `ModelRouterInput`/`ModelRouterResult`/`selectRecommendedModel()`.
+- Added `ModelRegistryRecord` in `@free-ai-open/model-registry` (`schema-v2.ts`), matching the recommended v2 registry schema: verification status, honest per-field estimates (value/unit/confidence/source, never guessed), context presets, per-language/task/form-factor/performance-mode suitability scores, minimum capability gates, known issues, required license metadata, and cycle-free fallback model IDs. No records exist against this shape yet; the active `ModelRecord`/`sampleModels` are unchanged.
+- Added three local, schema-versioned preference stores in `apps/web/app/_lib/` with pure migration functions, following the existing `gettingStartedPreference.ts` convention: `capabilityProfileStore.ts` (`StaticCapabilityProfile`), `benchmarkResultStore.ts` (`LocalBenchmarkResult`, with expiry handling so a stale result is treated as absent), and `modelObservationStore.ts` (`ModelPerformanceObservation[]`, capped at 200 entries, oldest dropped first). None of these are wired into the app yet — no detector, benchmark, or runtime call site writes to them in this phase.
+- Added `apps/web/app/_lib/packageDependencyBoundaries.test.ts`, a workspace dependency-graph test (reads real `package.json` files) proving `@free-ai-open/types` stays a zero-dependency leaf and no cycle exists between `model-router`, `ai-runtime`, `model-registry`, and `device-profiler`.
+
+### Changed
+
+- Moved `FormFactor`/`ArchitectureClass` from `@free-ai-open/device-profiler` into `@free-ai-open/types` (device-profiler re-exports both, so every existing `import type { FormFactor } from "@free-ai-open/device-profiler"` call site is unaffected). This lets the new `StaticCapabilityProfile` contract reuse the same coarse categories instead of duplicating them.
+
+### Security and Privacy
+
+- `StaticCapabilityProfile`'s `gpu` fields are coarse classes and bounded feature/limit maps only; the contract has no field for a raw GPU adapter string, and a test documents that intent. Raw adapter strings and exact high-entropy limit maps may be read ephemerally by a future detector but must never be persisted — see "Persistence boundaries" in `docs/architecture.md`.
+- `LocalBenchmarkResult` and `ModelPerformanceObservation` never include prompt, response, or conversation content — only technical timings, status/outcome codes, and confidence. Neither type nor its local store calls `fetch`, `sendBeacon`, or any server endpoint.
+- No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, new server endpoint, or server-side WebLLM path was added. No existing model-router selection logic, WebLLM runtime behavior, telemetry schema, or diagnostic-report schema changed.
+
+### Tests
+
+- Added contract-shape tests for `StaticCapabilityProfile`, `LocalBenchmarkResult`, `ModelPerformanceObservation`, `RouterInput`/`RouterDecision`, and `ModelRegistryRecord`, each asserting the shape is usable and free of prompt/response/conversation-shaped fields.
+- Added migration tests for all three new local stores: valid round-trip, wrong schema version, missing/malformed fields, corrupted JSON, and (for the benchmark store) expiry handling — all matching the existing `gettingStartedPreference.test.ts` pattern.
+- Added a test proving `selectRecommendedModel()` (the active v0.6 router) is unchanged and does not accept the new `RouterInput` shape.
+
 ## [0.6.6-alpha] - 2026-07-16
 
 ### Added
@@ -314,7 +342,8 @@ Versions are alpha milestones while the MVP is still under active development.
 - Added a simple local chat flow using the browser runtime.
 - Added runtime error classification and privacy safety tests.
 
-[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.6-alpha...HEAD
+[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.7.0-alpha...HEAD
+[0.7.0-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.6-alpha...v0.7.0-alpha
 [0.6.6-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.5-alpha...v0.6.6-alpha
 [0.6.5-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.4-alpha...v0.6.5-alpha
 [0.6.4-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.3-alpha...v0.6.4-alpha

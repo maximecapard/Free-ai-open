@@ -65,3 +65,13 @@ Prioritize stronger models when the device tier allows it.
 ## Manual selection
 
 Advanced users can bypass recommendations and select a model manually, but the UI must still show warnings for unsupported or experimental models.
+
+## v0.7.0-alpha — Adaptive Model Router v1 (in progress)
+
+Everything above describes the active v0.6 router (`selectRecommendedModel()`), which still makes every routing decision today. `v0.7.0-alpha` is adding a more adaptive router in phases; Phase 0 (contracts and architecture) is complete and adds, without wiring or replacing anything above:
+
+- `RouterInput`/`RouterDecision` in `@free-ai-open/model-router` (`adaptiveRouterContracts.ts`) — the future router's input (task, locale, performance mode, static capability profile, optional local benchmark result, an observation history, cached/manual model IDs) and output (selected/fallback model IDs, confidence, human-readable reasons/warnings, recommended token budgets, a decision version).
+- `ModelRegistryRecord` in `@free-ai-open/model-registry` (`schema-v2.ts`) — a richer per-model schema (verification status, honest estimates, context presets, per-language/task/form-factor/mode suitability scores, minimum capability gates, license metadata, cycle-free fallbacks). No records exist against it yet.
+- `StaticCapabilityProfile`, `LocalBenchmarkResult`, and `ModelPerformanceObservation` in `@free-ai-open/types` — the capability, benchmark, and real-observation inputs the future router will combine, in that order of increasing trust (real observations outweigh static assumptions once enough data exists).
+
+The intended scoring approach (not implemented yet) runs hard compatibility gates first, then weighs observed stability/performance, capability/benchmark fit, task suitability, language suitability, performance-mode intent, and cache/download convenience — see `docs/architecture.md`'s "Adaptive Router v1 contracts" section and `docs/roadmap.md` for the remaining phases.

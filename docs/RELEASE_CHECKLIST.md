@@ -9,6 +9,10 @@ Run through this list before cutting an alpha release. All boxes should be check
 - [ ] `pnpm lint` passes with no errors.
 - [ ] `pnpm build` succeeds (Next.js production build).
 
+## v0.7.0-alpha Phase 0 (contracts and architecture)
+
+Phase 0 adds types, package boundaries, and local persistence/migration only — there is no new or changed UI behavior, so no new manual browser check applies. Automated checks above cover this phase's verification surface; `packageDependencyBoundaries.test.ts` additionally guards against a circular dependency between `model-router`, `ai-runtime`, `model-registry`, and `device-profiler`. Future v0.7 phases (Capability Profiler v2, Model Registry v2, Local Benchmark v1, Adaptive Router Core, runtime integration, router UI) will add real manual checks here as they land — see `docs/roadmap.md`.
+
 ## Manual smoke tests (browser)
 
 - [ ] Chat: onboarding leads to `/chat`, the local model loads, and a prompt gets a streamed reply.
