@@ -1,82 +1,111 @@
+import { taskCategories } from "@free-ai-open/types";
 import { describe, expect, it } from "vitest";
-import type { ModelRegistryRecord } from "./schema-v2";
+import { modelRegistryV2 } from "./registry-v2";
+import {
+  MODEL_REGISTRY_SCHEMA_VERSION,
+  contextPresetIds,
+  modelRegistryRecordSchema,
+  taskSuitabilitySchema,
+} from "./schema-v2";
 
-const example: ModelRegistryRecord = {
-  schemaVersion: 1,
-  id: "example-general-light",
-  webllmModelId: "Example-General-Light-q4f16_1-MLC",
-  displayName: "Example general assistant",
-  family: "example",
-  descriptionKey: "modelRegistry.example.description",
-  status: "experimental",
-  downloadSize: { value: 1_200_000_000, unit: "bytes", confidence: "high", source: "webllm-config" },
-  runtimeMemory: { value: 2_500_000_000, unit: "bytes", confidence: "medium", source: "measured" },
-  contextPresets: [
-    { id: "compatibility", contextTokens: 1024, maxOutputTokens: 256 },
-    { id: "balanced", contextTokens: 2048, maxOutputTokens: 512 },
-  ],
-  languages: { en: "strong", fr: "usable", multilingual: "limited" },
-  tasks: {
-    chat: 4,
-    writing: 3,
-    rewrite: 3,
-    summarization: 3,
-    translation: 1,
-    coding: 1,
-    learning: 3,
-    document_analysis: 0,
-  },
-  formFactors: { mobile: 2, tablet: 3, desktop: 4 },
-  performanceModes: { fast: 4, balanced: 3, performance: 1 },
-  minimumCapability: { webgpuRequired: true, wasmSupported: false, fallbackAdapterAllowed: false },
-  knownIssues: [],
-  license: { id: "apache-2.0", name: "Apache License 2.0", sourceUrl: "https://example.test/license", attributionRequired: false },
-  source: { modelUrl: "hf://example/general-light", webllmConfigSource: "https://example.test/webllm-config.json" },
-  fallbackModelIds: [],
-};
+const validModel = modelRegistryV2[0];
 
-describe("ModelRegistryRecord contract", () => {
-  it("is a usable, schema-versioned shape", () => {
-    expect(example.schemaVersion).toBe(1);
-    expect(example.status).toBe("experimental");
+function cloneModel() {
+  return structuredClone(validModel);
+}
+
+describe("modelRegistryRecordSchema", () => {
+  it("validates the versioned registry record", () => {
+    expect(MODEL_REGISTRY_SCHEMA_VERSION).toBe(2);
+    expect(modelRegistryRecordSchema.parse(validModel)).toEqual(validModel);
   });
 
-  it("leaves unmeasured estimates genuinely unknown rather than guessed", () => {
-    const unmeasured: ModelRegistryRecord = {
-      ...example,
-      runtimeMemory: { unit: "bytes", confidence: "low", source: "unknown" },
+  it("scores exactly every TaskCategory", () => {
+    expect(Object.keys(validModel.tasks)).toEqual(taskCategories);
+    expect(taskSuitabilitySchema.safeParse(validModel.tasks).success).toBe(true);
+    expect(taskSuitabilitySchema.safeParse({ ...validModel.tasks, unknown_task: 1 }).success).toBe(false);
+  });
+
+  it("requires all three ordered context presets", () => {
+    expect(validModel.contextPresets.map((preset) => preset.id)).toEqual(contextPresetIds);
+
+    const reversed = cloneModel();
+    reversed.contextPresets.reverse();
+    expect(modelRegistryRecordSchema.safeParse(reversed).success).toBe(false);
+  });
+
+  it("rejects incomplete verification metadata", () => {
+    const missingVersion = cloneModel();
+    delete missingVersion.verifiedWithWebLLMVersion;
+    expect(modelRegistryRecordSchema.safeParse(missingVersion).success).toBe(false);
+
+    const missingDate = cloneModel();
+    delete missingDate.verifiedAt;
+    expect(modelRegistryRecordSchema.safeParse(missingDate).success).toBe(false);
+  });
+
+  it("rejects invalid status, language, suitability, and capability metadata", () => {
+    expect(modelRegistryRecordSchema.safeParse({ ...cloneModel(), status: "stable" }).success).toBe(false);
+    expect(
+      modelRegistryRecordSchema.safeParse({
+        ...cloneModel(),
+        languages: { ...validModel.languages, fr: "excellent" },
+      }).success
+    ).toBe(false);
+    expect(
+      modelRegistryRecordSchema.safeParse({
+        ...cloneModel(),
+        formFactors: { ...validModel.formFactors, mobile: 6 },
+      }).success
+    ).toBe(false);
+    expect(
+      modelRegistryRecordSchema.safeParse({
+        ...cloneModel(),
+        minimumCapability: { ...validModel.minimumCapability, approximateMemoryGB: -1 },
+      }).success
+    ).toBe(false);
+  });
+
+  it("keeps unmeasured estimates explicitly unknown", () => {
+    const unknownRuntimeMemory = cloneModel();
+    unknownRuntimeMemory.runtimeMemory = {
+      unit: "bytes",
+      confidence: "low",
+      source: "https://example.test/unmeasured-runtime-memory",
+      testedDeviceClass: "unknown",
     };
-    expect(unmeasured.runtimeMemory.value).toBeUndefined();
+
+    const parsed = modelRegistryRecordSchema.parse(unknownRuntimeMemory);
+    expect(parsed.runtimeMemory.value).toBeUndefined();
   });
 
-  it("does not list itself as its own fallback", () => {
-    const withFallback: ModelRegistryRecord = { ...example, fallbackModelIds: ["example-coding-light"] };
-    expect(withFallback.fallbackModelIds).not.toContain(withFallback.id);
+  it("rejects unexpected fields and unsafe URL schemes", () => {
+    expect(modelRegistryRecordSchema.safeParse({ ...cloneModel(), apiKey: "not-allowed" }).success).toBe(false);
+    expect(
+      modelRegistryRecordSchema.safeParse({
+        ...cloneModel(),
+        source: { ...validModel.source, modelUrl: "http://example.test/model" },
+      }).success
+    ).toBe(false);
   });
 
-  it("scores every task category, not just a subset", () => {
-    const scoredTasks = Object.keys(example.tasks);
-    expect(scoredTasks).toEqual([
-      "chat",
-      "writing",
-      "rewrite",
-      "summarization",
-      "translation",
-      "coding",
-      "learning",
-      "document_analysis",
-    ]);
+  it("requires complete source and license metadata", () => {
+    const missingLicense = { ...cloneModel(), license: undefined };
+    expect(modelRegistryRecordSchema.safeParse(missingLicense).success).toBe(false);
+
+    const missingSource = { ...cloneModel(), source: undefined };
+    expect(modelRegistryRecordSchema.safeParse(missingSource).success).toBe(false);
   });
 
-  it("requires a license for every record", () => {
-    expect(example.license.id).toBeTruthy();
-    expect(example.license.sourceUrl).toBeTruthy();
-  });
-
-  it("never contains prompt/response/conversation-shaped fields", () => {
-    const serialized = JSON.stringify(example).toLowerCase();
-    for (const forbidden of ["prompt", "response", "conversation", "\"message"]) {
-      expect(serialized).not.toContain(forbidden);
-    }
+  it("rejects self-references and duplicate fallbacks", () => {
+    expect(
+      modelRegistryRecordSchema.safeParse({ ...cloneModel(), fallbackModelIds: [validModel.id] }).success
+    ).toBe(false);
+    expect(
+      modelRegistryRecordSchema.safeParse({
+        ...cloneModel(),
+        fallbackModelIds: ["qwen3-0.6b-q4f16", "qwen3-0.6b-q4f16"],
+      }).success
+    ).toBe(false);
   });
 });

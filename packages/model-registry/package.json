@@ -10,6 +10,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "devDependencies": {
+    "@mlc-ai/web-llm": "0.2.84",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"
   },

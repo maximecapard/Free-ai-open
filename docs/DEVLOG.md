@@ -699,12 +699,43 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 ### Known limitations after Phase 1A
 
 - Static detection is still an estimate. It cannot know exact CPU model, CPU frequency, exact VRAM, or sustained local model performance.
-- The local benchmark, model registry v2 data, adaptive router core, runtime model-selection integration, and router UI remain future v0.7 phases.
+- At the Phase 1A point in time, the local benchmark, Model Registry v2 data, adaptive router core, runtime model-selection integration, and router UI remained future v0.7 phases. Model Registry v2 is now documented in the next section.
 - Current model loading behavior remains the same placeholder-model path; capability profiler v2 does not yet select a different model.
+
+## Sprint 6.15 - v0.7.0-alpha Phase 1B: Model Registry v2
+
+### Built
+
+- Replaced the Phase 0 type-only registry contract with a strict Zod schema version 2 and whole-registry validation. Validation covers exact `TaskCategory` scores, ordered context presets, verification metadata, HTTPS sources, estimate confidence, unique internal/WebLLM IDs, known fallback targets, and fallback-cycle detection.
+- Added five curated WebLLM `0.2.84` records: SmolLM2 360M Instruct for compatibility, Qwen3 0.6B for light multilingual use, Qwen3 1.7B for balanced multilingual use, Qwen2.5-Coder 1.5B Instruct for coding, and Qwen3 4B for capable desktops.
+- Recorded exact WebLLM model IDs and model-library URLs, upstream sources, download/runtime-memory estimates with confidence, installed 4,096-token context presets, conservative language/task/form-factor/mode scores, known issues, ordered fallbacks, and Apache-2.0 license sources.
+- Added automatic-eligibility helpers that expose only records with `status: "verified"` and complete verification metadata. No scoring or runtime router integration was added.
+- Replaced the fixed 135M Phase 0 test default with the browser-verified `SmolLM2-360M-Instruct-q4f32_1-MLC` compatibility model. This remains one fixed default for all tasks and performance modes.
+- Added public verification and attribution documentation. All five candidates loaded, completed synthetic English/French checks, confirmed Stop, reloaded in a new worker/runtime, and completed a post-recovery generation in one coarse Chromium/Windows desktop environment.
+
+### Privacy and architecture notes
+
+- Registry records are static public technical metadata. They contain no prompt, response, conversation, document, user identifier, credential, or local path, and registry production code performs no network call.
+- `@mlc-ai/web-llm` is a test-only dependency of `model-registry`, used to compare records against the installed `prebuiltAppConfig`; WebLLM remains a client-only production dependency of `ai-runtime`.
+- The browser smoke run used synthetic non-personal input. Public results contain only model IDs, coarse environment, status, timings, and approximate stream rates; generated text and raw hardware identifiers were not recorded.
+- Model files are not redistributed by this repository. Browser downloads continue through the existing WebLLM runtime and documented upstream artifacts.
+
+### Tests
+
+- Added strict schema tests for versioning, complete task coverage, ordered contexts, verification requirements, bounded suitability/capability values, honest unknown estimates, unknown fields, HTTPS sources, and self/duplicate fallbacks.
+- Added registry tests for deterministic records, unique IDs, exact WebLLM model/artifact/library/feature/memory agreement, automatic eligibility, conservative French/mobile suitability, missing fallback rejection, cycle rejection, and private-field exclusion.
+- Added an ai-runtime test proving the fixed default exists in WebLLM's installed prebuilt configuration and requires no extra GPU feature.
+
+### Known limitations after Phase 1B
+
+- Verification covers one browser/device class, not the full supported-device matrix. Mobile Safari, Firefox, Android browsers, integrated GPUs, and fallback adapters still require release testing.
+- French completion is basic smoke evidence only. Qwen3 entries are marked `usable`, never `strong`; the compact and coding-specific models remain `limited`.
+- The active v0.6 recommendation UI still reads `sampleModels`. The local benchmark, adaptive router core, runtime decision integration, explicit download UX, and router UI remain future phases.
+- Browser cache eviction, model-host availability, and model/library compatibility can change; WebLLM or artifact updates require re-verification.
 
 ## Cross-cutting remaining work
 
-- Expand and validate the model registry before adding more model records.
+- Re-verify and expand Model Registry v2 only when an exact artifact, source, license, and supported-device case can be substantiated.
 - Add broader browser/E2E tests for chat, Stop, Reload model, persisted conversation history, and debug export.
 - Keep Supabase usage limited to future technical metadata or optional features until schema and privacy boundaries are explicitly designed.
 - Keep Google Drive sync future-only and client-side encrypted if implemented later.

@@ -38,22 +38,24 @@ Versions are alpha milestones while the MVP is still under active development.
 ### Planned
 
 - Browser-level automated coverage for language/theme persistence, export/import, and Stop/recovery remains limited.
-- The model catalog is intentionally small and still uses early compatibility metadata.
+- Model Registry v2 is intentionally limited to five curated records; adaptive runtime selection is not connected yet.
 - Supabase-backed persistence is not started.
 - Google Drive sync is not started.
-- The browser runtime still targets a small WebLLM test model before broader model support.
+- The browser runtime still uses one fixed verified compact WebLLM model before adaptive multi-model selection.
 - Export/import has no browser end-to-end coverage yet (verified manually); encrypted export is not implemented.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
 
 ## [0.7.0-alpha] - 2026-07-17 (adaptive router phases in progress)
 
-This release is being built in phases for the "Adaptive Model Router v1." Phase 0 defined types, package boundaries, local persistence/migration, and documentation. Phase 1A adds the real static capability profiler. The local benchmark, model registry v2 data, adaptive router core, and runtime model-selection integration remain future phases — see `docs/roadmap.md`.
+This release is being built in phases for the "Adaptive Model Router v1." Phase 0 defined types and package boundaries, Phase 1A added the static capability profiler, and Phase 1B adds a verified Model Registry v2. The local benchmark, adaptive router core, runtime model-selection integration, and router UI remain future phases — see `docs/roadmap.md`.
 
 ### Added
 
 - Added the v0.7.0-alpha router-input contract types in `@free-ai-open/types`: `CapabilityConfidence`, `StaticCapabilityProfile` (static device/GPU capability signals), `LocalBenchmarkResult` (short local microbenchmark outcome), and `ModelPerformanceObservation` (a single observed model load/generation outcome). `StaticCapabilityProfile` is now produced by Capability Profiler v2; benchmark and model-observation records remain future phases.
 - Added `RouterInput`/`RouterDecision` in `@free-ai-open/model-router` (`adaptiveRouterContracts.ts`): the future adaptive router's input (task, locale, performance mode, capability, optional benchmark, observation history, cached/manual model IDs) and output (selected/fallback model IDs, confidence, human-readable reasons/warnings, recommended context/output token budgets, a decision version). Coexists with, and does not change, the active v0.6 `ModelRouterInput`/`ModelRouterResult`/`selectRecommendedModel()`.
-- Added `ModelRegistryRecord` in `@free-ai-open/model-registry` (`schema-v2.ts`), matching the recommended v2 registry schema: verification status, honest per-field estimates (value/unit/confidence/source, never guessed), context presets, per-language/task/form-factor/performance-mode suitability scores, minimum capability gates, known issues, required license metadata, and cycle-free fallback model IDs. No records exist against this shape yet; the active `ModelRecord`/`sampleModels` are unchanged.
+- Added a strict `ModelRegistryRecord` v2 schema and whole-registry validation: sourced estimates, ordered context presets, complete task/language/form-factor/mode scores, capability gates, source/license metadata, unique internal and WebLLM IDs, known fallback targets, and cycle detection.
+- Added five curated records verified in a local Chromium/WebGPU smoke matrix against `@mlc-ai/web-llm` `0.2.84`: SmolLM2 360M Instruct, Qwen3 0.6B, Qwen3 1.7B, Qwen2.5-Coder 1.5B Instruct, and Qwen3 4B. Exact artifact/library URLs, download and runtime-memory estimates, conservative French suitability, known issues, fallbacks, and upstream licenses are documented.
+- Added `docs/model-verification.md` and `docs/model-attributions.md` with the verification environment/results, evidence limits, sources, and Apache-2.0 license links. The project does not redistribute the model weights.
 - Added three local, schema-versioned preference stores in `apps/web/app/_lib/` with pure migration functions, following the existing `gettingStartedPreference.ts` convention: `capabilityProfileStore.ts` (`StaticCapabilityProfile`), `benchmarkResultStore.ts` (`LocalBenchmarkResult`, with expiry handling so a stale result is treated as absent), and `modelObservationStore.ts` (`ModelPerformanceObservation[]`, capped at 200 entries, oldest dropped first). Capability Profiler v2 now writes the capability store; benchmark and observation writers remain future phases.
 - Added `apps/web/app/_lib/packageDependencyBoundaries.test.ts`, a workspace dependency-graph test (reads real `package.json` files) proving `@free-ai-open/types` stays a zero-dependency leaf and no cycle exists between `model-router`, `ai-runtime`, `model-registry`, and `device-profiler`.
 - Added Capability Profiler v2 in `@free-ai-open/device-profiler`: a real `StaticCapabilityProfile` detector with schema version, detection/expiry timestamps, form factor, architecture class, browser/OS family, coarse memory and logical-processor classes, WebGPU/WASM availability, fallback-adapter status, coarse GPU vendor/architecture/description classes, allowlisted WebGPU feature classes, bucketed selected WebGPU limits, optional low-confidence experimental memory buckets, confidence, technical device tier, and product-facing capability class (`compatibility`, `light`, `balanced`, `performance`).
@@ -63,13 +65,15 @@ This release is being built in phases for the "Adaptive Model Router v1." Phase 
 ### Changed
 
 - Moved `FormFactor`/`ArchitectureClass` from `@free-ai-open/device-profiler` into `@free-ai-open/types` (device-profiler re-exports both, so every existing `import type { FormFactor } from "@free-ai-open/device-profiler"` call site is unaffected). This lets the new `StaticCapabilityProfile` contract reuse the same coarse categories instead of duplicating them.
+- Replaced the fixed tiny Phase 0 test-model default with the verified compact `SmolLM2-360M-Instruct-q4f32_1-MLC` WebLLM variant. Runtime selection is still fixed; this does not implement adaptive routing or silent model downloads.
 
 ### Security and Privacy
 
 - `StaticCapabilityProfile`'s `gpu` fields are coarse classes and bounded feature/limit maps only; the contract has no field for a raw GPU adapter string, and a test documents that intent. Raw adapter strings and exact high-entropy limit maps may be read ephemerally to derive coarse classes but must never be persisted — see "Persistence boundaries" in `docs/architecture.md`.
 - `LocalBenchmarkResult` and `ModelPerformanceObservation` never include prompt, response, or conversation content — only technical timings, status/outcome codes, and confidence. Neither type nor its local store calls `fetch`, `sendBeacon`, or any server endpoint.
-- No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, new server endpoint, or server-side WebLLM path was added. No existing model-router selection logic, WebLLM runtime behavior, telemetry schema, or diagnostic-report schema changed.
+- No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, new server endpoint, or server-side WebLLM path was added. No adaptive model-router selection, telemetry schema, or diagnostic-report schema changed; the only runtime selection change is the fixed verified compatibility default documented above.
 - Capability Profiler v2 reads raw GPU adapter strings only ephemerally to derive coarse classes. It does not persist raw GPU descriptions, device IDs, driver strings, exact VRAM, exact CPU model/frequency, raw user-agent strings, or unique hashes. Browser-reported experimental memory heaps are stored only as coarse, low-confidence buckets and never treated as exact VRAM.
+- Model Registry v2 contains public technical metadata only and performs no network call. WebLLM is imported by registry tests solely to validate exact installed prebuilt records; browser model downloads remain in the existing client runtime.
 
 ### Tests
 
@@ -77,6 +81,7 @@ This release is being built in phases for the "Adaptive Model Router v1." Phase 
 - Added migration tests for all three new local stores: valid round-trip, wrong schema version, missing/malformed fields, corrupted JSON, and (for the benchmark store) expiry handling — all matching the existing `gettingStartedPreference.test.ts` pattern.
 - Added a test proving `selectRecommendedModel()` (the active v0.6 router) is unchanged and does not accept the new `RouterInput` shape.
 - Added Capability Profiler v2 tests for high-memory mobile/tablet conservatism, high-memory desktop differences, iPadOS desktop-style tablet detection, normal macOS desktop detection, ARM/x86/unknown fallback behavior, missing/failing WebGPU adapter requests, missing adapter info, fallback adapters, feature and limit normalization, optional memory heap bucketing, large memory heap non-promotion, privacy-safe serialization, old static-profile migration, expiry/re-detection, and diagnostic sanitization of coarse capability fields.
+- Added Model Registry v2 schema and graph tests for exact task coverage, ordered context presets, verified metadata, strict unknown-field rejection, estimate uncertainty, unique IDs, missing fallbacks, fallback cycles, automatic-eligibility rules, conservative language/form-factor metadata, privacy-safe field names, and exact agreement with WebLLM `prebuiltAppConfig`.
 
 ## [0.6.6-alpha] - 2026-07-16
 
