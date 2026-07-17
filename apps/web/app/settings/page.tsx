@@ -2,48 +2,55 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DEFAULT_MODEL_ID } from "@free-ai-open/ai-runtime";
 import { detectDeviceProfile } from "@free-ai-open/device-profiler";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
-import { DEFAULT_MODEL_ID } from "@free-ai-open/ai-runtime";
 import type { PerformanceMode } from "@free-ai-open/types";
 import { DeviceCapabilitySummary } from "../_components/DeviceCapabilitySummary";
-import { LanguageToggle } from "../_i18n/LanguageToggle";
-import { ThemeToggle } from "../_theme/ThemeToggle";
 import { performanceModes } from "../_lib/catalog";
-import {
-  getGettingStartedState,
-  resetGettingStarted,
-  setStoredPerformanceMode,
-} from "../_lib/gettingStartedPreference";
+import { resetGettingStarted } from "../_lib/gettingStartedPreference";
+import { isPerformanceModeChangeBlockedStatus } from "../_lib/performanceModeRuntimePolicy";
+import { LanguageToggle } from "../_i18n/LanguageToggle";
 import { useTranslations } from "../_i18n/LocaleContext";
+import { ThemeToggle } from "../_theme/ThemeToggle";
+import { useAppRuntime } from "../_runtime/AppRuntimeProvider";
 
 export default function SettingsPage() {
   const t = useTranslations();
   const router = useRouter();
+  const { runtimeState, performanceMode: savedMode, applyPerformanceMode } = useAppRuntime();
   const [profile, setProfile] = useState<DeviceProfile | null>(null);
-  const [savedMode, setSavedMode] = useState<PerformanceMode | null>(null);
   const [pendingMode, setPendingMode] = useState<PerformanceMode | null>(null);
   const [modeSavedNotice, setModeSavedNotice] = useState(false);
+  const [modeBlockedNotice, setModeBlockedNotice] = useState(false);
   const [isResetConfirming, setIsResetConfirming] = useState(false);
 
   useEffect(() => {
-    setSavedMode(getGettingStartedState().performanceMode);
     detectDeviceProfile().then(setProfile);
   }, []);
 
   const availableModes = performanceModes.filter((mode) => mode.id !== "performance" || profile?.webgpuAvailable);
   const selectedMode = pendingMode ?? savedMode;
+  const hasPendingMode = pendingMode !== null && pendingMode !== savedMode;
+  const performanceChangeBlocked = hasPendingMode && isPerformanceModeChangeBlockedStatus(runtimeState.status);
 
   function handlePick(mode: PerformanceMode) {
     setModeSavedNotice(false);
+    setModeBlockedNotice(false);
     setPendingMode(mode);
   }
 
-  function handleSaveMode() {
+  async function handleSaveMode() {
     if (!pendingMode || pendingMode === savedMode) return;
-    setStoredPerformanceMode(pendingMode);
-    setSavedMode(pendingMode);
+    const result = await applyPerformanceMode(pendingMode);
+    if (!result.ok) {
+      setModeSavedNotice(false);
+      setModeBlockedNotice(result.blockedReason === "active_generation");
+      return;
+    }
+
     setPendingMode(null);
+    setModeBlockedNotice(false);
     setModeSavedNotice(true);
   }
 
@@ -102,7 +109,7 @@ export default function SettingsPage() {
             type="button"
             className="fo-button fo-button-primary"
             onClick={handleSaveMode}
-            disabled={!pendingMode || pendingMode === savedMode}
+            disabled={!hasPendingMode || performanceChangeBlocked}
           >
             {t("settings.performanceSave")}
           </button>
@@ -112,6 +119,11 @@ export default function SettingsPage() {
             </span>
           )}
         </div>
+        {(performanceChangeBlocked || modeBlockedNotice) && (
+          <p role="status" className="fo-muted" style={{ margin: "10px 0 0", fontSize: 13 }}>
+            {t("settings.performanceBlockedWhileGenerating")}
+          </p>
+        )}
       </section>
 
       <section className="fo-card" style={{ padding: 20, marginBottom: 16 }}>

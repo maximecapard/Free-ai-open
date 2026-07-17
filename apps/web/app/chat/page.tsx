@@ -1,369 +1,105 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
-import { detectDeviceProfile } from "@free-ai-open/device-profiler";
-import { sampleModels } from "@free-ai-open/model-registry";
-import { selectRecommendedModel } from "@free-ai-open/model-router";
-import type { ModelRouterResult } from "@free-ai-open/model-router";
-import { createInferenceRuntime } from "@free-ai-open/ai-runtime";
-import type { GenerationStopReason, InferenceRuntime, RuntimeErrorCode, RuntimeState } from "@free-ai-open/ai-runtime";
-import { createLogEvent, logEvent } from "@free-ai-open/logger";
-import type { PerformanceMode, TaskCategory } from "@free-ai-open/types";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import type { TaskCategory } from "@free-ai-open/types";
 import {
   addMessage,
   createConversation,
-  deleteConversation,
   getConversation,
   listConversations,
-  updateConversationTitle,
 } from "@free-ai-open/conversation-store";
-import type { Conversation, ConversationId, ConversationMetadata } from "@free-ai-open/conversation-store";
+import type { Conversation } from "@free-ai-open/conversation-store";
 import {
   buildConversationExport,
   parseConversationImport,
   prepareImportedConversations,
   serializeConversationExport,
 } from "@free-ai-open/conversation-export";
+import { ChatHistoryDrawerPanel } from "../_components/ChatHistoryDrawerPanel";
+import type { ConversationImportSummary } from "../_components/ConversationExportImportControls";
+import { ChatTranscript } from "../_components/ChatTranscript";
 import { ModelStatusPill } from "../_components/ModelStatusPill";
+import { NewChatTaskDialog } from "../_components/NewChatTaskDialog";
 import { PrivacyNotice } from "../_components/PrivacyNotice";
 import { RuntimeStatusBadge } from "../_components/RuntimeStatusBadge";
-import { ChatTranscript } from "../_components/ChatTranscript";
-import type { ChatMessageItem } from "../_components/ChatTranscript";
-import { ChatHistoryDrawerPanel } from "../_components/ChatHistoryDrawerPanel";
 import { useMobileHistoryDrawer } from "../_components/useMobileHistoryDrawer";
-import { NewChatTaskDialog } from "../_components/NewChatTaskDialog";
-import type { ConversationImportSummary } from "../_components/ConversationExportImportControls";
-import { findModeLabelKey, findTaskLabelKey, resolveConversationTask } from "../_lib/catalog";
+import { findModeLabelKey, findTaskLabelKey, isPerformanceMode, isTaskCategory } from "../_lib/catalog";
+import { downloadTextFile } from "../_lib/downloadTextFile";
+import { isGettingStartedCompleted } from "../_lib/gettingStartedPreference";
 import { rejectionReasonKey, routeDecisionKey } from "../_lib/routeExplanation";
 import { runtimeErrorKey } from "../_lib/runtimeErrorLabel";
-import { terminateWorkerAfter } from "../_lib/workerTeardown";
-import { deriveConversationTitle, toChatMessageItems } from "../_lib/conversationMessages";
-import { downloadTextFile } from "../_lib/downloadTextFile";
-import {
-  clearStoredActiveConversationId,
-  getStoredActiveConversationId,
-  setStoredActiveConversationId,
-} from "../_lib/activeConversationStorage";
-import {
-  generationNoticeKey,
-  shouldDiscardPartialAssistantOutput,
-  shouldPersistAssistantOutput,
-} from "../_lib/generationPersistence";
-import { getStoredPerformanceMode, isGettingStartedCompleted } from "../_lib/gettingStartedPreference";
-import { recordRuntimeRecoveryEvent } from "../_lib/runtimeRecovery";
-import { canSendChatMessage, isConversationSwitchBlockedStatus } from "../_lib/runtimeUiState";
-import { createStreamingTextBuffer } from "../_lib/streamingBuffer";
+import { canSendChatMessage } from "../_lib/runtimeUiState";
 import { useLocale, useTranslations } from "../_i18n/LocaleContext";
+import { useAppRuntime } from "../_runtime/AppRuntimeProvider";
 
-const IDLE_RUNTIME_STATE: RuntimeState = { status: "idle", modelId: null, loadProgress: 0, error: null };
-
-// Bounds how long teardown waits for a graceful runtime.dispose() (which
-// calls the WebLLM engine's unload()) before terminating the worker anyway.
-// A wedged engine (e.g. after a cancel timeout) can leave dispose() pending
-// forever; the worker must never be leaked waiting on it.
-const TEARDOWN_GRACE_MS = 2_000;
-
-export default function ChatPage() {
+function ChatContent() {
   const t = useTranslations();
   const { locale } = useLocale();
   const router = useRouter();
-
+  const searchParams = useSearchParams();
   const drawer = useMobileHistoryDrawer();
-  const [message, setMessage] = useState("");
-  const [performanceMode, setPerformanceMode] = useState<PerformanceMode | null>(null);
-  const [activeConversationTask, setActiveConversationTask] = useState<TaskCategory>("chat");
-  const [routeResult, setRouteResult] = useState<ModelRouterResult | null>(null);
-  const [runtimeState, setRuntimeState] = useState<RuntimeState>(IDLE_RUNTIME_STATE);
-  const [messages, setMessages] = useState<ChatMessageItem[]>([]);
-  const [conversations, setConversations] = useState<ConversationMetadata[]>([]);
-  const [activeConversationId, setActiveConversationId] = useState<ConversationId | null>(null);
-  const [storageNotice, setStorageNotice] = useState<string | null>(null);
-  const [importSummary, setImportSummary] = useState<ConversationImportSummary | null>(null);
-  const [isNewChatDialogOpen, setIsNewChatDialogOpen] = useState(false);
-  const runtimeRef = useRef<InferenceRuntime | null>(null);
-  const workerRef = useRef<Worker | null>(null);
-  const unsubscribeRef = useRef<(() => void) | null>(null);
-  const pendingAssistantIdRef = useRef<string | null>(null);
-  const recoveryEpochRef = useRef(0);
-  const recoveryInProgressRef = useRef(false);
-  const lastFocusedBeforeDialogRef = useRef<HTMLElement | null>(null);
+  const {
+    runtimeState,
+    performanceMode,
+    activeConversationTask,
+    routeResult,
+    conversations,
+    activeConversationId,
+    messages,
+    storageNotice,
+    isConversationSwitchBlocked,
+    configureChatRoute,
+    refreshConversations,
+    clearStorageNotice,
+    setStorageNotice,
+    startNewConversation,
+    selectConversation,
+    renameConversation,
+    deleteConversation,
+    sendMessage,
+    stopGeneration,
+    reloadRuntime,
+  } = useAppRuntime();
 
+  const rawTask = searchParams.get("task");
+  const rawMode = searchParams.get("mode");
+  const taskFromQuery = isTaskCategory(rawTask) ? rawTask : null;
+  const modeFromQuery = isPerformanceMode(rawMode) ? rawMode : null;
+  const modeLabelKey = findModeLabelKey(performanceMode ?? modeFromQuery);
   const taskLabelKey = findTaskLabelKey(activeConversationTask);
-  const modeLabelKey = findModeLabelKey(performanceMode);
   const taskLabel = taskLabelKey ? t(taskLabelKey) : null;
   const modeLabel = modeLabelKey ? t(modeLabelKey) : null;
+  const storageNoticeText = storageNotice ? t(storageNotice.key, storageNotice.params) : null;
 
-  // Getting Started must be completed before /chat can start the local
-  // runtime — sends the user to the first-run flow instead of silently
-  // falling back to a default performance mode.
+  const [isSetupComplete, setIsSetupComplete] = useState<boolean | null>(null);
+  const [message, setMessage] = useState("");
+  const [importSummary, setImportSummary] = useState<ConversationImportSummary | null>(null);
+  const [isNewChatDialogOpen, setIsNewChatDialogOpen] = useState(false);
+  const lastFocusedBeforeDialogRef = useRef<HTMLElement | null>(null);
+
+  // First-run setup owns only global performance mode. New chat asks only for
+  // usage/task, so arriving at /chat before setup must redirect once.
   useEffect(() => {
-    if (!isGettingStartedCompleted()) router.replace("/onboarding");
+    const completed = isGettingStartedCompleted();
+    setIsSetupComplete(completed);
+    if (!completed) router.replace("/onboarding");
   }, [router]);
 
   useEffect(() => {
-    setPerformanceMode(getStoredPerformanceMode());
-  }, []);
-
-  const refreshConversations = useCallback(async () => {
-    setConversations(await listConversations());
-  }, []);
-
-  // Resumes the last-viewed conversation after a refresh. Independent of the
-  // performance-mode runtime lifecycle effect below, so switching
-  // conversations never re-initializes the WebLLM runtime.
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      const list = await listConversations();
-      if (cancelled) return;
-      setConversations(list);
-      if (list.length === 0) return;
-
-      const storedId = getStoredActiveConversationId();
-      const targetId = (storedId && list.some((item) => item.id === storedId) ? storedId : list[0].id) as ConversationId;
-      const conversation = await getConversation(targetId);
-      if (cancelled || !conversation) return;
-
-      setActiveConversationId(conversation.id);
-      setActiveConversationTask(resolveConversationTask(conversation.task));
-      setMessages(toChatMessageItems(conversation));
-      setStoredActiveConversationId(conversation.id);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Router recommendation is purely advisory display: this alpha always
-  // loads the same placeholder model regardless of task/mode (see
-  // chat.placeholderModelNote below), so it is safe and cheap to recompute
-  // whenever the active conversation's task or the performance mode changes,
-  // without touching the runtime/worker lifecycle at all.
-  useEffect(() => {
-    if (!performanceMode) return;
-    let cancelled = false;
-
-    detectDeviceProfile().then((deviceProfile) => {
-      if (cancelled) return;
-
-      const result = selectRecommendedModel({
-        task: activeConversationTask,
-        performanceMode,
-        deviceProfile,
-        modelRegistry: sampleModels,
-      });
-
-      setRouteResult(result);
-      logEvent(
-        createLogEvent("router_decision", "info", {
-          task: activeConversationTask,
-          performanceMode,
-          deviceTier: deviceProfile.deviceTier,
-          selectedModelId: result.selectedModel?.id ?? null,
-          fallbackModelId: result.fallbackModel?.id ?? null,
-          reasonCode: result.reasonCode,
-          rejectedCount: result.rejectedModels.length,
-        })
-      );
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeConversationTask, performanceMode]);
-
-  const teardownRuntime = useCallback(() => {
-    unsubscribeRef.current?.();
-    unsubscribeRef.current = null;
-    const runtime = runtimeRef.current;
-    const worker = workerRef.current;
-    runtimeRef.current = null;
-    workerRef.current = null;
-
-    if (!worker) return;
-    if (!runtime) {
-      worker.terminate();
-      return;
-    }
-
-    // Never depends on dispose() resolving: the worker is guaranteed to be
-    // terminated within TEARDOWN_GRACE_MS regardless of whether the engine's
-    // unload() call ever settles, so a new runtime can always be created
-    // right after this call returns.
-    terminateWorkerAfter(runtime.dispose(), worker, TEARDOWN_GRACE_MS);
-  }, []);
-
-  // Also used by the "Reload model" recovery button, so a stuck runtime
-  // (e.g. after a cancel timeout) can be replaced without a page refresh.
-  const initializeRuntime = useCallback(async (options: { recovery?: boolean } = {}) => {
-    const isRecovery = options.recovery === true;
-    const recoveryEpoch = ++recoveryEpochRef.current;
-    if (isRecovery) {
-      recordRuntimeRecoveryEvent("runtime.recovery.started", "info", "recovering");
-    }
-
-    teardownRuntime();
-
-    const worker = new Worker(new URL("../../workers/inference.worker.ts", import.meta.url), { type: "module" });
-    const runtime = createInferenceRuntime(worker);
-    workerRef.current = worker;
-    runtimeRef.current = runtime;
-    unsubscribeRef.current = runtime.subscribe(setRuntimeState);
-    setRuntimeState(isRecovery ? { status: "recovering", modelId: null, loadProgress: 0, error: null } : runtime.getState());
-    try {
-      await runtime.loadModel(undefined, { initialStatus: isRecovery ? "recovering" : "loading_model" });
-    } catch {
-      if (recoveryEpoch === recoveryEpochRef.current && runtimeRef.current === runtime) {
-        setRuntimeState({
-          status: "error",
-          modelId: runtime.getState().modelId,
-          loadProgress: runtime.getState().loadProgress,
-          error: { code: "unknown", message: "Runtime recovery failed." },
-        });
-        if (isRecovery) {
-          recordRuntimeRecoveryEvent("runtime.recovery.failed", "error", "error", "RUNTIME_RECOVERY_FAILED");
-        }
-      }
-      return;
-    }
-
-    if (recoveryEpoch !== recoveryEpochRef.current || runtimeRef.current !== runtime) return;
-    const nextState = runtime.getState();
-    if (isRecovery) {
-      if (nextState.status === "ready") {
-        recordRuntimeRecoveryEvent("runtime.recovery.completed", "info", "ready");
-      } else {
-        recordRuntimeRecoveryEvent(
-          "runtime.recovery.failed",
-          "error",
-          "error",
-          nextState.error?.code ? nextState.error.code.toUpperCase() : "RUNTIME_RECOVERY_FAILED"
-        );
-      }
-    }
-  }, [teardownRuntime]);
-
-  const recoverRuntime = useCallback(async () => {
-    if (recoveryInProgressRef.current) return;
-    recoveryInProgressRef.current = true;
-    try {
-      await initializeRuntime({ recovery: true });
-    } finally {
-      recoveryInProgressRef.current = false;
-    }
-  }, [initializeRuntime]);
-
-  useEffect(() => {
-    if (!performanceMode) return;
-    void initializeRuntime();
-    return () => teardownRuntime();
-  }, [performanceMode, initializeRuntime, teardownRuntime]);
-
-  const isConversationSwitchBlocked = isConversationSwitchBlockedStatus(runtimeState.status);
-
-  useEffect(() => {
-    if (runtimeState.status !== "error" || !runtimeState.error || !pendingAssistantIdRef.current) return;
-
-    const noticeKey = generationNoticeKey(null, runtimeState.error.code);
-    if (!noticeKey) return;
-
-    const assistantId = pendingAssistantIdRef.current;
-    pendingAssistantIdRef.current = null;
-    setMessages((previous) => previous.filter((item) => item.id !== assistantId));
-    setStorageNotice(t(noticeKey));
-    if (runtimeState.error.code === "cancel_timeout") {
-      void recoverRuntime();
-    }
-  }, [recoverRuntime, runtimeState.status, runtimeState.error, t]);
-
-  const appendAssistantText = useCallback((assistantId: string, text: string) => {
-    setMessages((previous) =>
-      previous.map((item) => (item.id === assistantId ? { ...item, content: item.content + text } : item))
-    );
-  }, []);
-
-  const openNewChatDialog = useCallback(() => {
-    if (isConversationSwitchBlocked) return;
-    lastFocusedBeforeDialogRef.current = document.activeElement as HTMLElement | null;
-    setIsNewChatDialogOpen(true);
-  }, [isConversationSwitchBlocked]);
-
-  const closeNewChatDialog = useCallback(() => {
-    setIsNewChatDialogOpen(false);
-    lastFocusedBeforeDialogRef.current?.focus?.({ preventScroll: true });
-    lastFocusedBeforeDialogRef.current = null;
-  }, []);
-
-  const handleSelectNewChatTask = useCallback(async (task: TaskCategory) => {
-    setIsNewChatDialogOpen(false);
-    lastFocusedBeforeDialogRef.current = null;
-    setStorageNotice(null);
-
-    const created = await createConversation({ task });
-    if (!created) {
-      setStorageNotice(t("storageNotice.couldNotStartConversation"));
-      return;
-    }
-
-    setActiveConversationId(created.id);
-    setActiveConversationTask(task);
-    setMessages([]);
-    setStoredActiveConversationId(created.id);
-    await refreshConversations();
-  }, [refreshConversations, t]);
-
-  const handleSelectConversation = useCallback(async (id: string) => {
-    if (isConversationSwitchBlocked) return;
-    setStorageNotice(null);
-    const conversation = await getConversation(id as ConversationId);
-    if (!conversation) {
-      setStorageNotice(t("storageNotice.couldNotLoadConversation"));
-      return;
-    }
-    setActiveConversationId(conversation.id);
-    setActiveConversationTask(resolveConversationTask(conversation.task));
-    setMessages(toChatMessageItems(conversation));
-    setStoredActiveConversationId(conversation.id);
-  }, [isConversationSwitchBlocked, t]);
-
-  const handleRenameConversation = useCallback(async (id: string, title: string) => {
-    const updated = await updateConversationTitle(id as ConversationId, title);
-    if (!updated) {
-      setStorageNotice(t("storageNotice.couldNotRename"));
-      return;
-    }
-    await refreshConversations();
-  }, [refreshConversations, t]);
-
-  const handleDeleteConversation = useCallback(async (id: string) => {
-    if (isConversationSwitchBlocked) return;
-    const success = await deleteConversation(id as ConversationId);
-    if (!success) {
-      setStorageNotice(t("storageNotice.couldNotDelete"));
-      return;
-    }
-    if (activeConversationId === id) {
-      setActiveConversationId(null);
-      setActiveConversationTask("chat");
-      setMessages([]);
-      clearStoredActiveConversationId();
-    }
-    await refreshConversations();
-  }, [activeConversationId, isConversationSwitchBlocked, refreshConversations, t]);
+    configureChatRoute(taskFromQuery, modeFromQuery);
+  }, [configureChatRoute, modeFromQuery, taskFromQuery]);
 
   const handleExportActiveConversation = useCallback(async () => {
     setStorageNotice(null);
     if (!activeConversationId) {
-      setStorageNotice(t("backup.noActiveConversation"));
+      setStorageNotice({ key: "backup.noActiveConversation" });
       return;
     }
 
     const conversation = await getConversation(activeConversationId);
     if (!conversation) {
-      setStorageNotice(t("backup.couldNotLoadConversation"));
+      setStorageNotice({ key: "backup.couldNotLoadConversation" });
       return;
     }
 
@@ -371,15 +107,15 @@ export default function ChatPage() {
       const json = serializeConversationExport(buildConversationExport([conversation]));
       downloadTextFile(`freeai-open-conversation-${Date.now()}.json`, json);
     } catch {
-      setStorageNotice(t("backup.couldNotBuildExportOne"));
+      setStorageNotice({ key: "backup.couldNotBuildExportOne" });
     }
-  }, [activeConversationId, t]);
+  }, [activeConversationId, setStorageNotice]);
 
   const handleExportAllConversations = useCallback(async () => {
     setStorageNotice(null);
     const metadataList = await listConversations();
     if (metadataList.length === 0) {
-      setStorageNotice(t("backup.noConversations"));
+      setStorageNotice({ key: "backup.noConversations" });
       return;
     }
 
@@ -387,7 +123,7 @@ export default function ChatPage() {
       (conversation): conversation is Conversation => conversation !== null
     );
     if (fullConversations.length === 0) {
-      setStorageNotice(t("backup.couldNotLoadConversations"));
+      setStorageNotice({ key: "backup.couldNotLoadConversations" });
       return;
     }
 
@@ -395,175 +131,114 @@ export default function ChatPage() {
       const json = serializeConversationExport(buildConversationExport(fullConversations));
       downloadTextFile(`freeai-open-conversations-${Date.now()}.json`, json);
     } catch {
-      setStorageNotice(t("backup.couldNotBuildExportAll"));
+      setStorageNotice({ key: "backup.couldNotBuildExportAll" });
     }
-  }, [t]);
+  }, [setStorageNotice]);
 
-  const handleImportFile = useCallback(async (file: File) => {
-    setStorageNotice(null);
-    setImportSummary(null);
+  const handleImportFile = useCallback(
+    async (file: File) => {
+      setStorageNotice(null);
+      setImportSummary(null);
 
-    let text: string;
-    try {
-      text = await file.text();
-    } catch {
-      setImportSummary({ importedCount: 0, skippedCount: 0, errors: [t("backup.couldNotReadFile")] });
-      return;
-    }
-
-    let exportData;
-    try {
-      exportData = parseConversationImport(text);
-    } catch {
-      setImportSummary({ importedCount: 0, skippedCount: 0, errors: [t("backup.invalidFile")] });
-      return;
-    }
-
-    const existingIds = (await listConversations()).map((item) => item.id);
-    const prepared = prepareImportedConversations(exportData, { existingIds });
-
-    let importedCount = 0;
-    let skippedCount = 0;
-    const errors: string[] = [];
-
-    for (const conversation of prepared) {
-      const created = await createConversation({
-        id: conversation.id,
-        title: conversation.title,
-        createdAt: conversation.createdAt,
-        task: conversation.task,
-      });
-      if (!created) {
-        skippedCount += 1;
-        errors.push(t("backup.couldNotImportConversation", { title: conversation.title }));
-        continue;
+      let text: string;
+      try {
+        text = await file.text();
+      } catch {
+        setImportSummary({ importedCount: 0, skippedCount: 0, errors: [t("backup.couldNotReadFile")] });
+        return;
       }
 
-      importedCount += 1;
-      for (const message of conversation.messages) {
-        const saved = await addMessage(created.id, {
-          id: message.id,
-          role: message.role,
-          content: message.content,
-          createdAt: message.createdAt,
+      let exportData;
+      try {
+        exportData = parseConversationImport(text);
+      } catch {
+        setImportSummary({ importedCount: 0, skippedCount: 0, errors: [t("backup.invalidFile")] });
+        return;
+      }
+
+      const existingIds = (await listConversations()).map((item) => item.id);
+      const prepared = prepareImportedConversations(exportData, { existingIds });
+
+      let importedCount = 0;
+      let skippedCount = 0;
+      const errors: string[] = [];
+
+      for (const conversation of prepared) {
+        const created = await createConversation({
+          id: conversation.id,
+          title: conversation.title,
+          createdAt: conversation.createdAt,
+          task: conversation.task,
         });
-        if (!saved) {
-          errors.push(t("backup.messageNotSaved", { title: conversation.title }));
+        if (!created) {
+          skippedCount += 1;
+          errors.push(t("backup.couldNotImportConversation", { title: conversation.title }));
+          continue;
+        }
+
+        importedCount += 1;
+        for (const importedMessage of conversation.messages) {
+          const saved = await addMessage(created.id, {
+            id: importedMessage.id,
+            role: importedMessage.role,
+            content: importedMessage.content,
+            createdAt: importedMessage.createdAt,
+          });
+          if (!saved) {
+            errors.push(t("backup.messageNotSaved", { title: conversation.title }));
+          }
         }
       }
-    }
 
-    setImportSummary({ importedCount, skippedCount, errors });
-    await refreshConversations();
-  }, [refreshConversations, t]);
+      setImportSummary({ importedCount, skippedCount, errors });
+      await refreshConversations();
+    },
+    [refreshConversations, setStorageNotice, t]
+  );
 
   const handleDismissImportSummary = useCallback(() => {
     setImportSummary(null);
   }, []);
 
-  const handleNewChatFromDrawer = useCallback(() => {
-    drawer.startNewChat();
-    openNewChatDialog();
-  }, [drawer.startNewChat, openNewChatDialog]);
+  const handleOpenNewChatDialog = useCallback(() => {
+    if (isConversationSwitchBlocked) return;
+    lastFocusedBeforeDialogRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setIsNewChatDialogOpen(true);
+  }, [isConversationSwitchBlocked]);
 
-  const handleSelectConversationFromDrawer = useCallback((id: string) => {
-    void handleSelectConversation(id);
-    drawer.selectConversation();
-  }, [drawer.selectConversation, handleSelectConversation]);
+  const handleCloseNewChatDialog = useCallback(() => {
+    setIsNewChatDialogOpen(false);
+    lastFocusedBeforeDialogRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  const handleSelectNewChatTask = useCallback(
+    (task: TaskCategory) => {
+      if (!startNewConversation(task)) return;
+      setIsNewChatDialogOpen(false);
+      drawer.startNewChat();
+      lastFocusedBeforeDialogRef.current?.focus({ preventScroll: true });
+    },
+    [drawer, startNewConversation]
+  );
+
+  const handleSelectConversationFromDrawer = useCallback(
+    (id: string) => {
+      void selectConversation(id);
+      drawer.selectConversation();
+    },
+    [drawer, selectConversation]
+  );
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    const runtime = runtimeRef.current;
     const prompt = message.trim();
-    if (!runtime || !canSendChatMessage(runtimeState.status, prompt)) return;
+    if (!canSendChatMessage(runtimeState.status, prompt)) return;
 
-    setStorageNotice(null);
-    let conversationId = activeConversationId;
-    const isFirstMessageOfConversation = messages.length === 0;
-    let justCreatedLazily = false;
-
-    if (!conversationId) {
-      const created = await createConversation({ task: "chat", title: deriveConversationTitle(prompt) });
-      if (!created) {
-        setStorageNotice(t("storageNotice.couldNotStartConversation"));
-      } else {
-        conversationId = created.id;
-        justCreatedLazily = true;
-        setActiveConversationId(created.id);
-        setActiveConversationTask("chat");
-        setStoredActiveConversationId(created.id);
-        await refreshConversations();
-      }
-    }
-
-    const userMessage: ChatMessageItem = { id: crypto.randomUUID(), role: "user", content: prompt };
-    const assistantId = crypto.randomUUID();
-    pendingAssistantIdRef.current = assistantId;
-    setMessages((previous) => [...previous, userMessage, { id: assistantId, role: "assistant", content: "" }]);
     setMessage("");
-
-    if (conversationId) {
-      if (!(await addMessage(conversationId, { role: "user", content: prompt }))) {
-        setStorageNotice(t("storageNotice.couldNotSaveMessage"));
-      } else if (isFirstMessageOfConversation && !justCreatedLazily) {
-        // The conversation may have been created via the New Chat dialog
-        // (default "New conversation" title, no message yet) — retitle it
-        // from the first message now, same as the always-had-a-title lazy
-        // path above. Fire-and-forget: a rename failure is non-blocking.
-        void updateConversationTitle(conversationId, deriveConversationTitle(prompt)).then((updated) => {
-          if (updated) void refreshConversations();
-        });
-      }
-    }
-
-    let assistantText = "";
-    let stopReason: GenerationStopReason | null = null;
-    let runtimeErrorCode: RuntimeErrorCode | undefined;
-    const streamBuffer = createStreamingTextBuffer({
-      onFlush: (text) => appendAssistantText(assistantId, text),
-    });
-
-    try {
-      for await (const chunk of runtime.generate({ conversationId: conversationId ?? "local-chat", prompt, responseLocale: locale })) {
-        if (chunk.type === "token") {
-          assistantText += chunk.text;
-          streamBuffer.append(chunk.text);
-        } else if (chunk.type === "done") {
-          stopReason = chunk.reason;
-        } else if (chunk.type === "error") {
-          runtimeErrorCode = chunk.error.code;
-          break;
-        }
-      }
-    } finally {
-      streamBuffer.flush();
-    }
-
-    if (shouldDiscardPartialAssistantOutput(stopReason, runtimeErrorCode)) {
-      pendingAssistantIdRef.current = null;
-      setMessages((previous) => previous.filter((item) => item.id !== assistantId));
-      const noticeKey = stopReason === "cancelled" ? "storageNotice.generationStoppedRecovering" : generationNoticeKey(stopReason, runtimeErrorCode);
-      if (noticeKey) setStorageNotice(t(noticeKey));
-      if (stopReason === "cancelled") {
-        await recoverRuntime();
-      }
-      return;
-    }
-
-    pendingAssistantIdRef.current = null;
-    if (stopReason === "completed" && assistantText.length === 0) {
-      setMessages((previous) => previous.filter((item) => item.id !== assistantId));
-      return;
-    }
-
-    if (conversationId && shouldPersistAssistantOutput(stopReason, assistantText)) {
-      if (!(await addMessage(conversationId, { role: "assistant", content: assistantText }))) {
-        setStorageNotice(t("storageNotice.couldNotSaveReply"));
-      } else {
-        await refreshConversations();
-      }
-    }
+    await sendMessage(prompt, locale);
   }
+
+  if (isSetupComplete !== true) return null;
 
   return (
     <div className="chat-layout">
@@ -578,18 +253,16 @@ export default function ChatPage() {
         conversations={conversations}
         activeConversationId={activeConversationId}
         disabled={isConversationSwitchBlocked}
-        onNewChat={handleNewChatFromDrawer}
+        onNewChat={handleOpenNewChatDialog}
         onSelect={handleSelectConversationFromDrawer}
-        onRename={handleRenameConversation}
-        onDelete={handleDeleteConversation}
+        onRename={renameConversation}
+        onDelete={deleteConversation}
         onExportActive={handleExportActiveConversation}
         onExportAll={handleExportAllConversations}
         onImportFile={handleImportFile}
         importSummary={importSummary}
         onDismissImportSummary={handleDismissImportSummary}
       />
-
-      <NewChatTaskDialog isOpen={isNewChatDialogOpen} onClose={closeNewChatDialog} onSelectTask={handleSelectNewChatTask} />
 
       <main ref={drawer.backgroundRef} className="chat-main">
         <div className="chat-main__header">
@@ -625,7 +298,7 @@ export default function ChatPage() {
             </div>
           </div>
 
-          {storageNotice && (
+          {storageNoticeText && (
             <section
               role="status"
               aria-live="polite"
@@ -641,8 +314,8 @@ export default function ChatPage() {
                 fontSize: 13,
               }}
             >
-              <span>{storageNotice}</span>
-              <button type="button" className="fo-button fo-button-secondary" onClick={() => setStorageNotice(null)}>
+              <span>{storageNoticeText}</span>
+              <button type="button" className="fo-button fo-button-secondary" onClick={clearStorageNotice}>
                 {t("common.dismiss")}
               </button>
             </section>
@@ -653,8 +326,8 @@ export default function ChatPage() {
               <strong>{routeResult.selectedModel ? t("chat.recommendedModel") : t("chat.noModelAvailable")}</strong>
               <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>
                 {t(routeDecisionKey(routeResult), {
-                  task: taskLabel ?? t("chat.noTaskSelected"),
-                  mode: modeLabel ?? "",
+                  task: taskLabel ?? activeConversationTask,
+                  mode: modeLabel ?? performanceMode,
                   model: routeResult.selectedModel?.displayName ?? "",
                   fallback: routeResult.fallbackModel?.displayName ?? "",
                   count: routeResult.rejectedModels.length,
@@ -675,7 +348,7 @@ export default function ChatPage() {
                   <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
                     {routeResult.rejectedModels.map((rejected) => (
                       <li key={rejected.modelId}>
-                        <span className="fo-technical-value">{rejected.modelId}</span> — {t(rejectionReasonKey(rejected.reason))}
+                        <span className="fo-technical-value">{rejected.modelId}</span> - {t(rejectionReasonKey(rejected.reason))}
                       </li>
                     ))}
                   </ul>
@@ -688,7 +361,7 @@ export default function ChatPage() {
             <section role="alert" className="fo-inline-notice" style={{ borderColor: "var(--fo-danger)", background: "var(--fo-danger-soft)", marginBottom: 16 }}>
               <strong>{t("chat.localModelUnavailable")}</strong>
               <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>{t(runtimeErrorKey(runtimeState.error.code))}</p>
-              <button type="button" className="fo-button fo-button-secondary" onClick={() => void initializeRuntime()} style={{ marginTop: 8 }}>
+              <button type="button" className="fo-button fo-button-secondary" onClick={() => void reloadRuntime()} style={{ marginTop: 8 }}>
                 {t("chat.reloadModel")}
               </button>
               <details className="fo-muted" style={{ marginTop: 8, fontSize: 12 }}>
@@ -734,7 +407,7 @@ export default function ChatPage() {
               }}
             />
             {runtimeState.status === "generating" ? (
-              <button type="button" className="fo-button fo-button-secondary" onClick={() => runtimeRef.current?.stopGeneration()}>
+              <button type="button" className="fo-button fo-button-secondary" onClick={stopGeneration}>
                 {t("common.stop")}
               </button>
             ) : runtimeState.status === "cancelling" ? (
@@ -755,6 +428,20 @@ export default function ChatPage() {
           </div>
         </div>
       </main>
+
+      <NewChatTaskDialog
+        isOpen={isNewChatDialogOpen}
+        onClose={handleCloseNewChatDialog}
+        onSelectTask={handleSelectNewChatTask}
+      />
     </div>
+  );
+}
+
+export default function ChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChatContent />
+    </Suspense>
   );
 }

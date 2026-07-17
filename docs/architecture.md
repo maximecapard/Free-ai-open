@@ -95,6 +95,33 @@ On desktop (`min-width: 721px`, the same breakpoint used everywhere else in the 
 
 Mobile is untouched: none of the rules above apply below the 721px breakpoint, so the existing off-canvas history drawer, normal page scrolling, and footer all render exactly as before this change.
 
+## Persistent runtime ownership
+
+`apps/web/app/_runtime/AppRuntimeProvider.tsx` is a client component mounted from the root application layout, inside the locale/theme providers and above normal route boundaries. It owns the WebLLM `Worker`, the `InferenceRuntime`, runtime subscriptions, active generation identifiers, the current in-memory transcript view, and the performance-mode transition API. `/chat` is now a view over this provider rather than the owner of the worker.
+
+The provider loads the local model when the user first enters `/chat` with the saved Getting Started performance mode. A small legacy bridge still accepts valid `/chat?task=...&mode=...` links by recording the mode preference and, when no conversation is active yet, the task. New app flows no longer depend on query parameters. After the first load, normal internal navigation does not dispose the runtime:
+
+- Chat -> Settings -> Chat keeps the loaded worker/model;
+- Chat -> Debug -> Chat keeps the loaded worker/model;
+- route component unmount is a no-op for runtime disposal;
+- `document.visibilityState`/hidden-tab changes are not disposal triggers.
+
+The public runtime status lifecycle remains `idle` (uninitialized/not started), `loading_model`, `ready`, `generating`, `cancelling`, `recovering`, and `error`. Explicit reload, performance replacement, and root disposal are internal lifecycle triggers rather than additional user-facing statuses.
+
+Disposal is limited to explicit lifecycle events:
+
+- the application root unmounts;
+- the user explicitly reloads the model;
+- recovery recycles a stuck or interrupted worker;
+- a future performance/model transition actually requires replacing the worker/model.
+
+The lifecycle controller (`persistentRuntimeLifecycle.ts`) wraps the existing bounded worker teardown helper, so replacement paths still call `runtime.dispose()` but always terminate the old worker within the configured grace period if unload hangs.
+
+Active generation state is also provider-owned. Each generation carries a `generationId`, conversation ID, and assistant message ID; streamed chunks update the visible assistant message only while those identifiers still match. Returning to `/chat` therefore shows the current or completed response, while late chunks from stale generations are ignored. The final assistant response is persisted to `@free-ai-open/conversation-store` only after the existing completion rules allow it; stopped, timed-out, failed, or unstable partial output is still discarded instead of saved as a completed answer.
+
+Changing global performance mode goes through `applyPerformanceMode()` on the provider. While the runtime is generating, cancelling, or recovering, Settings disables the save action and does not persist the new preference. In v0.6.6-alpha all modes still use the same placeholder model, so a valid mode change persists the local preference and updates recommendations without replacing the runtime. The policy has a separate replacement decision for the future v0.7 model-selection path.
+
+Background browser execution is intentionally described as best effort. FreeAI Open does not unload the model merely because a tab becomes hidden, but browsers and mobile operating systems may still throttle or suspend background work.
 ## Runtime cancellation recovery
 
 Stop/cancel is handled as a runtime lifecycle transition, not just a UI interruption:

@@ -62,6 +62,8 @@ export const en = {
     performanceHint: "Changing this may reload the local model the next time you open Chat. It will not interrupt a reply that is currently being written.",
     performanceSave: "Save performance mode",
     performanceSaved: "Saved.",
+    performanceBlockedWhileGenerating:
+      "Wait for the current response to finish, or stop it, before changing performance mode.",
     languageHeading: "Language",
     themeHeading: "Theme",
     deviceHeading: "This device",
@@ -232,6 +234,16 @@ export const en = {
     cancelling: "Stopping",
     recovering: "Preparing the model again",
     error: "Something went wrong",
+  },
+  globalRuntime: {
+    loading: "Preparing the local model ({progress}%)",
+    generating: "Writing a response",
+    cancelling: "Stopping the response",
+    recovering: "Preparing the model again",
+    error: "The local model needs attention",
+    idle: "Local model not started",
+    ready: "Local model ready",
+    returnToConversation: "Return to conversation",
   },
   runtimeError: {
     webgpu_unavailable: "This browser doesn't support WebGPU, so the local model can't run here yet.",

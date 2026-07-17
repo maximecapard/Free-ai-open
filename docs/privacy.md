@@ -73,6 +73,16 @@ Generation safety is an alpha safeguard against unstable local model output. If 
 
 During normal streaming, the chat UI may briefly buffer generated text in memory before rendering it to reduce React update pressure. This buffer is not local technical logging, telemetry, diagnostic-report data, IndexedDB persistence, or server data. It is discarded after the generation path flushes or ends.
 
+## Persistent runtime and navigation
+
+The WebLLM runtime is owned by a root-level client provider so normal internal navigation does not unload the local model. Navigating from Chat to Settings or Debug and back keeps the same local worker/runtime when it is healthy, and an active generation can continue while the Chat route is temporarily unmounted.
+
+The provider may keep technical runtime state, the current conversation ID, the current generation ID, model/backend metadata, and in-memory transcript UI state needed to keep streaming visible when the user returns to Chat. It must not write prompts, responses, conversation messages, uploaded document content, hidden language instructions, local file paths, API keys, or tokens into local technical logs, diagnostic reports, telemetry, server storage, Supabase, or any network path.
+
+Conversation content remains local browser data. Completed messages are persisted through `@free-ai-open/conversation-store`; partial assistant output from a stopped, timed-out, failed, or unstable generation is still removed and not saved as a completed response.
+
+FreeAI Open does not unload the model only because the browser tab becomes hidden. Background tabs may still be throttled or suspended by the browser or mobile operating system, so generation can slow or pause outside the app's control.
+
 ## Language and theme preferences
 
 The UI language (English/French) and theme (system/light/dark) are stored locally as small preference values, never sent to a server, and never combined with conversation content. Language defaults to the browser's language on first visit; theme defaults to the operating system's preference. Both can be changed anytime from the header and are remembered on this device.
