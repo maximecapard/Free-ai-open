@@ -1,5 +1,7 @@
 import type { ModelRecord } from "./schema";
 
+// Legacy v0.6 advisory fixtures. Model Registry v2 is the verified source for
+// future adaptive routing; these remain only until that integration lands.
 export const sampleModels: ModelRecord[] = [
   {
     id: "sample-general-light",

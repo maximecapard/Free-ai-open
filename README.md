@@ -35,7 +35,7 @@ Implemented in the current alpha:
 - Local technical logs stored in the browser.
 - Privacy-safe diagnostic report generation and export.
 - `/debug` dashboard for runtime status, device information, technical logs, and diagnostics.
-- Device profiling and model routing groundwork, with a local static capability profile based on coarse signals (form factor, memory bucket, CPU-concurrency bucket, WebGPU/WASM, fallback adapter, and normalized GPU feature/limit classes) rather than RAM alone.
+- Device profiling and model routing groundwork, with a local static capability profile based on coarse signals and a five-model Registry v2 whose exact WebLLM artifacts, sources, licenses, compatibility metadata, and basic browser behavior are documented. Adaptive runtime selection is not connected yet.
 - Strict schemas and redaction utilities for privacy-sensitive telemetry and logs.
 - English/French UI language toggle (defaults to the browser's language, persisted locally) across the public app surfaces.
 - Best-effort local model response language based on the selected UI locale through a hidden runtime-only instruction. Actual language quality depends on the selected model.
@@ -49,7 +49,7 @@ The following are not implemented in this alpha:
 - Supabase or other cloud conversation storage.
 - Account system.
 - Encrypted conversation export/import backups (current exports are plain, unencrypted JSON).
-- Production-scale multi-model registry.
+- Production-scale catalog and adaptive runtime model selection (the current Registry v2 is a curated five-model foundation; the runtime still uses one fixed verified compatibility default).
 - Desktop or mobile apps.
 - Broad browser end-to-end test coverage.
 - Guaranteed multilingual model quality across every model.
@@ -130,6 +130,9 @@ pnpm build
 - [Security design](docs/security.md)
 - [Telemetry design](docs/telemetry.md)
 - [Model selection](docs/model-selection.md)
+- [Model registry](docs/model-registry.md)
+- [Model verification](docs/model-verification.md)
+- [Model attributions and licenses](docs/model-attributions.md)
 - [Release checklist](docs/RELEASE_CHECKLIST.md)
 - [Architecture decision records](docs/adr/README.md)
 - [Contributing](CONTRIBUTING.md)

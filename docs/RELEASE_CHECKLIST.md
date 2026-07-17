@@ -23,6 +23,17 @@ Phase 0 adds types, package boundaries, and local persistence/migration only —
 - [ ] On a normal macOS desktop, confirm the form factor remains desktop.
 - [ ] If the browser reports a fallback/software WebGPU adapter, confirm the capability stays conservative.
 
+## v0.7.0-alpha Phase 1B (Model Registry v2)
+
+- [ ] Run the model-registry tests and confirm all v2 records match the installed WebLLM `prebuiltAppConfig`, including exact model IDs, model URLs, model libraries, required features, and runtime-memory metadata.
+- [ ] Confirm every record has an upstream source, exact license source, download estimate, runtime-memory estimate, known issues, conservative language/task/form-factor/mode scores, and ordered context presets.
+- [ ] Confirm duplicate IDs, unknown fallback IDs, fallback cycles, incomplete verification, unsafe URLs, and unknown fields are rejected.
+- [ ] Review `docs/model-verification.md` and `docs/model-attributions.md`; confirm browser evidence and license claims match the exact artifact and model size, not another family member.
+- [ ] In a Chromium/WebGPU desktop environment, load each curated model and run synthetic English, French where claimed, Stop, worker recycle/cached reload, and post-recovery generation checks. Record only technical status/timings, never generated content or raw hardware identifiers.
+- [ ] Confirm the fixed default `SmolLM2-360M-Instruct-q4f32_1-MLC` loads through the existing client worker and Stop/recovery still succeeds.
+- [ ] Confirm the active UI still does not silently select or download models from Registry v2; adaptive router scoring and explicit download UX remain later phases.
+- [ ] Confirm no registry field, log, or diagnostic contains prompt/response/conversation/document content and no registry production module adds `fetch`, `sendBeacon`, or server-side WebLLM.
+
 ## Manual smoke tests (browser)
 
 - [ ] Chat: onboarding leads to `/chat`, the local model loads, and a prompt gets a streamed reply.

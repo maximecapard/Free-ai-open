@@ -1,65 +1,60 @@
 # Model registry
 
-The model registry is the source of truth for model metadata used by routing,
-manual selection, compatibility warnings, and future debug views. It is metadata
-only. It must never contain user prompts, model responses, documents, API keys,
-tokens, or private local paths.
+`@free-ai-open/model-registry` owns model metadata and validation. Registry data is technical metadata only: it must never contain prompts, responses, documents, conversation content, credentials, signed URLs, or private local paths.
 
-Every model record must include:
+## Current state
 
-- `id`
-- `displayName`
-- `technicalName`
-- `source`
-- `modelUrl`
-- `tasks`
-- `minDeviceTier`
-- `recommendedDeviceTier`
-- `estimatedDownloadGb`
-- `estimatedRamGb`
-- `backend`
-- `license`
-- `verified`
-- `sha256` when available
-- `status`
+Model Registry v2 contains five curated records verified with `@mlc-ai/web-llm` `0.2.84`:
 
-## Field guidance
+| Registry ID | WebLLM model ID | Intended role | Download estimate | Runtime-memory estimate |
+| --- | --- | --- | ---: | ---: |
+| `smollm2-360m-instruct-q4f32` | `SmolLM2-360M-Instruct-q4f32_1-MLC` | broad compatibility | 207 MB | 580 MB |
+| `qwen3-0.6b-q4f16` | `Qwen3-0.6B-q4f16_1-MLC` | light multilingual use | 352 MB | 1.40 GB |
+| `qwen3-1.7b-q4f16` | `Qwen3-1.7B-q4f16_1-MLC` | balanced multilingual use | 984 MB | 2.04 GB |
+| `qwen2.5-coder-1.5b-q4f16` | `Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC` | coding-focused use | 880 MB | 1.63 GB |
+| `qwen3-4b-q4f16` | `Qwen3-4B-q4f16_1-MLC` | capable desktop use | about 2.28 GB | 3.43 GB |
 
-- `id`: lowercase stable slug, for example `sample-general-light`.
-- `displayName`: user-facing name shown in the app.
-- `technicalName`: upstream or implementation-oriented model name.
-- `source`: one of `huggingface`, `r2`, `local`, or `custom`.
-- `modelUrl`: must use `hf://`, `https://`, `local://`, or `custom://`.
-- `tasks`: one or more supported task categories from `packages/types`.
-- `minDeviceTier`: lowest tier where the model is allowed to run.
-- `recommendedDeviceTier`: preferred tier and must not be below `minDeviceTier`.
-- `estimatedDownloadGb`: approximate download size in gigabytes.
-- `estimatedRamGb`: approximate runtime RAM requirement in gigabytes.
-- `backend`: one or more of `webgpu`, `wasm`, or `cpu`.
-- `license`: SPDX identifier or clear license note. Use
-  `verify-before-use` only for placeholders or unverified samples.
-- `verified`: `true` only after browser validation.
-- `sha256`: 64-character hex digest when a fixed artifact is known.
-- `status`: `experimental`, `stable`, or `blocked`.
+Download estimates describe model artifacts, while runtime-memory estimates come from WebLLM's `vram_required_MB` metadata. They are different measurements and neither predicts model-weight bytes, KV-cache growth, total browser memory, or operating-system memory use. No separate model-weight byte estimate is claimed. The 4B download estimate has medium confidence; the other listed download estimates have high confidence. All installed records were loaded with WebLLM's 4,096-token context override on a desktop-class test environment, but the smoke run was not a full 4,096-token context stress test; larger upstream context claims are not exposed by this registry.
 
-## Rules
+The active v0.6 recommendation UI still reads the legacy `sampleModels` records. Model Registry v2 is ready for the later adaptive-router phase, but it does not yet select or silently download a model. Until runtime integration lands, `ai-runtime` uses the fixed verified compatibility default `SmolLM2-360M-Instruct-q4f32_1-MLC`.
 
-- Do not mark a model stable until it has been tested in the browser.
-- Do not redistribute models without checking the license.
-- Do not use a mirror for a model unless the hash and source are documented.
-- Advanced/manual users may select experimental models, but the UI must warn them.
-- Keep sample records explicitly `experimental` until a real model has been
-  validated in browser.
-- Do not add secrets, signed URLs, access tokens, local file paths, or private
-  infrastructure details to model metadata.
-- Run the model-registry tests after adding or changing a model record.
+## V2 contract
 
-## How to add a model
+Each `ModelRegistryRecord` includes:
 
-1. Add the record to `packages/model-registry/src/registry.ts`.
-2. Include source, license, backend, estimated download size, estimated RAM,
-   status, and compatibility metadata.
-3. Keep `verified: false` and `status: "experimental"` until the model has
-   been manually tested in the browser.
-4. Add `sha256` when the exact model artifact is known and stable.
-5. Run `pnpm --filter @free-ai-open/model-registry test`.
+- schema, registry, internal, and exact WebLLM identifiers;
+- verification status, date, and WebLLM version;
+- quantization and parameter class;
+- independently sourced download and runtime-memory estimates with confidence;
+- ordered compatibility, balanced, and performance context presets;
+- explicit `0`-`5` task, form-factor, and performance-mode suitability scores;
+- conservative English, French, and multilingual support levels;
+- minimum WebGPU feature/limit and fallback-adapter requirements;
+- known limitations;
+- upstream source, MLC artifact, WebLLM library, and license URLs;
+- ordered fallback model IDs.
+
+`modelRegistryV2Schema` rejects unknown fields, malformed metadata, duplicate internal or WebLLM IDs, missing fallback targets, and fallback cycles. Only records with `status: "verified"`, a verification date, and a matching WebLLM version are eligible for future automatic routing. Experimental, deprecated, and unavailable records remain excluded.
+
+## Verification and licensing
+
+The browser checks and their limits are recorded in [model-verification.md](model-verification.md). Model origins and licenses are recorded in [model-attributions.md](model-attributions.md). A successful smoke test is evidence for one browser/device class, not a guarantee for every browser, GPU, driver, language, or workload.
+
+## Adding or changing a model
+
+1. Confirm that the exact `webllmModelId`, model URL, model library URL, required features, and runtime-memory estimate exist in the installed WebLLM `prebuiltAppConfig`.
+2. Verify the upstream source and license. Do not infer a license from another model size in the same family.
+3. Record artifact size and runtime-memory estimates separately, with source and confidence.
+4. Score every task, form factor, performance mode, and language conservatively. Unknown support must remain `unknown`, limited, or low-scored rather than guessed.
+5. Keep the record experimental until browser loading, English completion, any claimed French behavior, Stop/recovery, and a post-recovery completion have been tested.
+6. Add or update the public verification matrix and attribution table.
+7. Run `pnpm --filter @free-ai-open/model-registry typecheck` and `pnpm --filter @free-ai-open/model-registry test`.
+
+Do not add a model solely because it exists upstream. Its exact WebLLM artifact, source, license, compatibility metadata, and browser behavior must be verified first.
+
+## Candidates not included
+
+- `SmolLM2-135M-Instruct-q0f32-MLC`: retained only as historical Phase 0 test context, not as the normal v2 compatibility choice; the verified 360M q4 variant is still compact and offers a more credible baseline.
+- `Qwen2.5-Coder-3B-Instruct` variants: excluded because the reviewed upstream 3B model uses the Qwen Research license rather than the Apache-2.0 license of the selected 1.5B variant.
+- Larger Qwen3 variants such as 8B: excluded from this small alpha registry because their download/runtime requirements were outside the practical verification scope.
+- Additional quantization variants of the same models: excluded to avoid a catalog of near-duplicates before the router and supported-device matrix can justify them.

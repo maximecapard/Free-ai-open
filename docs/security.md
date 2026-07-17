@@ -118,9 +118,9 @@ These events may include runtime status and technical error codes, but must not 
 - the profiler never calls `fetch`, `sendBeacon`, or any server endpoint — profiling stays entirely local and synchronous with the existing onboarding/`/debug` display paths;
 - an optional `measuredPerformance` input (tokens/sec, load/first-token time, recent failure count) is locally supplied only, never derived from remote data, and is not populated with real data by any current caller.
 
-## v0.7.0-alpha adaptive router contracts (Phase 0)
+## v0.7.0-alpha adaptive router inputs (Phases 0-1B)
 
-Contracts and local persistence shapes exist, and Phase 1A now implements the static capability detector. Benchmark and router logic remain future work. Recorded here so the eventual implementation phases inherit the right constraints from the start:
+Contracts and local persistence shapes exist, Phase 1A implements the static capability detector, and Phase 1B adds a strict verified model registry. Benchmark and router logic remain future work. Recorded here so the eventual implementation phases inherit the right constraints from the start:
 
 - Hard compatibility gates must run before any scoring (an unverified model, an unavailable backend, a missing required WebGPU feature/limit, clearly insufficient memory, a known incompatibility, or repeated recent OOM/device-loss failures excludes a model outright).
 - RAM alone must never determine model selection; exact VRAM must remain optional and never required.
@@ -131,6 +131,8 @@ Contracts and local persistence shapes exist, and Phase 1A now implements the st
 - `LocalBenchmarkResult`/`ModelPerformanceObservation` must stay technical-only (timings, status/outcome codes, confidence) — never prompt, response, or conversation content — matching the existing local-log/diagnostic-report allowlist discipline elsewhere in this document.
 - The three new local stores (`apps/web/app/_lib/capabilityProfileStore.ts`, `benchmarkResultStore.ts`, `modelObservationStore.ts`) must stay `fetch`/`sendBeacon`-free, matching every other local-only store in this codebase.
 - No new inter-package dependency edge was introduced while adding these contracts; `apps/web/app/_lib/packageDependencyBoundaries.test.ts` asserts `@free-ai-open/types` stays dependency-free and that `model-router`/`ai-runtime`/`model-registry`/`device-profiler` do not form a cycle, so a later phase that wires real logic gets an early test failure if it accidentally creates one.
+- Model Registry v2 rejects unknown fields, unsafe URL schemes, duplicate IDs, unknown fallbacks, cycles, and incomplete verification metadata. Only fully verified records may enter future automatic routing.
+- Registry production code is static and network-free. Its WebLLM dependency is test-only, used to compare exact model IDs, artifact URLs, model libraries, required features, and memory metadata against the installed prebuilt configuration; runtime WebLLM stays client-only.
 
 ## Runtime language instruction
 
