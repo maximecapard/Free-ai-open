@@ -26,6 +26,7 @@ import type {
   DiagnosticCapabilityProfile,
   DiagnosticError,
   DiagnosticLog,
+  DiagnosticLocalBenchmark,
   DiagnosticMetrics,
   DiagnosticReport,
   DiagnosticReportInput,
@@ -34,6 +35,31 @@ import type {
 
 const DEFAULT_MAX_ERRORS = 10;
 const DEFAULT_MAX_LOGS = 25;
+
+function sanitizeLocalBenchmark(value: unknown): DiagnosticLocalBenchmark | undefined {
+  if (!isRecord(value)) return undefined;
+  const benchmarkVersion = asShortTechnicalText(value.benchmarkVersion, 40);
+  const measuredAt = asIsoTimestamp(value.measuredAt);
+  const expiresAt = asIsoTimestamp(value.expiresAt);
+  const status = value.status === "completed" || value.status === "cancelled" || value.status === "failed" || value.status === "unsupported"
+    ? value.status
+    : undefined;
+  const stability = value.stability === "unknown" || value.stability === "stable" || value.stability === "degraded" || value.stability === "failed"
+    ? value.stability
+    : undefined;
+  const confidence = asCapabilityConfidence(value.confidence);
+  if (!benchmarkVersion || !measuredAt || !expiresAt || !status || !stability || !confidence) return undefined;
+
+  const result: DiagnosticLocalBenchmark = { benchmarkVersion, measuredAt, expiresAt, status, stability, confidence };
+  for (const key of ["webgpuInitMs", "computeScore", "medianComputeMs", "sampleCount", "mainThreadDelayMs", "durationMs"] as const) {
+    const numeric = asNonNegativeNumber(value[key]);
+    if (numeric !== undefined) result[key] = numeric;
+  }
+  if (value.timingMethod === "wall-clock" || value.timingMethod === "gpu-timestamp") result.timingMethod = value.timingMethod;
+  const errorCode = asErrorCode(value.errorCode);
+  if (errorCode) result.errorCode = errorCode as DiagnosticLocalBenchmark["errorCode"];
+  return result;
+}
 
 function hasKey(record: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(record, key);
@@ -267,6 +293,9 @@ export function buildDiagnosticReport(
 
   const capabilityProfile = sanitizeCapabilityProfile(capabilityProfileSource);
   if (capabilityProfile) report.capabilityProfile = capabilityProfile;
+
+  const localBenchmark = sanitizeLocalBenchmark(source.localBenchmark);
+  if (localBenchmark) report.localBenchmark = localBenchmark;
 
   if (hasKey(source, "contentLogged")) {
     report.contentLogged = false;

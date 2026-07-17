@@ -184,7 +184,7 @@ The home page's "Use the recommended setup" CTA also uses `apps/web/app/_lib/dev
 
 ## v0.7.0-alpha — Adaptive Router v1 phases
 
-**Status: Phase 0 contracts, Phase 1A Capability Profiler v2, and Phase 1B Model Registry v2 are implemented.** The local benchmark workload, adaptive router core, runtime model-selection integration, and router UI do not exist yet; the active v0.6 registry/router still power actual model recommendations today. The runtime now uses a fixed verified compact model, but it does not consume an adaptive router decision. See `docs/roadmap.md` for the remaining phases.
+**Status: Phase 0 contracts, Phase 1A Capability Profiler v2, Phase 1B Model Registry v2, and Phase 2 Local Benchmark v1 are implemented.** The adaptive router core, runtime model-selection integration, and router UI do not exist yet; the active v0.6 registry/router still power actual model recommendations today.
 
 ### Contract types and where they live
 
@@ -202,7 +202,7 @@ The fixed runtime default changed from the tiny Phase 0 test model to the verifi
 
 ### Persistence boundaries
 
-Three local, schema-versioned preference stores live in `apps/web/app/_lib/`, following the exact `gettingStartedPreference.ts` convention (window-guarded `localStorage`, try/catch, a pure `migrate*()` function that returns `null`/`[]` for anything that doesn't match the current schema version and shape rather than trusting it blindly): `capabilityProfileStore.ts`, `benchmarkResultStore.ts` (`getStoredLocalBenchmarkResult()` treats an expired result as absent, taking a caller-supplied clock for testability), and `modelObservationStore.ts` (append-only, capped at 200 entries with oldest dropped first, mirroring `conversation-store`'s own pruning). Phase 1A now writes `capabilityProfileStore.ts` with the coarse static capability profile; benchmark and model-observation writers remain future phases.
+Three local, schema-versioned preference stores live in `apps/web/app/_lib/`: `capabilityProfileStore.ts`, `benchmarkResultStore.ts`, and `modelObservationStore.ts`. Phase 2 writes strict allowlisted benchmark results and rejects stale, version-mismatched, profile-mismatched, or malformed records. Model-observation writers remain future work.
 
 Matching the mission's recommended boundaries:
 
@@ -211,9 +211,9 @@ Matching the mission's recommended boundaries:
 - **In diagnostics:** coarse capability categories, benchmark version/status/score, selected model ID, router reason codes, technical observations — never expanded beyond what `/debug` already shows for v0.6 fields.
 - **Never:** prompt, response, conversation, document content, a unique device fingerprint, or the hidden runtime-only language instruction.
 
-### Package boundary for a future local-benchmark package
+### Local benchmark package boundary
 
-The mission's recommended module split names a `local-benchmark` package ("safe local microbenchmark") alongside `device-profiler`, `model-registry`, `model-router`, and `ai-runtime`. No such package exists yet — `LocalBenchmarkResult`'s shape already lives in `@free-ai-open/types`, so Phase 2 can create `packages/local-benchmark` from scratch with real benchmark logic when it lands, without needing to first extract a type out of another package.
+`@free-ai-open/local-benchmark` depends only on `@free-ai-open/types`. It owns workload selection, deterministic WebGPU execution, scoring, stability classification, timeout/cancellation handling, and resource cleanup. `apps/web` owns Worker creation, local persistence, lifecycle logs, and UI. The package does not depend on or share a device with `ai-runtime`.
 
 ### Dependency graph verified for this phase
 

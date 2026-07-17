@@ -15,6 +15,7 @@
     "@free-ai-open/conversation-store": "workspace:*",
     "@free-ai-open/diagnostic-report": "workspace:*",
     "@free-ai-open/local-logs": "workspace:*",
+    "@free-ai-open/local-benchmark": "workspace:*",
     "@free-ai-open/model-registry": "workspace:*",
     "@free-ai-open/model-router": "workspace:*",
     "@free-ai-open/device-profiler": "workspace:*",

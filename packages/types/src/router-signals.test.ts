@@ -62,16 +62,19 @@ describe("StaticCapabilityProfile contract", () => {
 
 describe("LocalBenchmarkResult contract", () => {
   const example: LocalBenchmarkResult = {
-    schemaVersion: 1,
-    benchmarkVersion: "v1",
+    schemaVersion: 2,
+    benchmarkVersion: "1.0.0",
+    capabilityProfileKey: "desktop:performance:webgpu:native",
     measuredAt: "2026-07-17T10:00:00.000Z",
     expiresAt: "2026-07-24T10:00:00.000Z",
     status: "completed",
+    stage: "complete",
     webgpuInitMs: 42,
     computeScore: 0.8,
     mainThreadDelayMs: 3,
+    responsiveness: "responsive",
     stability: "stable",
-    confidence: "high",
+    confidence: "medium",
   };
 
   it("carries an expiry so a stale result can be treated as absent", () => {
@@ -80,11 +83,14 @@ describe("LocalBenchmarkResult contract", () => {
 
   it("accepts a failed/unsupported result without numeric fields", () => {
     const failed: LocalBenchmarkResult = {
-      schemaVersion: 1,
-      benchmarkVersion: "v1",
+      schemaVersion: 2,
+      benchmarkVersion: "1.0.0",
+      capabilityProfileKey: "desktop:compatibility:no-webgpu:native",
       measuredAt: "2026-07-17T10:00:00.000Z",
       expiresAt: "2026-07-24T10:00:00.000Z",
       status: "unsupported",
+      stage: "initialization",
+      responsiveness: "unknown",
       stability: "unknown",
       confidence: "low",
       errorCode: "webgpu_unavailable",

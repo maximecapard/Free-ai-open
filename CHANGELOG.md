@@ -47,9 +47,12 @@ Versions are alpha milestones while the MVP is still under active development.
 
 ## [0.7.0-alpha] - 2026-07-17 (adaptive router phases in progress)
 
-This release is being built in phases for the "Adaptive Model Router v1." Phase 0 defined types and package boundaries, Phase 1A added the static capability profiler, and Phase 1B adds a verified Model Registry v2. The local benchmark, adaptive router core, runtime model-selection integration, and router UI remain future phases — see `docs/roadmap.md`.
+This release is being built in phases for the "Adaptive Model Router v1." Phase 0 defined types and package boundaries, Phase 1A added the static capability profiler, Phase 1B added a verified Model Registry v2, and Phase 2 adds the local capability benchmark. The adaptive router core, runtime model-selection integration, and router UI remain future phases — see `docs/roadmap.md`.
 
 ### Added
+
+- Added `@free-ai-open/local-benchmark`, a bounded deterministic WebGPU compute check that runs in a dedicated browser Worker, uses reduced mobile/tablet workloads, validates output, records median wall-clock samples, enforces a hard timeout, and always releases GPU buffers/device resources.
+- Added local benchmark caching with schema/version/profile/expiry invalidation, a first-setup run with cancellation, a Settings rerun action, privacy-safe technical lifecycle logs, and allowlisted benchmark fields in diagnostic reports.
 
 - Added the v0.7.0-alpha router-input contract types in `@free-ai-open/types`: `CapabilityConfidence`, `StaticCapabilityProfile` (static device/GPU capability signals), `LocalBenchmarkResult` (short local microbenchmark outcome), and `ModelPerformanceObservation` (a single observed model load/generation outcome). `StaticCapabilityProfile` is now produced by Capability Profiler v2; benchmark and model-observation records remain future phases.
 - Added `RouterInput`/`RouterDecision` in `@free-ai-open/model-router` (`adaptiveRouterContracts.ts`): the future adaptive router's input (task, locale, performance mode, capability, optional benchmark, observation history, cached/manual model IDs) and output (selected/fallback model IDs, confidence, human-readable reasons/warnings, recommended context/output token budgets, a decision version). Coexists with, and does not change, the active v0.6 `ModelRouterInput`/`ModelRouterResult`/`selectRecommendedModel()`.
@@ -68,6 +71,8 @@ This release is being built in phases for the "Adaptive Model Router v1." Phase 
 - Replaced the fixed tiny Phase 0 test-model default with the verified compact `SmolLM2-360M-Instruct-q4f32_1-MLC` WebLLM variant. Runtime selection is still fixed; this does not implement adaptive routing or silent model downloads.
 
 ### Security and Privacy
+
+- Local benchmark results contain only technical timings, a bounded score, coarse status/stability/confidence, and an internal coarse capability-profile key. They contain no raw GPU identifier or user content and are never transmitted.
 
 - `StaticCapabilityProfile`'s `gpu` fields are coarse classes and bounded feature/limit maps only; the contract has no field for a raw GPU adapter string, and a test documents that intent. Raw adapter strings and exact high-entropy limit maps may be read ephemerally to derive coarse classes but must never be persisted — see "Persistence boundaries" in `docs/architecture.md`.
 - `LocalBenchmarkResult` and `ModelPerformanceObservation` never include prompt, response, or conversation content — only technical timings, status/outcome codes, and confidence. Neither type nor its local store calls `fetch`, `sendBeacon`, or any server endpoint.

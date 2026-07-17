@@ -6,6 +6,8 @@ import { DEFAULT_MODEL_ID } from "@free-ai-open/ai-runtime";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import type { PerformanceMode } from "@free-ai-open/types";
 import { DeviceCapabilitySummary } from "../_components/DeviceCapabilitySummary";
+import { LocalBenchmarkPanel } from "../_components/LocalBenchmarkPanel";
+import { clearStoredLocalBenchmarkResult } from "../_lib/benchmarkResultStore";
 import { performanceModes } from "../_lib/catalog";
 import { detectAndStoreDeviceProfile } from "../_lib/deviceProfileDetection";
 import { resetGettingStarted } from "../_lib/gettingStartedPreference";
@@ -60,6 +62,7 @@ export default function SettingsPage() {
   }
 
   function handleResetGettingStarted() {
+    clearStoredLocalBenchmarkResult();
     resetGettingStarted();
     router.push("/onboarding");
   }
@@ -145,6 +148,15 @@ export default function SettingsPage() {
           {t("settings.recheckDevice")}
         </button>
       </section>
+
+      {profile?.staticCapabilityProfile && (
+        <section className="fo-card" style={{ padding: 20, marginBottom: 16 }}>
+          <LocalBenchmarkPanel
+            profile={profile.staticCapabilityProfile}
+            disabled={isPerformanceModeChangeBlockedStatus(runtimeState.status)}
+          />
+        </section>
+      )}
 
       <section className="fo-card" style={{ padding: 20, marginBottom: 16 }}>
         <h2 style={{ fontSize: 18, margin: "0 0 4px" }}>{t("settings.resetHeading")}</h2>

@@ -26,7 +26,7 @@ function hasPath(from: string, to: string, packages: string[], visited = new Set
   return false;
 }
 
-const V0_7_RELEVANT_PACKAGES = ["types", "device-profiler", "model-registry", "model-router", "ai-runtime"];
+const V0_7_RELEVANT_PACKAGES = ["types", "device-profiler", "local-benchmark", "model-registry", "model-router", "ai-runtime"];
 
 describe("v0.7 router/runtime/registry package boundaries", () => {
   it("keeps @free-ai-open/types a zero-workspace-dependency leaf, since router/runtime/registry/profiler all share it", () => {

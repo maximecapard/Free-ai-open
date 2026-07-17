@@ -8,6 +8,7 @@ import type {
   CapabilityConfidence,
   DeviceTier,
   FormFactor,
+  LocalBenchmarkResult,
   PerformanceMode,
   TaskCategory,
 } from "@free-ai-open/types";
@@ -28,6 +29,23 @@ export interface DiagnosticMetrics {
   firstTokenTimeMs?: number | null;
   tokensPerSecond?: number;
   generationDurationMs?: number;
+}
+
+export interface DiagnosticLocalBenchmark {
+  benchmarkVersion: string;
+  measuredAt: string;
+  expiresAt: string;
+  status: LocalBenchmarkResult["status"];
+  webgpuInitMs?: number;
+  computeScore?: number;
+  medianComputeMs?: number;
+  sampleCount?: number;
+  mainThreadDelayMs?: number;
+  durationMs?: number;
+  timingMethod?: LocalBenchmarkResult["timingMethod"];
+  stability: LocalBenchmarkResult["stability"];
+  confidence: LocalBenchmarkResult["confidence"];
+  errorCode?: LocalBenchmarkResult["errorCode"];
 }
 
 export interface DiagnosticBrowserInfo {
@@ -101,6 +119,7 @@ export interface DiagnosticReportInput {
   browserInfo?: DiagnosticBrowserInfo;
   deviceProfile?: DeviceProfile;
   capabilityProfile?: StaticCapabilityProfile;
+  localBenchmark?: LocalBenchmarkResult;
   routerResult?: Pick<ModelRouterResult, "selectedModel" | "fallbackModel"> | null;
 }
 
@@ -122,6 +141,7 @@ export interface DiagnosticReport {
   metrics?: DiagnosticMetrics;
   browserInfo?: DiagnosticBrowserInfo;
   capabilityProfile?: DiagnosticCapabilityProfile;
+  localBenchmark?: DiagnosticLocalBenchmark;
 }
 
 export interface DiagnosticReportOptions {
