@@ -1,8 +1,14 @@
 "use client";
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { useTranslations } from "../_i18n/LocaleContext";
-import { isNearPageBottom } from "../_lib/chatAutoscroll";
+import {
+  getElementScrollMetrics,
+  isNearPageBottom,
+  isNearScrollEnd,
+  isScrollableOverflow,
+} from "../_lib/chatAutoscroll";
 
 export interface ChatMessageItem {
   id: string;
@@ -10,7 +16,12 @@ export interface ChatMessageItem {
   content: string;
 }
 
-export const ChatTranscript = memo(function ChatTranscript({ messages }: { messages: ChatMessageItem[] }) {
+interface ChatTranscriptProps {
+  messages: ChatMessageItem[];
+  scrollContainerRef?: RefObject<HTMLElement | null>;
+}
+
+export const ChatTranscript = memo(function ChatTranscript({ messages, scrollContainerRef }: ChatTranscriptProps) {
   const t = useTranslations();
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollFrameRef = useRef<number | null>(null);
@@ -31,29 +42,43 @@ export const ChatTranscript = memo(function ChatTranscript({ messages }: { messa
     });
   }, []);
 
+  const getActiveScrollContainer = useCallback(() => {
+    if (typeof window === "undefined") return null;
+    const element = scrollContainerRef?.current ?? null;
+    if (!element) return null;
+
+    return isScrollableOverflow(window.getComputedStyle(element).overflowY) ? element : null;
+  }, [scrollContainerRef]);
+
   const syncFollowState = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    const isFollowing = isNearPageBottom(window);
+    const scrollContainer = getActiveScrollContainer();
+    const isFollowing = scrollContainer
+      ? isNearScrollEnd(getElementScrollMetrics(scrollContainer))
+      : isNearPageBottom(window);
     shouldFollowLatestRef.current = isFollowing;
     setShowScrollToLatest(!isFollowing);
-  }, []);
+  }, [getActiveScrollContainer]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
+    const scrollContainer = scrollContainerRef?.current ?? null;
     syncFollowState();
     window.addEventListener("scroll", syncFollowState, { passive: true });
     window.addEventListener("resize", syncFollowState);
+    scrollContainer?.addEventListener("scroll", syncFollowState, { passive: true });
 
     return () => {
       window.removeEventListener("scroll", syncFollowState);
       window.removeEventListener("resize", syncFollowState);
+      scrollContainer?.removeEventListener("scroll", syncFollowState);
       if (scrollFrameRef.current !== null) {
         window.cancelAnimationFrame(scrollFrameRef.current);
       }
     };
-  }, [syncFollowState]);
+  }, [scrollContainerRef, syncFollowState]);
 
   useEffect(() => {
     if (messages.length === 0) {

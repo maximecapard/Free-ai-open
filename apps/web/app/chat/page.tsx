@@ -77,6 +77,7 @@ function ChatContent() {
   const [importSummary, setImportSummary] = useState<ConversationImportSummary | null>(null);
   const [isNewChatDialogOpen, setIsNewChatDialogOpen] = useState(false);
   const lastFocusedBeforeDialogRef = useRef<HTMLElement | null>(null);
+  const transcriptScrollRef = useRef<HTMLDivElement | null>(null);
 
   // First-run setup owns only global performance mode. New chat asks only for
   // usage/task, so arriving at /chat before setup must redirect once.
@@ -374,9 +375,9 @@ function ChatContent() {
           )}
         </div>
 
-        <div className="chat-main__scroll">
+        <div ref={transcriptScrollRef} className="chat-main__scroll">
           <section className="fo-card" style={{ padding: 16, minHeight: 320 }}>
-            <ChatTranscript messages={messages} />
+            <ChatTranscript messages={messages} scrollContainerRef={transcriptScrollRef} />
           </section>
         </div>
 

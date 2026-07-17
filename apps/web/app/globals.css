@@ -944,9 +944,25 @@ samp {
    normal document flow entirely unchanged: every rule below sits behind the
    same 720px desktop breakpoint used everywhere else in the app. */
 @media (min-width: 721px) {
+  .app-shell:has(.chat-shell) {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .app-shell__content:has(.chat-shell) {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .app-shell__main:has(> .chat-shell) {
+    min-height: 0;
+    overflow: hidden;
+  }
+
   .chat-shell {
     display: flex;
-    height: 100dvh;
+    height: 100%;
     min-height: 0;
   }
 

@@ -31,3 +31,15 @@ export function getPageScrollMetrics(windowObject: Window): ScrollEndMetrics {
 export function isNearPageBottom(windowObject: Window): boolean {
   return isNearScrollEnd(getPageScrollMetrics(windowObject));
 }
+
+export function getElementScrollMetrics(element: HTMLElement): ScrollEndMetrics {
+  return {
+    scrollTop: element.scrollTop,
+    viewportHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  };
+}
+
+export function isScrollableOverflow(overflowY: string): boolean {
+  return overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay";
+}
