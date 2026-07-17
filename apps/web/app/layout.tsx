@@ -2,9 +2,11 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Header } from "./_components/Header";
 import { Footer } from "./_components/Footer";
+import { GlobalRuntimeStatus } from "./_components/GlobalRuntimeStatus";
 import { LocaleProvider } from "./_i18n/LocaleContext";
 import { ThemeProvider } from "./_theme/ThemeContext";
 import { THEME_INIT_SCRIPT } from "./_lib/themePreference";
+import { AppRuntimeProvider } from "./_runtime/AppRuntimeProvider";
 
 export const metadata: Metadata = {
   title: "FreeAI Open",
@@ -37,13 +39,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <ThemeProvider>
           <LocaleProvider>
-            <div className="app-shell">
-              <Header />
-              <div className="app-shell__content">
-                <div className="app-shell__main">{children}</div>
-                <Footer />
+            <AppRuntimeProvider>
+              <div className="app-shell">
+                <Header />
+                <div className="app-shell__content">
+                  <GlobalRuntimeStatus />
+                  <div className="app-shell__main">{children}</div>
+                  <Footer />
+                </div>
               </div>
-            </div>
+            </AppRuntimeProvider>
           </LocaleProvider>
         </ThemeProvider>
       </body>

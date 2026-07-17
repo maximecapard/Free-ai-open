@@ -601,6 +601,38 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - v0.7: use the refined device tier/`formFactor` in `model-router` to prefer specific models per task/device, as already described in `docs/roadmap.md` — intentionally out of scope for this sprint.
 - Any further v0.6.6-alpha parts, if the mission is extended.
 
+## Sprint 6.12 - v0.6.6-alpha part 2: persistent runtime ownership
+
+### Built
+
+- Moved WebLLM runtime ownership out of `apps/web/app/chat/page.tsx` and into `apps/web/app/_runtime/AppRuntimeProvider.tsx`, mounted from the root application layout above normal route boundaries. Entering `/chat` still triggers the first model load, but once the worker/runtime exists it survives internal navigation to Settings, Debug, Home, and back.
+- Added `apps/web/app/_runtime/persistentRuntimeLifecycle.ts`, a small lifecycle controller around the existing `terminateWorkerAfter()` helper. It reuses one runtime instance while the provider stays mounted, treats route-view unmounts and hidden tabs as no-ops, and disposes only for app-root teardown, explicit reload, recovery, or a future performance/model replacement.
+- Moved active generation orchestration into the provider. Each generation now has a `generationId`, conversation ID, and assistant message ID; chunks are applied only when those identifiers still match the active generation. This preserves streamed output while `/chat` is absent and prevents late chunks from an abandoned generation from overwriting newer conversation state.
+- Kept conversation content persistence in `@free-ai-open/conversation-store`. The provider holds the current in-memory transcript UI state and persists the final assistant response only after the existing generation-persistence rules allow it; stopped, timed-out, failed, or unstable partial assistant output is still removed and not saved as a completed reply.
+- Added `apps/web/app/_components/GlobalRuntimeStatus.tsx`, a restrained root-level status strip for useful cross-route runtime states: model loading, generating outside Chat, recovery, and errors. When a response continues outside `/chat`, the strip offers a translated "Return to conversation" action.
+- Reworked `/settings` performance-mode save to call the runtime provider. While a generation, cancellation, or recovery is active, the save action is disabled and no preference write occurs. All modes still use the same placeholder model, so a valid change persists the preference without replacing the runtime; the policy already has an explicit replacement path for the future model-selection integration.
+- Kept browser tab visibility out of runtime disposal. A hidden/background tab may be throttled by the browser or mobile OS, but the app does not intentionally cancel generation or unload the model only because visibility changed.
+
+### Privacy and architecture notes
+
+- The previous disposal root cause was the chat route owning `runtimeRef`, `workerRef`, generation refs, and a runtime lifecycle effect whose cleanup called teardown when `/chat` unmounted. The new root provider owns those resources for the lifetime of the application shell instead.
+- Provider state may include technical runtime state, current conversation/generation identifiers, model/backend metadata, and in-memory streamed UI text. It does not write prompts, responses, document content, or conversation messages to local technical logs, diagnostic reports, telemetry, server storage, Supabase, or any network path.
+- No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, new server endpoint, server-side WebLLM path, or full v0.7 model-router behavior was added.
+- Performance preference persistence remains local-only. Changing the saved preference does not erase conversations, and the current placeholder-model runtime is not replaced unless a future policy says the model/backend actually changed.
+
+### Tests
+
+- Added `runtimeLifecyclePolicy.test.ts` for disposal triggers, including explicit coverage that route-view unmount and hidden-tab visibility are not disposal reasons.
+- Added `persistentRuntimeLifecycle.test.ts` for single-instance ownership, route unmount no-op, hidden-tab no-op, explicit reload worker termination, and application-root teardown cleanup.
+- Added `persistentGenerationState.test.ts` for active generation matching, stale chunk rejection, conversation/generation identity checks, and removal of abandoned assistant placeholders.
+- Added `performanceModeRuntimePolicy.test.ts` for active-generation blocking, the current no-replacement placeholder-model behavior, future replacement decisions, and no-op same-mode saves.
+
+### Known limitations after Sprint 6.12
+
+- The app still has no browser-level E2E/rendering framework. The new persistent runtime behavior is covered by unit-level lifecycle/policy tests plus manual release-checklist checks for Chat -> Settings -> Chat, Chat -> Debug -> Chat, background tab behavior, Stop/recovery, and safe performance-mode changes.
+- Background execution is not guaranteed by FreeAI Open. Browsers and mobile operating systems may throttle or suspend background tabs, so generation can slow or pause even though the app does not intentionally unload the model.
+- The v0.7 router/model replacement path remains future work; this branch still runs the same placeholder WebLLM model for every performance mode and task recommendation.
+
 ## Cross-cutting remaining work
 
 - Expand and validate the model registry before adding more model records.

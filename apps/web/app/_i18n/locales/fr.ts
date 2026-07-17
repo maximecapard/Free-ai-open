@@ -64,6 +64,8 @@ export const fr: Dictionary = {
     performanceHint: "Ce changement peut recharger le modèle local la prochaine fois que vous ouvrez le Chat. Il n'interrompra pas une réponse en cours de rédaction.",
     performanceSave: "Enregistrer le mode de performance",
     performanceSaved: "Enregistré.",
+    performanceBlockedWhileGenerating:
+      "Attendez la fin de la réponse en cours, ou arrêtez-la, avant de changer le mode de performance.",
     languageHeading: "Langue",
     themeHeading: "Thème",
     deviceHeading: "Cet appareil",
@@ -235,6 +237,16 @@ export const fr: Dictionary = {
     cancelling: "Arrêt en cours",
     recovering: "Nouvelle préparation du modèle",
     error: "Un problème est survenu",
+  },
+  globalRuntime: {
+    loading: "Préparation du modèle local ({progress} %)",
+    generating: "Rédaction d'une réponse",
+    cancelling: "Arrêt de la réponse",
+    recovering: "Nouvelle préparation du modèle",
+    error: "Le modèle local demande votre attention",
+    idle: "Modèle local non démarré",
+    ready: "Modèle local prêt",
+    returnToConversation: "Retour à la conversation",
   },
   runtimeError: {
     webgpu_unavailable:

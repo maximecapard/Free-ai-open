@@ -80,6 +80,21 @@ When these safeguards fire, partial assistant output is not stored as a complete
 
 The chat transcript renderer may batch generated text briefly in memory before updating React state. This is a UI-only performance buffer, not a logging or diagnostic path, and must not be connected to telemetry, local technical logs, diagnostic reports, or server endpoints.
 
+## Persistent runtime ownership
+
+The WebLLM worker/runtime is owned by a root-level client provider, not by the `/chat` route component. This prevents route-view unmount from becoming a security-sensitive implicit teardown path: navigating to Settings or Debug must not cancel generation, unload the model, or terminate the worker by itself.
+
+Allowed runtime disposal/replacement triggers are:
+
+- application-root teardown;
+- explicit Reload model;
+- recovery after a stuck/interrupted worker;
+- a validated future performance/model transition that actually requires replacement.
+
+Route-view unmount and hidden-tab visibility changes are not disposal triggers. Browsers may throttle hidden tabs, but the app must not intentionally unload the model only because visibility changed.
+
+Provider state may include runtime status, model/backend metadata, current conversation ID, current generation ID, and in-memory transcript UI state. None of that may be connected to local technical logs, diagnostic reports, telemetry, server storage, Supabase, Google Drive, or other network paths in a way that exposes prompt, response, document, or conversation content.
+
 ## Cancellation recovery
 
 After a Stop request, the interrupted runtime must not be trusted as ready for the next generation merely because the stream returned an abort confirmation. The app now treats the old worker as unsafe after cancellation, enters `recovering`, tears down the old worker using bounded termination, creates a replacement runtime, and returns to `ready` only after the model reload succeeds.

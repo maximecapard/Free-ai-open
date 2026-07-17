@@ -607,6 +607,39 @@ samp {
   flex: 1;
 }
 
+.global-runtime-status {
+  display: flex;
+  align-items: center;
+  gap: var(--fo-space-2);
+  min-height: 36px;
+  padding: 8px var(--fo-space-6);
+  border-bottom: 1px solid var(--fo-border-subtle);
+  background: color-mix(in srgb, var(--fo-surface) 82%, transparent);
+  color: var(--fo-text-muted);
+  font-size: 13px;
+}
+
+.global-runtime-status .fo-status-dot {
+  background: var(--fo-accent);
+}
+
+.global-runtime-status--loading_model .fo-status-dot,
+.global-runtime-status--recovering .fo-status-dot,
+.global-runtime-status--cancelling .fo-status-dot {
+  background: var(--fo-warning);
+}
+
+.global-runtime-status--error .fo-status-dot {
+  background: var(--fo-danger);
+}
+
+.global-runtime-status__action {
+  margin-left: auto;
+  color: var(--fo-accent-text);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
 .app-shell__topbar,
 .app-shell__topbar-menu {
   display: none;
@@ -768,6 +801,15 @@ samp {
 
   .app-shell__content {
     padding-top: calc(var(--fo-topbar-height) + env(safe-area-inset-top, 0px));
+  }
+
+  .global-runtime-status {
+    padding: 8px 16px;
+    flex-wrap: wrap;
+  }
+
+  .global-runtime-status__action {
+    margin-left: 0;
   }
 
   .chat-layout {

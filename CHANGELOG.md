@@ -45,7 +45,7 @@ Versions are alpha milestones while the MVP is still under active development.
 - Export/import has no browser end-to-end coverage yet (verified manually); encrypted export is not implemented.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
 
-## [0.6.6-alpha] - 2026-07-16 (part 1)
+## [0.6.6-alpha] - 2026-07-16
 
 ### Added
 
@@ -55,27 +55,39 @@ Versions are alpha milestones while the MVP is still under active development.
 - Added an optional `task` field to `@free-ai-open/conversation-store`'s `Conversation`/`ConversationMetadata` and to `@free-ai-open/conversation-export`'s export/import schema (still format `freeai-open-conversations` version `1`). Older conversations and older export files without a `task` field remain fully valid; the app defaults a missing/invalid task to general chat behavior rather than losing the conversation.
 - Redesigned `/settings` into a real settings page: change the performance mode (with plain-language explanation and an explicit "Save" step, so a change is never applied silently and can't interrupt a reply that's currently generating), change language and theme, re-check this device, and reset Getting Started — with device profile, exact mode value, and the local model ID available behind an "Advanced technical details" disclosure.
 - Added a dedicated desktop chat workspace layout (`apps/web/app/chat/layout.tsx` plus new `.chat-shell`/`.chat-main__*` rules in `globals.css`, scoped to `/chat` only): on desktop, the workspace fills the viewport height, the conversation sidebar and the message transcript scroll independently, and the composer stays anchored at the bottom, so switching conversations or scrolling history never moves the page back to the top. Mobile keeps the existing off-canvas drawer and normal page scrolling unchanged.
+- Added a stable application-level client runtime provider mounted from the root layout. The WebLLM worker/runtime is now owned above route boundaries instead of by `/chat`, so an already-loaded local model is retained while navigating between Chat, Settings, and Debug.
+- Added a persistent generation coordinator in the same provider. Active generation state now carries a `generationId`, conversation ID, and assistant message ID so streamed chunks remain associated with the correct conversation while `/chat` is unmounted, and stale chunks cannot overwrite newer conversation state.
+- Added a small global runtime status strip for useful cross-route states: model loading, generation outside Chat, recovery, and errors needing attention. When a response is being generated away from `/chat`, it offers a translated "Return to conversation" action.
+- Added explicit runtime lifecycle and settings policies covering root teardown, route-view unmount, visibility changes, explicit reload, recovery, and performance-mode changes.
 
 ### Fixed
 
 - Fixed a light-mode contrast bug where the desktop navigation rail's selected language/theme control could show white text on a very light teal background (unreadable for labels like "FR" and "Système"). The rail now forces its semantic color tokens to dark-surface values (the same technique already used by `.fo-ink-surface`), so the selected state always resolves to accessible text regardless of the site's light/dark theme, and stays visible through background, border, and bold text rather than color alone.
+- Fixed internal navigation cancelling the local runtime: leaving `/chat` no longer calls runtime disposal, no longer terminates/unloads the worker/model, and no longer cancels an active generation solely because the route component unmounted.
+- Fixed Settings performance changes so they go through the runtime provider. A mode change is blocked while a generation, cancellation, or recovery is active, and this alpha persists the new preference without replacing the runtime because all modes still use the same placeholder model.
+- Fixed the previous root cause where `ChatPage` owned `runtimeRef`, `workerRef`, generation refs, and an effect cleanup that disposed the runtime whenever the chat route unmounted.
 
 ### Changed
 
 - The home page now gates on Getting Started: if it isn't completed, the user is sent straight to `/onboarding` instead of being offered a "skip setup" shortcut. Once complete, home shows a single "Open chat" action plus the existing device-capability summary and privacy notice.
 - `/onboarding` no longer includes a separate task-selection step (`/onboarding/task` is removed); it now only detects the device and confirms a performance mode, then hands off to per-conversation task selection in `/chat`.
-- `/chat` no longer reads `task`/`mode` from the URL. The performance mode now comes from the Getting-Started preference store, and the active conversation's task comes from its own stored metadata (defaulting to general chat). The model-router recommendation panel updates automatically when the active conversation's task or the performance mode changes; the WebLLM worker/runtime lifecycle is unaffected by either, since this alpha always loads the same placeholder model regardless of the routing recommendation.
+- `/chat` primarily reads performance mode from the Getting-Started preference store and task from the active conversation's stored metadata (defaulting missing/invalid values to general chat). The provider keeps a legacy query-parameter bridge for older `/chat?task=...&mode=...` links, but new app flows no longer depend on it. The model-router recommendation panel updates automatically when the active conversation's task or the performance mode changes; the WebLLM worker/runtime lifecycle is unaffected by either, since this alpha always loads the same placeholder model regardless of the routing recommendation.
 
 ### Security and Privacy
 
 - The new Getting Started preference store is a single `localStorage` key holding only a completion flag, the chosen performance mode, and coarse, already-reviewed device-profile fields (tier, WebGPU availability, form factor) — never raw sensor values, never sent to a server.
 - The per-conversation `task` field is a short catalog label (e.g. "coding", "writing"), never prompt or response content; it is included in local exports the same way the title already is, and is rejected by import validation if it isn't a bounded string.
-- No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, new server endpoint, or server-side WebLLM path was added. No model-router selection logic, WebLLM runtime behavior, telemetry, or diagnostics changed.
+- The provider may hold technical runtime state, current conversation/generation IDs, and in-memory streamed UI state, but it does not write prompts, responses, message content, or documents to technical logs, diagnostic reports, telemetry, server storage, Supabase, or any network path.
+- Browser tab visibility is not treated as a disposal trigger. Background tabs may still be throttled by the browser or mobile OS, but FreeAI Open does not intentionally cancel or unload the local model solely because the tab becomes hidden.
+- No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, new server endpoint, server-side WebLLM path, or full v0.7 model-router change was added.
 
 ### Tests
 
 - Added tests for the Getting Started preference store (completion, mode persistence, device snapshot, schema-version guard, reset), the New Chat task catalog (excludes document analysis, mirrors the shared `TaskCategory` list), conversation-task migration defaults, conversation-store/export round-tripping and backward compatibility for the new `task` field, the rail's forced-dark contrast tokens, and the desktop chat workspace's CSS layout structure (fixed height, independent scroll regions, anchored composer, route-scoped footer hiding).
-
+- Added tests for runtime lifecycle policy (route-view unmount and hidden tab are non-disposal triggers; root teardown/reload/recovery/replacement are disposal triggers).
+- Added tests for persistent runtime lifecycle ownership: one runtime instance is reused while the app provider stays mounted, route unmount does not dispose or terminate the worker, explicit reload terminates the old worker safely, and root teardown cleans up.
+- Added tests for generation identity guards and stale chunk rejection.
+- Added tests for safe performance-mode change decisions, including active-generation blocking and the current no-replacement placeholder-model behavior.
 ## [0.6.5-alpha] - 2026-07-16
 
 ### Added
