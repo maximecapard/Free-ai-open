@@ -14,5 +14,14 @@ export type {
   RouteModelInput,
   RouteModelResult,
 } from "./types";
-// v0.7.0-alpha contracts only — not yet wired to an implementation.
-export type { RouterDecision, RouterInput } from "./adaptiveRouterContracts";
+export { ADAPTIVE_ROUTER_DECISION_VERSION, routeAdaptiveModel } from "./adaptiveRouter";
+export type { AdaptiveRouterOptions } from "./adaptiveRouter";
+export type {
+  RouterDecision,
+  RouterInput,
+  RouterReasonCode,
+  RouterRejectedModel,
+  RouterRejectionCode,
+  RouterScoreBreakdown,
+  RouterWarningCode,
+} from "./adaptiveRouterContracts";

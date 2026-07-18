@@ -101,16 +101,16 @@ When WebGPU exposes adapter information, FreeAI Open may read raw adapter string
 
 The iPadOS desktop-style heuristic uses local browser signals only to choose the coarse `tablet` bucket when a `Macintosh`/`Mac OS` user agent is paired with multitouch support; the raw signals are not exposed. Browser-reported memory heaps are non-standard and low confidence; they are bucketed and can never alone promote a device to a performance recommendation. An optional, locally-supplied measured-performance value (tokens per second, load time, first-token time, recent failure count) can adjust the tier, but real benchmark/observation wiring is still future work.
 
-## v0.7.0-alpha adaptive router inputs (Phases 0-1B)
+## v0.7.0-alpha adaptive router inputs and pure decision core (Phases 0-3)
 
-Phase 0 defined local storage shapes. Phase 1A populates the static capability profile, Phase 1B adds static public model metadata, and Phase 2 populates the local benchmark result. Model-observation records remain future behavior.
+Phase 0 defined local storage shapes. Phase 1A populates the static capability profile, Phase 1B adds static public model metadata, Phase 2 populates the local benchmark result, and Phase 3 consumes these technical signals in a pure local decision function. Model-observation writers and runtime decision integration remain future behavior.
 
 - **Static capability profile:** a device's coarse, non-benchmarked capability signals (form factor, architecture class, approximate memory, WebGPU/WASM availability, and coarse GPU classes). Raw GPU adapter strings and exact high-entropy limit maps may be read momentarily by the profiler to derive these coarse classes, but must never be written to local storage, logs, diagnostics, or sent anywhere.
 - **Local benchmark result:** the outcome of a short, local, privacy-safe WebGPU microbenchmark (technical timings, bounded compute score, responsiveness bucket, stability, confidence, and technical error code). It is stored locally for up to seven days and invalidated when its schema, benchmark version, expiry, or coarse capability-profile key changes. It is never transmitted and contains no raw adapter/device identifier.
 - **Model performance observations:** technical timings and an outcome code (e.g. completed, stalled, out of memory) from a real local model load/generation attempt — never the prompt or response involved. Kept as a capped local history (200 most recent) so future routing can weigh real observed behavior alongside static signals.
 - **Model registry records:** public technical metadata such as exact WebLLM model ID, source/license URLs, coarse suitability scores, estimates, requirements, and known issues. Registry code does not collect user/device data, persist a profile, log content, or perform a network request.
 
-None of the local input records are conversation content, and none may ever be sent to a server, Supabase, or Google Drive. Registry metadata is committed public data rather than user data. A future router decision (also not implemented yet) will only ever include coarse categories, a benchmark status/score bucket, the selected model ID, and reason codes in any diagnostic export — never conversation content or raw hardware identifiers.
+None of the local input records are conversation content, and none may ever be sent to a server, Supabase, or Google Drive. Registry metadata is committed public data rather than user data. The pure Phase 3 decision contains only model IDs, bounded technical scores, token budgets, confidence, and stable reason/warning/rejection codes. It is not logged, exported in diagnostics, or applied by the runtime yet. Any future diagnostic integration must remain allowlisted and exclude conversation content and raw hardware identifiers.
 
 ## Cancellation recovery
 

@@ -753,6 +753,26 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - Backgrounding the page cancels the run rather than trusting a throttled result. GPU timestamp queries are not used in v1.
 - The result does not choose or download a model. Adaptive scoring and real model performance observations remain later phases.
 
+## Sprint 6.17 - v0.7.0-alpha Phase 3: Adaptive Router Core
+
+### Built
+
+- Implemented pure `routeAdaptiveModel()` orchestration without changing the active v0.6 application path.
+- Split normalization, recent observation aggregation, hard eligibility, scoring, fallback construction, and orchestration into focused modules.
+- Added strict registry validation, defensive technical-input normalization, 30-day observation expiry, repeated OOM/device-loss exclusion, cancellation-neutral observation handling, bounded cache influence, French/English/task/mode suitability, eligible manual selection, conservative token presets, stable reason/warning/rejection codes, and technical score breakdowns.
+- Fallbacks follow validated registry metadata, skip ineligible intermediates, become progressively no heavier, avoid cycles, and stop after a bounded number of attempts.
+
+### Tests
+
+- Added a 29-scenario adaptive-router suite (46 model-router tests total) covering mobile/desktop parity, weak/strong devices, French writing, English coding, unknown/WASM/fallback-adapter environments, benchmark states, cache/download effects, recent and stale observations, cancellation neutrality, repeated OOM/device loss, manual selection, token presets, hard feature/limit/memory gates, unsupported capability schemas, fallback order, invalid registries, deterministic output, malformed runtime values, and private-field exclusion.
+
+### Known limitations after Phase 3
+
+- `AppRuntimeProvider` still uses the active v0.6 recommendation path and fixed compatibility WebLLM model. No adaptive decision is loaded or downloaded yet.
+- `ai-runtime` does not yet record real `ModelPerformanceObservation` entries; the core can consume them once Phase 4 supplies them.
+- Known fatal incompatibilities are gated only where Registry v2 has structured fields. Free-text `knownIssues` are documentation and are deliberately not parsed as executable policy.
+- Reason codes are ready for translation, but no Phase 5 recommendation/manual-selection UI exists yet.
+
 ## Cross-cutting remaining work
 
 - Re-verify and expand Model Registry v2 only when an exact artifact, source, license, and supported-device case can be substantiated.
