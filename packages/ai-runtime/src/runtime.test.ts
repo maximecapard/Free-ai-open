@@ -152,6 +152,38 @@ describe("createInferenceRuntime", () => {
     );
   });
 
+  it("tightens the token limit when a smaller router-recommended budget is supplied", async () => {
+    mocks.mockEngine.chat.completions.create.mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: "Hello" }, finish_reason: "stop" }] };
+      })()
+    );
+
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    await drain(runtime.generate({ conversationId: "c1", prompt: "hi", maxOutputTokens: 256 }));
+
+    expect(mocks.mockEngine.chat.completions.create).toHaveBeenCalledWith(
+      expect.objectContaining({ max_tokens: 256 })
+    );
+  });
+
+  it("never lets a router-recommended budget exceed the alpha safety cap", async () => {
+    mocks.mockEngine.chat.completions.create.mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: "Hello" }, finish_reason: "stop" }] };
+      })()
+    );
+
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    await drain(runtime.generate({ conversationId: "c1", prompt: "hi", maxOutputTokens: GENERATION_SAFETY_LIMITS.maxTokens + 5_000 }));
+
+    expect(mocks.mockEngine.chat.completions.create).toHaveBeenCalledWith(
+      expect.objectContaining({ max_tokens: GENERATION_SAFETY_LIMITS.maxTokens })
+    );
+  });
+
   it("passes the hidden French language instruction to WebLLM without logging it", async () => {
     mocks.mockEngine.chat.completions.create.mockResolvedValue(
       (async function* () {

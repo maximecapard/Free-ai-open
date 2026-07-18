@@ -45,9 +45,9 @@ Versions are alpha milestones while the MVP is still under active development.
 - Export/import has no browser end-to-end coverage yet (verified manually); encrypted export is not implemented.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
 
-## [0.7.0-alpha] - 2026-07-17 (adaptive router phases in progress)
+## [0.7.0-alpha] - 2026-07-18 (adaptive router phases in progress)
 
-This release is being built in phases for the "Adaptive Model Router v1." Phases 0 through 3 now provide contracts, static profiling, Registry v2, a local benchmark, and the pure adaptive-router core. Runtime model-selection integration and router UI remain future phases — see `docs/roadmap.md`.
+This release is being built in phases for the "Adaptive Model Router v1." Phases 0 through 4 now provide contracts, static profiling, Registry v2, a local benchmark, the pure adaptive-router core, and real runtime integration — `AppRuntimeProvider` now uses `RouterDecision` to load, switch, and observe real models. Router UI (manual override, richer explanations) remains Phase 5 — see `docs/roadmap.md`.
 
 ### Added
 
@@ -65,11 +65,19 @@ This release is being built in phases for the "Adaptive Model Router v1." Phases
 - Added Capability Profiler v2 in `@free-ai-open/device-profiler`: a real `StaticCapabilityProfile` detector with schema version, detection/expiry timestamps, form factor, architecture class, browser/OS family, coarse memory and logical-processor classes, WebGPU/WASM availability, fallback-adapter status, coarse GPU vendor/architecture/description classes, allowlisted WebGPU feature classes, bucketed selected WebGPU limits, optional low-confidence experimental memory buckets, confidence, technical device tier, and product-facing capability class (`compatibility`, `light`, `balanced`, `performance`).
 - Added app-side persistence for the coarse static capability profile when Home, onboarding, Settings, Debug, or the runtime provider re-detect the device. The stored profile expires and can be refreshed by Settings' existing "Re-check this device" action.
 - Added diagnostic-report support for the new coarse capability profile fields. Diagnostic exports may include normalized classes and buckets, but raw adapter/device/driver strings and exact high-entropy GPU identifiers are ignored.
+- **Phase 4 — Runtime integration.** `AppRuntimeProvider` now computes a `RouterDecision` before the first model load and applies it: recomputes only at real routing moments (task/locale/mode change, or the current model repeatedly failing) via a new routing-decision cache key, never before every message.
+- Added `apps/web/app/_runtime/routingOrchestration.ts` (`buildRouterInputContext`, `attemptModelLoadWithFallback`, `buildLoadCandidatesFromDecision`, `registryIdForWebllmModelId`) to gather real router input and bridge `RouterDecision`'s registry-ID space to `ai-runtime`'s WebLLM-model-ID space at every load/switch/observation call site.
+- Added `apps/web/app/_lib/modelSwitchPolicy.ts` and a `ModelDownloadConsent` prompt: a model switch is a no-op for the same model, deferred while the runtime is busy (never interrupts active generation), immediate for a cached model or the pre-disclosed compatibility default, and otherwise shown to the user (friendly name, approximate size, that it runs locally) before any download starts — including the very first automatic model selection, not only later switches.
+- Added `apps/web/app/_lib/performanceObservationBuilder.ts` and wired real observation recording: every model load attempt and every generation now produces a technical-only `ModelPerformanceObservation` (outcome, timings), with user cancellation always recorded as `cancelled` rather than a model failure.
+- Added `@free-ai-open/ai-runtime`'s `isModelCached()` (real Cache Storage lookup, never guessed from registry metadata) and an optional `maxOutputTokens` on `generate()` that only ever tightens the existing alpha `GENERATION_SAFETY_LIMITS.maxTokens` cap, now fed from `RouterDecision.recommendedMaxOutputTokens`.
+- Added a `model_replacement` runtime-disposal trigger, reusing the existing safe worker dispose-then-recreate sequence for model switches so a switch can never leave two workers alive at once.
+- Extended `/debug` with an adaptive-router diagnostics panel (selected model, confidence, translated reason/warning codes, fallback chain, rejected models with reasons, recommended context/output token budgets, decision/registry version) and a local observations summary, both additive alongside the existing v0.6 preview panel.
 
 ### Changed
 
 - Moved `FormFactor`/`ArchitectureClass` from `@free-ai-open/device-profiler` into `@free-ai-open/types` (device-profiler re-exports both, so every existing `import type { FormFactor } from "@free-ai-open/device-profiler"` call site is unaffected). This lets the new `StaticCapabilityProfile` contract reuse the same coarse categories instead of duplicating them.
 - Replaced the fixed tiny Phase 0 test-model default with the verified compact `SmolLM2-360M-Instruct-q4f32_1-MLC` WebLLM variant. Runtime selection is still fixed; this does not implement adaptive routing or silent model downloads.
+- `/chat`'s model-status notice now reflects `RouterDecision` instead of the legacy `ModelRouterResult`; the detailed reason/rejection breakdown moved to `/debug` to keep the normal chat surface simple, matching Phase 4's own "keep normal chat simple" guidance — chat now only surfaces the one case a user needs to act on (no compatible model).
 
 ### Security and Privacy
 
@@ -81,6 +89,10 @@ This release is being built in phases for the "Adaptive Model Router v1." Phases
 - No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, new server endpoint, or server-side WebLLM path was added. No adaptive model-router selection, telemetry schema, or diagnostic-report schema changed; the only runtime selection change is the fixed verified compatibility default documented above.
 - Capability Profiler v2 reads raw GPU adapter strings only ephemerally to derive coarse classes. It does not persist raw GPU descriptions, device IDs, driver strings, exact VRAM, exact CPU model/frequency, raw user-agent strings, or unique hashes. Browser-reported experimental memory heaps are stored only as coarse, low-confidence buckets and never treated as exact VRAM.
 - Model Registry v2 contains public technical metadata only and performs no network call. WebLLM is imported by registry tests solely to validate exact installed prebuilt records; browser model downloads remain in the existing client runtime.
+- A model that is neither cached nor the pre-disclosed default now always requires explicit user confirmation before downloading, including the very first automatic selection — no silent multi-gigabyte download is ever started solely because the router picked a model. Cache status comes from the real Cache Storage API, never inferred from registry metadata.
+- A model switch is never applied while the runtime is busy (loading, generating, cancelling, or recovering); it is deferred to the next safe routing moment instead of interrupting an in-flight reply or starting a second concurrent load.
+- `ModelPerformanceObservation`s recorded this phase remain technical-only (model ID, timings, outcome code) — no conversation content — verified by an explicit allowlist test on the observation builder's output shape, matching the discipline already established for local logs and diagnostic reports.
+- No cloud model profiling was added: capability, benchmark, and observation data used for routing are read from local storage only.
 
 ### Tests
 
@@ -90,6 +102,7 @@ This release is being built in phases for the "Adaptive Model Router v1." Phases
 - Added Capability Profiler v2 tests for high-memory mobile/tablet conservatism, high-memory desktop differences, iPadOS desktop-style tablet detection, normal macOS desktop detection, ARM/x86/unknown fallback behavior, missing/failing WebGPU adapter requests, missing adapter info, fallback adapters, feature and limit normalization, optional memory heap bucketing, large memory heap non-promotion, privacy-safe serialization, old static-profile migration, expiry/re-detection, and diagnostic sanitization of coarse capability fields.
 - Added Model Registry v2 schema and graph tests for exact task coverage, ordered context presets, verified metadata, strict unknown-field rejection, estimate uncertainty, unique IDs, missing fallbacks, fallback cycles, automatic-eligibility rules, conservative language/form-factor metadata, privacy-safe field names, and exact agreement with WebLLM `prebuiltAppConfig`.
 - Added an adaptive-router matrix covering mobile/desktop memory parity, weak mobile and strong desktop modes, French writing, English coding, unknown/WASM/fallback-adapter devices, benchmark confidence, cache influence, large downloads, recent/stale observations, cancellations, repeated OOM/device loss, manual selection, hard feature/limit/memory gates, fallback order/cycles, invalid registries, determinism, defensive normalization, and private-field exclusion.
+- Added Phase 4 unit coverage for every new pure module (routing cache key, model switch policy, observation builder and outcome classification, download-size formatting, reason/warning/rejection-code translation-key mapping, observations summary) and for `routingOrchestration.ts` (router-input assembly, fallback-chain loading including registry-ID/WebLLM-ID handling and candidate deduplication). Full monorepo `pnpm -r typecheck`, `pnpm -r test`, `pnpm lint`, and `pnpm build` all pass.
 
 ## [0.6.6-alpha] - 2026-07-16
 

@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
-import { sampleModels } from "@free-ai-open/model-registry";
-import { selectRecommendedModel } from "@free-ai-open/model-router";
-import type { ModelRouterResult } from "@free-ai-open/model-router";
+import { modelRegistryV2, sampleModels } from "@free-ai-open/model-registry";
+import { routeAdaptiveModel, selectRecommendedModel } from "@free-ai-open/model-router";
+import type { ModelRouterResult, RouterDecision } from "@free-ai-open/model-router";
 import { clearLocalLogs, getRecentLocalLogs } from "@free-ai-open/local-logs";
 import type { LocalLogRecord } from "@free-ai-open/local-logs";
 import { buildDiagnosticReport, copyDiagnosticReportToClipboardData, exportDiagnosticReportAsJson } from "@free-ai-open/diagnostic-report";
@@ -20,13 +20,24 @@ import {
   findLoadedModelId,
 } from "../_lib/debugDiagnostics";
 import { buildDebugDiagnosticReportInput, DEBUG_PREVIEW_TASK } from "../_lib/debugReportInput";
+import { getStoredModelPerformanceObservations } from "../_lib/modelObservationStore";
+import { summarizeStoredObservations } from "../_lib/observationsSummary";
+import type { ObservationsSummary } from "../_lib/observationsSummary";
 import { DebugSystemStatus } from "../_components/DebugSystemStatus";
 import { DebugModelSection } from "../_components/DebugModelSection";
+import { DebugAdaptiveRouterSection, DebugObservationsSection } from "../_components/DebugAdaptiveRouterSection";
 import { DebugPerformanceSection } from "../_components/DebugPerformanceSection";
 import { DebugRecentLogs } from "../_components/DebugRecentLogs";
 import { DebugPrivacySection } from "../_components/DebugPrivacySection";
 import { DebugActions } from "../_components/DebugActions";
-import { useTranslations } from "../_i18n/LocaleContext";
+import { useLocale, useTranslations } from "../_i18n/LocaleContext";
+import { buildRouterInputContext } from "../_runtime/routingOrchestration";
+
+const EMPTY_OBSERVATIONS_SUMMARY: ObservationsSummary = {
+  total: 0,
+  byOutcome: { completed: 0, cancelled: 0, stalled: 0, degenerate: 0, out_of_memory: 0, device_lost: 0, load_failed: 0 },
+  byModel: {},
+};
 
 const MAX_LOGS = 25;
 
@@ -47,8 +58,11 @@ function buildReportInput(deviceProfile: DeviceProfile | null, routeResult: Mode
 
 export default function DebugPage() {
   const t = useTranslations();
+  const { locale } = useLocale();
   const [deviceProfile, setDeviceProfile] = useState<DeviceProfile | null>(null);
   const [routeResult, setRouteResult] = useState<ModelRouterResult | null>(null);
+  const [adaptiveDecision, setAdaptiveDecision] = useState<RouterDecision | null>(null);
+  const [observationsSummary, setObservationsSummary] = useState<ObservationsSummary>(EMPTY_OBSERVATIONS_SUMMARY);
   const [mode, setMode] = useState<PerformanceMode>("balanced");
   const [logs, setLogs] = useState<LocalLogRecord[]>([]);
   const [report, setReport] = useState<DiagnosticReport | null>(null);
@@ -72,12 +86,16 @@ export default function DebugPage() {
     });
     const recentLogs = available ? await getRecentLocalLogs(MAX_LOGS) : [];
 
+    const routerInput = await buildRouterInputContext({ task: DEBUG_PREVIEW_TASK, locale, performanceMode: previewMode });
+    setAdaptiveDecision(routerInput ? routeAdaptiveModel(routerInput) : null);
+    setObservationsSummary(summarizeStoredObservations(getStoredModelPerformanceObservations()));
+
     setDeviceProfile(profile);
     setRouteResult(result);
     setMode(previewMode);
     setLogs(recentLogs);
     setReport(buildDiagnosticReport(buildReportInput(profile, result, previewMode, recentLogs)));
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     refresh();
@@ -149,6 +167,10 @@ export default function DebugPage() {
         loadedModelId={loadedModelId}
         loadedModel={loadedModel}
       />
+
+      <DebugAdaptiveRouterSection decision={adaptiveDecision} registry={modelRegistryV2} />
+
+      <DebugObservationsSection summary={observationsSummary} registry={modelRegistryV2} />
 
       <DebugPerformanceSection
         loadTimeMs={findLoadTimeMs(logs)}

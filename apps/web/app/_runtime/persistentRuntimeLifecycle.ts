@@ -48,7 +48,7 @@ export function createPersistentRuntimeLifecycle<
   }
 
   function replaceRuntime(
-    trigger: Extract<RuntimeDisposalTrigger, "explicit_reload" | "performance_replacement" | "recovery">,
+    trigger: Extract<RuntimeDisposalTrigger, "explicit_reload" | "performance_replacement" | "recovery" | "model_replacement">,
     listener: (state: RuntimeState) => void
   ): RuntimeInstance<TRuntime, TWorker> {
     disposeCurrent(trigger);

@@ -19,6 +19,7 @@ import {
 import { ChatHistoryDrawerPanel } from "../_components/ChatHistoryDrawerPanel";
 import type { ConversationImportSummary } from "../_components/ConversationExportImportControls";
 import { ChatTranscript } from "../_components/ChatTranscript";
+import { ModelDownloadConsent } from "../_components/ModelDownloadConsent";
 import { ModelStatusPill } from "../_components/ModelStatusPill";
 import { NewChatTaskDialog } from "../_components/NewChatTaskDialog";
 import { PrivacyNotice } from "../_components/PrivacyNotice";
@@ -27,7 +28,6 @@ import { useMobileHistoryDrawer } from "../_components/useMobileHistoryDrawer";
 import { findModeLabelKey, findTaskLabelKey, isPerformanceMode, isTaskCategory } from "../_lib/catalog";
 import { downloadTextFile } from "../_lib/downloadTextFile";
 import { isGettingStartedCompleted } from "../_lib/gettingStartedPreference";
-import { rejectionReasonKey, routeDecisionKey } from "../_lib/routeExplanation";
 import { runtimeErrorKey } from "../_lib/runtimeErrorLabel";
 import { canSendChatMessage } from "../_lib/runtimeUiState";
 import { useLocale, useTranslations } from "../_i18n/LocaleContext";
@@ -43,7 +43,9 @@ function ChatContent() {
     runtimeState,
     performanceMode,
     activeConversationTask,
-    routeResult,
+    routerDecision,
+    selectedModel,
+    pendingModelSwitch,
     conversations,
     activeConversationId,
     messages,
@@ -60,6 +62,8 @@ function ChatContent() {
     sendMessage,
     stopGeneration,
     reloadRuntime,
+    confirmModelSwitch,
+    cancelModelSwitch,
   } = useAppRuntime();
 
   const rawTask = searchParams.get("task");
@@ -294,7 +298,7 @@ function ChatContent() {
               </h1>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <ModelStatusPill taskLabel={taskLabel} modeLabel={modeLabel} modelName={routeResult?.selectedModel?.displayName} />
+              <ModelStatusPill taskLabel={taskLabel} modeLabel={modeLabel} modelName={selectedModel?.displayName} />
               {performanceMode && <RuntimeStatusBadge state={runtimeState} />}
             </div>
           </div>
@@ -322,40 +326,27 @@ function ChatContent() {
             </section>
           )}
 
-          {performanceMode && routeResult && (
-            <section className="fo-inline-notice" style={{ marginBottom: 16 }}>
-              <strong>{routeResult.selectedModel ? t("chat.recommendedModel") : t("chat.noModelAvailable")}</strong>
+          {/* Reason codes, warnings, and rejected models are technical detail —
+              kept on /debug so normal chat stays simple. This only surfaces
+              the one case a chatting user needs to act on: nothing to load. */}
+          {performanceMode && routerDecision && !selectedModel && (
+            <section role="alert" className="fo-inline-notice" style={{ marginBottom: 16 }}>
+              <strong>{t("chat.noModelAvailable")}</strong>
               <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>
-                {t(routeDecisionKey(routeResult), {
+                {t("router.noCompatible", {
                   task: taskLabel ?? activeConversationTask,
-                  mode: modeLabel ?? performanceMode,
-                  model: routeResult.selectedModel?.displayName ?? "",
-                  fallback: routeResult.fallbackModel?.displayName ?? "",
-                  count: routeResult.rejectedModels.length,
+                  count: routerDecision.rejectedModels.length,
                 })}
               </p>
-              <p className="fo-muted" style={{ margin: "8px 0 0", fontSize: 13 }}>
-                {t("chat.placeholderModelNote")}
-              </p>
-
-              {routeResult.rejectedModels.length > 0 && (
-                <details className="fo-muted" style={{ marginTop: 12, fontSize: 13 }}>
-                  <summary style={{ cursor: "pointer" }}>
-                    {t("chat.advancedNotUsed", {
-                      count: routeResult.rejectedModels.length,
-                      plural: routeResult.rejectedModels.length > 1 ? "s" : "",
-                    })}
-                  </summary>
-                  <ul style={{ margin: "8px 0 0", paddingLeft: 20 }}>
-                    {routeResult.rejectedModels.map((rejected) => (
-                      <li key={rejected.modelId}>
-                        <span className="fo-technical-value">{rejected.modelId}</span> - {t(rejectionReasonKey(rejected.reason))}
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
             </section>
+          )}
+
+          {pendingModelSwitch && (
+            <ModelDownloadConsent
+              pendingModelSwitch={pendingModelSwitch}
+              onConfirm={() => void confirmModelSwitch()}
+              onCancel={cancelModelSwitch}
+            />
           )}
 
           {runtimeState.status === "error" && runtimeState.error && (

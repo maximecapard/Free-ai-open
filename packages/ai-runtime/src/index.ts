@@ -1,3 +1,4 @@
+export { isModelCached } from "./cache";
 export { classifyRuntimeError } from "./errors";
 export { detectDegenerateOutput, GENERATION_SAFETY_LIMITS } from "./generation-safety";
 export { getRuntimeLanguageInstruction } from "./language-instruction";

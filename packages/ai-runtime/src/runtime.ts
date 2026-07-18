@@ -267,7 +267,12 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
           { role: "user", content: input.prompt },
         ],
         stream: true,
-        max_tokens: GENERATION_SAFETY_LIMITS.maxTokens,
+        // The router-recommended budget is a ceiling, never an increase: it
+        // can only tighten the existing alpha safety cap, not raise it.
+        max_tokens:
+          input.maxOutputTokens !== undefined
+            ? Math.min(input.maxOutputTokens, GENERATION_SAFETY_LIMITS.maxTokens)
+            : GENERATION_SAFETY_LIMITS.maxTokens,
       });
 
       let responseLength = 0;

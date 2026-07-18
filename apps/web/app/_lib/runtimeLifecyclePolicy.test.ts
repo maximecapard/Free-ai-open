@@ -16,4 +16,8 @@ describe("runtime lifecycle policy", () => {
     expect(shouldDisposeRuntimeForTrigger("performance_replacement")).toBe(true);
     expect(shouldDisposeRuntimeForTrigger("recovery")).toBe(true);
   });
+
+  it("allows disposal when the adaptive router selects a different model", () => {
+    expect(shouldDisposeRuntimeForTrigger("model_replacement")).toBe(true);
+  });
 });

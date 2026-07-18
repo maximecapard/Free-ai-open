@@ -56,6 +56,21 @@ Phase 0 adds types, package boundaries, and local persistence/migration only —
 - [ ] Confirm decisions contain no prompt/response/message/conversation/document fields and the package contains no `fetch`, `sendBeacon`, browser API, persistence, telemetry, or runtime import.
 - [ ] Confirm the application still uses its fixed compatibility runtime model; Phase 3 must not silently download or switch models.
 
+## v0.7.0-alpha Phase 4 (Runtime integration)
+
+- [ ] Complete onboarding on a WebGPU device, open `/chat`, and confirm a `RouterDecision` is computed before the first model load — check `/debug`'s "Adaptive router" panel for a non-null selected model, reason codes, and a fallback chain, rather than the fixed default loading unconditionally with no decision behind it.
+- [ ] On a device where the router's first pick is not the pre-disclosed default and is not yet cached, confirm the app loads the disclosed default immediately (chat stays usable right away) and shows a `ModelDownloadConsent` prompt with a friendly model name, approximate size, and a note that it runs locally; confirm nothing downloads until the prompt is accepted.
+- [ ] Confirm dismissing the download prompt keeps the current model loaded and chat working, with no partial or silent download left running in the background.
+- [ ] Change performance mode in Settings while idle and confirm either a safe model switch or a no-op (if the router picks the same model for both modes) — never an unconditional reload of the old placeholder model.
+- [ ] Start a generation, then change performance mode or task in a way that would trigger a model switch; confirm the switch is deferred until generation completes and never interrupts the in-flight reply.
+- [ ] After a successful chat exchange, open `/debug` and confirm "Local performance observations" shows a non-zero count with a `completed` outcome for the loaded model, and that no prompt/response text appears anywhere on the page.
+- [ ] Cancel a generation (Stop) and confirm `/debug`'s observations record the outcome as `cancelled`, not a model failure.
+- [ ] Confirm `/debug`'s new "Adaptive router" panel shows the selected model, confidence, reason/warning codes, fallback chain, and rejected models with reasons, and that the French UI shows translated text — no raw reason/warning/rejection codes visible outside `/debug`'s own technical-value styling.
+- [ ] Confirm the existing v0.6 "Recommended model" panel on `/debug` still renders independently and unchanged, alongside the new adaptive panel.
+- [ ] Switch UI language mid-session and confirm the next routing decision uses the new locale (check `/debug`), without rewriting past messages or affecting the hidden runtime language instruction.
+- [ ] Confirm navigating Chat → Settings → Chat or Chat → Debug → Chat still keeps the same loaded model and does not trigger a spurious re-route or re-download.
+- [ ] Export a diagnostic report and confirm it still contains no prompt/response/conversation content — only technical routing and observation fields.
+
 ## Manual smoke tests (browser)
 
 - [ ] Chat: onboarding leads to `/chat`, the local model loads, and a prompt gets a streamed reply.
