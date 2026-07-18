@@ -29,6 +29,7 @@ describe("RouterInput contract", () => {
       capability: exampleCapability,
       observations: [],
       cachedModelIds: ["sample-general-light"],
+      registryVersion: "0.7.0-alpha.1",
     };
 
     expect(input.task).toBe("coding");
@@ -43,6 +44,7 @@ describe("RouterInput contract", () => {
       capability: exampleCapability,
       observations: [],
       cachedModelIds: [],
+      registryVersion: "0.7.0-alpha.1",
       manualModelId: "sample-general-light",
     };
 
@@ -82,16 +84,19 @@ describe("RouterInput contract", () => {
 });
 
 describe("RouterDecision contract", () => {
-  it("is a usable, versioned decision shape with human-readable reasons", () => {
+  it("is a usable, versioned decision shape with stable reason codes", () => {
     const decision: RouterDecision = {
       selectedModelId: "sample-general-light",
       fallbackModelIds: ["sample-coding-light"],
       confidence: "medium",
-      reasons: ["Matches task and performance mode."],
+      reasons: ["task_match"],
       warnings: [],
+      rejectedModels: [],
+      candidateScores: [],
       recommendedContextTokens: 2048,
       recommendedMaxOutputTokens: 512,
-      decisionVersion: "v1",
+      registryVersion: "0.7.0-alpha.1",
+      decisionVersion: "1.0.0:0.7.0-alpha.1",
     };
 
     expect(decision.reasons.length).toBeGreaterThan(0);

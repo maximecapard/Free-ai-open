@@ -1,7 +1,6 @@
 // v0.7.0-alpha "Adaptive Model Router v1" contracts. These types are additive:
-// StaticCapabilityProfile is produced by Capability Profiler v2, while the
-// benchmark workload and adaptive router implementation remain future phases
-// — see docs/roadmap.md for the phased rollout. They live in this zero-dependency
+// StaticCapabilityProfile and LocalBenchmarkResult are produced locally and
+// consumed by the pure adaptive router core. They live in this zero-dependency
 // leaf package (rather than device-profiler/local-benchmark/ai-runtime/
 // model-router individually) so every future producer and consumer package
 // can share one contract without any of them depending on each other,

@@ -31,7 +31,7 @@ Phase 0 adds types, package boundaries, and local persistence/migration only —
 - [ ] Review `docs/model-verification.md` and `docs/model-attributions.md`; confirm browser evidence and license claims match the exact artifact and model size, not another family member.
 - [ ] In a Chromium/WebGPU desktop environment, load each curated model and run synthetic English, French where claimed, Stop, worker recycle/cached reload, and post-recovery generation checks. Record only technical status/timings, never generated content or raw hardware identifiers.
 - [ ] Confirm the fixed default `SmolLM2-360M-Instruct-q4f32_1-MLC` loads through the existing client worker and Stop/recovery still succeeds.
-- [ ] Confirm the active UI still does not silently select or download models from Registry v2; adaptive router scoring and explicit download UX remain later phases.
+- [ ] Confirm the active UI still does not silently select or download models from Registry v2; the pure adaptive-router core exists, while runtime integration and explicit download UX remain later phases.
 - [ ] Confirm no registry field, log, or diagnostic contains prompt/response/conversation/document content and no registry production module adds `fetch`, `sendBeacon`, or server-side WebLLM.
 
 ## v0.7.0-alpha Phase 2 (Local Benchmark v1)
@@ -43,6 +43,18 @@ Phase 0 adds types, package boundaries, and local persistence/migration only —
 - [ ] Confirm mobile/tablet uses the reduced workload and the page remains responsive.
 - [ ] Export `/debug` diagnostics and confirm only benchmark version/status/timings/score/stability/confidence are present; no coarse profile key, raw GPU identifier, or user content is included.
 - [ ] Confirm no benchmark starts while generation/cancellation/recovery is active in Settings and that the WebLLM runtime remains loaded and usable afterward.
+
+## v0.7.0-alpha Phase 3 (Adaptive Router Core)
+
+- [ ] Run the model-router matrix and confirm identical inputs, registry version, and clock produce identical decisions.
+- [ ] Confirm hard backend, feature/limit, memory, form-factor, metadata, task, repeated OOM, and repeated device-loss failures appear in `rejectedModels` before scoring.
+- [ ] Confirm 12 GB mobile and 12 GB desktop scenarios do not receive the same performance-model outcome solely because RAM matches.
+- [ ] Confirm French writing prefers suitable multilingual metadata and English coding prefers the verified coding specialist in the tested Balanced scenario.
+- [ ] Confirm user cancellations do not reduce observation scores, while stale observations are ignored.
+- [ ] Confirm manual selection can choose an eligible model but cannot bypass hard gates.
+- [ ] Confirm fallback IDs are eligible, acyclic, bounded, and progressively no heavier.
+- [ ] Confirm decisions contain no prompt/response/message/conversation/document fields and the package contains no `fetch`, `sendBeacon`, browser API, persistence, telemetry, or runtime import.
+- [ ] Confirm the application still uses its fixed compatibility runtime model; Phase 3 must not silently download or switch models.
 
 ## Manual smoke tests (browser)
 
