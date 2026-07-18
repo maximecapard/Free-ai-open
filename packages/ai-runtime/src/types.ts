@@ -38,6 +38,11 @@ export interface GenerateInput {
   conversationId: string;
   prompt: string;
   responseLocale?: RuntimeLocale;
+  // An upper bound suggested by the adaptive router's selected context/output
+  // preset for the loaded model. Never raises generation above the existing
+  // alpha safety cap (GENERATION_SAFETY_LIMITS.maxTokens) — see generate()'s
+  // use of Math.min(). Omit to use the safety cap alone, as before.
+  maxOutputTokens?: number;
 }
 
 export type GenerationStopReason = "completed" | "cancelled" | "degenerate_output";

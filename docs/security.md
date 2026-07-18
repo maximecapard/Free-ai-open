@@ -118,9 +118,9 @@ These events may include runtime status and technical error codes, but must not 
 - the profiler never calls `fetch`, `sendBeacon`, or any server endpoint — profiling stays entirely local and synchronous with the existing onboarding/`/debug` display paths;
 - an optional `measuredPerformance` input (tokens/sec, load/first-token time, recent failure count) is locally supplied only, never derived from remote data, and is not populated with real data by any current caller.
 
-## v0.7.0-alpha adaptive router inputs and pure core (Phases 0-3)
+## v0.7.0-alpha adaptive router inputs and pure core (Phases 0-4)
 
-Contracts and local persistence shapes exist, Phase 1A implements the static capability detector, Phase 1B adds a strict verified model registry, Phase 2 adds the local benchmark, and Phase 3 implements the pure router core. Runtime application of decisions remains future work:
+Contracts and local persistence shapes exist, Phase 1A implements the static capability detector, Phase 1B adds a strict verified model registry, Phase 2 adds the local benchmark, Phase 3 implements the pure router core, and Phase 4 applies decisions to the runtime:
 
 - Hard compatibility gates must run before any scoring (an unverified model, an unavailable backend, a missing required WebGPU feature/limit, clearly insufficient memory, a known incompatibility, or repeated recent OOM/device-loss failures excludes a model outright).
 - RAM alone must never determine model selection; exact VRAM must remain optional and never required.
@@ -135,6 +135,15 @@ Contracts and local persistence shapes exist, Phase 1A implements the static cap
 - Model Registry v2 rejects unknown fields, unsafe URL schemes, duplicate IDs, unknown fallbacks, cycles, and incomplete verification metadata. Only fully verified records may enter future automatic routing.
 - Registry production code is static and network-free. Its WebLLM dependency is test-only, used to compare exact model IDs, artifact URLs, model libraries, required features, and memory metadata against the installed prebuilt configuration; runtime WebLLM stays client-only.
 - Phase 3 validates the whole registry before routing, applies hard gates before scoring, rejects repeated recent OOM/device loss, ignores user cancellations as failures, filters stale observations, bounds fallback attempts, and never allows manual selection to bypass a definite incompatibility. The core imports no browser API and performs no persistence, logging, telemetry, runtime loading, or network operation.
+
+## v0.7.0-alpha Phase 4 (runtime integration) security notes
+
+- A model switch is resolved through `apps/web/app/_lib/modelSwitchPolicy.ts`'s `resolveModelSwitch()` before any worker/model change: it is a hard no-op if the runtime is busy (`loading_model`, `generating`, `cancelling`, or `recovering`), so a routing moment landing mid-generation or mid-load can never interrupt it or start a second concurrent load — the next safe routing moment retries instead.
+- A model that is neither cached nor the pre-disclosed compatibility default always requires explicit user confirmation (`ModelDownloadConsent`) before any download starts, including the very first automatic selection — this applies even when the router's confidence is high. Cache status comes from the real Cache Storage API (`isModelCached()` in `ai-runtime`, defaulting to "not cached" — the safer direction — on any lookup failure), never inferred from registry metadata.
+- `RouterDecision.selectedModelId`/`fallbackModelIds` and stored `ModelPerformanceObservation.modelId` are registry IDs; `InferenceRuntime.loadModel()`/`RuntimeState.modelId` are WebLLM model IDs. Every call site that bridges them goes through `routingOrchestration.ts`'s `buildLoadCandidatesFromDecision()`/`registryIdForWebllmModelId()` rather than ad hoc string handling, so an observation can never be silently recorded, or a switch silently resolved, against the wrong ID space.
+- A model swap reuses the existing safe worker-teardown path: `runtimeLifecyclePolicy.ts`'s new `model_replacement` disposal trigger goes through the same `disposeCurrent`-then-`ensureRuntime` sequence as `explicit_reload`/`performance_replacement`/`recovery`, so a switch can never leave two workers alive at once.
+- `attemptModelLoadWithFallback()` walks a candidate list already bounded by the router's own `maxFallbacks`, deduplicates candidates defensively, and records one observation per attempt — it cannot retry the same model or loop unbounded even if called with a malformed decision.
+- No cloud model profiling was added: capability, benchmark, and observation data used for routing are read from local storage only; nothing about device capability or model performance is sent to a server as part of this integration.
 
 ## Runtime language instruction
 
