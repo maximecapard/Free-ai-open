@@ -4,9 +4,12 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DEFAULT_MODEL_ID } from "@free-ai-open/ai-runtime";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
+import { modelRegistryV2 } from "@free-ai-open/model-registry";
 import type { PerformanceMode } from "@free-ai-open/types";
 import { DeviceCapabilitySummary } from "../_components/DeviceCapabilitySummary";
 import { LocalBenchmarkPanel } from "../_components/LocalBenchmarkPanel";
+import { ManualModelPicker } from "../_components/ManualModelPicker";
+import { ModelDownloadConsent } from "../_components/ModelDownloadConsent";
 import { clearStoredLocalBenchmarkResult } from "../_lib/benchmarkResultStore";
 import { performanceModes } from "../_lib/catalog";
 import { detectAndStoreDeviceProfile } from "../_lib/deviceProfileDetection";
@@ -20,7 +23,21 @@ import { useAppRuntime } from "../_runtime/AppRuntimeProvider";
 export default function SettingsPage() {
   const t = useTranslations();
   const router = useRouter();
-  const { runtimeState, performanceMode: savedMode, applyPerformanceMode } = useAppRuntime();
+  const {
+    runtimeState,
+    performanceMode: savedMode,
+    applyPerformanceMode,
+    routerDecision,
+    modelSelectionMode,
+    manualModelId,
+    setManualModel,
+    setAutomaticModel,
+    clearObservations,
+    pendingModelSwitch,
+    confirmModelSwitch,
+    cancelModelSwitch,
+  } = useAppRuntime();
+  const [observationsClearedNotice, setObservationsClearedNotice] = useState(false);
   const [profile, setProfile] = useState<DeviceProfile | null>(null);
   const [pendingMode, setPendingMode] = useState<PerformanceMode | null>(null);
   const [modeSavedNotice, setModeSavedNotice] = useState(false);
@@ -65,6 +82,11 @@ export default function SettingsPage() {
     clearStoredLocalBenchmarkResult();
     resetGettingStarted();
     router.push("/onboarding");
+  }
+
+  function handleClearObservations() {
+    clearObservations();
+    setObservationsClearedNotice(true);
   }
 
   return (
@@ -130,6 +152,31 @@ export default function SettingsPage() {
       </section>
 
       <section className="fo-card" style={{ padding: 20, marginBottom: 16 }}>
+        <h2 style={{ fontSize: 18, margin: "0 0 4px" }}>{t("settings.modelSelectionHeading")}</h2>
+        <p className="fo-muted" style={{ margin: "0 0 16px", fontSize: 14 }}>
+          {t("settings.modelSelectionBody")}
+        </p>
+        <ManualModelPicker
+          registry={modelRegistryV2}
+          routerDecision={routerDecision}
+          modelSelectionMode={modelSelectionMode}
+          manualModelId={manualModelId}
+          disabled={isPerformanceModeChangeBlockedStatus(runtimeState.status)}
+          onSelectAutomatic={() => void setAutomaticModel()}
+          onSelectManual={(modelId) => void setManualModel(modelId)}
+        />
+        {pendingModelSwitch && (
+          <div style={{ marginTop: 16 }}>
+            <ModelDownloadConsent
+              pendingModelSwitch={pendingModelSwitch}
+              onConfirm={() => void confirmModelSwitch()}
+              onCancel={cancelModelSwitch}
+            />
+          </div>
+        )}
+      </section>
+
+      <section className="fo-card" style={{ padding: 20, marginBottom: 16 }}>
         <h2 style={{ fontSize: 18, margin: "0 0 12px" }}>{t("settings.languageHeading")}</h2>
         <LanguageToggle />
       </section>
@@ -157,6 +204,23 @@ export default function SettingsPage() {
           />
         </section>
       )}
+
+      <section className="fo-card" style={{ padding: 20, marginBottom: 16 }}>
+        <h2 style={{ fontSize: 18, margin: "0 0 4px" }}>{t("settings.performanceHistoryHeading")}</h2>
+        <p className="fo-muted" style={{ margin: "0 0 12px", fontSize: 14 }}>
+          {t("settings.performanceHistoryBody")}
+        </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <button type="button" className="fo-button fo-button-secondary" onClick={handleClearObservations}>
+            {t("settings.clearObservations")}
+          </button>
+          {observationsClearedNotice && (
+            <span role="status" className="fo-muted" style={{ fontSize: 13 }}>
+              {t("settings.observationsCleared")}
+            </span>
+          )}
+        </div>
+      </section>
 
       <section className="fo-card" style={{ padding: 20, marginBottom: 16 }}>
         <h2 style={{ fontSize: 18, margin: "0 0 4px" }}>{t("settings.resetHeading")}</h2>

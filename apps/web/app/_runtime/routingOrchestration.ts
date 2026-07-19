@@ -107,6 +107,11 @@ export function registryIdForWebllmModelId(
 export interface AttemptModelLoadOptions {
   initialStatus?: "loading_model" | "recovering";
   now?: () => Date;
+  // Fired synchronously right before each candidate's loadModel() call, with
+  // its zero-based position in the list. Lets the UI show "Trying a lighter
+  // model" once attemptIndex > 0, without this module knowing anything about
+  // React state.
+  onAttempt?: (candidate: ModelLoadCandidate, attemptIndex: number) => void;
 }
 
 // Walks an ordered candidate list — typically [selectedModel,
@@ -127,10 +132,14 @@ export async function attemptModelLoadWithFallback(
 ): Promise<AttemptModelLoadResult> {
   const now = options.now ?? (() => new Date());
   const seen = new Set<string>();
+  let attemptIndex = 0;
 
   for (const candidate of candidates) {
     if (seen.has(candidate.webllmModelId)) continue;
     seen.add(candidate.webllmModelId);
+
+    options.onAttempt?.(candidate, attemptIndex);
+    attemptIndex += 1;
 
     const startedAt = now().getTime();
     await runtime.loadModel(candidate.webllmModelId, { initialStatus: options.initialStatus });

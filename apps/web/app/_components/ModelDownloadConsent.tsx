@@ -1,7 +1,7 @@
 "use client";
 
 import type { PendingModelSwitch } from "../_runtime/AppRuntimeProvider";
-import { formatApproximateDownloadSize } from "../_lib/modelDownloadDisclosure";
+import { formatApproximateDownloadSize, isLargeMobileDownload } from "../_lib/modelDownloadDisclosure";
 import { useTranslations } from "../_i18n/LocaleContext";
 
 export interface ModelDownloadConsentProps {
@@ -19,6 +19,7 @@ export function ModelDownloadConsent({ pendingModelSwitch, onConfirm, onCancel }
   const t = useTranslations();
   const size = formatApproximateDownloadSize(pendingModelSwitch.downloadSizeBytes);
   const sizeText = size ? `${size.value} ${size.unit}` : t("modelDownload.sizeUnknown");
+  const showMobileWarning = isLargeMobileDownload(pendingModelSwitch.downloadSizeBytes, pendingModelSwitch.isMobileFormFactor);
 
   return (
     <section role="alertdialog" aria-labelledby="model-download-consent-title" className="fo-inline-notice" style={{ marginBottom: 16 }}>
@@ -29,6 +30,11 @@ export function ModelDownloadConsent({ pendingModelSwitch, onConfirm, onCancel }
       <p className="fo-muted" style={{ margin: "8px 0 0", fontSize: 13 }}>
         {t(pendingModelSwitch.descriptionKey)}
       </p>
+      {showMobileWarning && (
+        <p role="alert" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--fo-warning)" }}>
+          {t("modelDownload.mobileWarning")}
+        </p>
+      )}
       <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
         <button type="button" className="fo-button fo-button-primary" onClick={onConfirm}>
           {t("modelDownload.confirm")}

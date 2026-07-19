@@ -66,7 +66,7 @@ Prioritize stronger models when the device tier allows it.
 
 Advanced users can bypass recommendations and select a model manually, but the UI must still show warnings for unsupported or experimental models.
 
-## v0.7.0-alpha — Adaptive Model Router v1 (runtime integration complete, UI in progress)
+## v0.7.0-alpha — Adaptive Model Router v1 (complete)
 
 Everything above describes the legacy v0.6 router (`selectRecommendedModel()`). As of Phase 4, `AppRuntimeProvider` uses the adaptive v0.7 core (`routeAdaptiveModel()`) to make every real chat routing decision; the v0.6 router remains only as `/debug`'s independent, side-by-side preview call, kept during the phased rollout rather than removed outright:
 
@@ -78,4 +78,6 @@ The implementation validates Registry v2, normalizes stale or malformed technica
 
 Fallbacks follow validated registry edges, include eligible models only, become progressively no heavier, and stop after an explicit maximum. Manual selection can choose an eligible model and receives marginal-choice warnings; it cannot bypass hard gates. Fast uses conservative token presets, Balanced avoids treating the largest eligible model as automatically best, and Performance requires stronger evidence before returning the largest context/output preset.
 
-As of Phase 4, the active runtime uses `RouterDecision` for real model loading and switching, and `/debug` translates its reason/warning/rejection codes into plain language. A `RouterDecision`'s model IDs are registry IDs, distinct from the WebLLM model IDs `ai-runtime`'s `loadModel()` expects — `apps/web/app/_runtime/routingOrchestration.ts` bridges the two everywhere a decision turns into an actual load. Manual model override and a richer in-chat explanation UI (beyond the current minimal integration states) remain Phase 5.
+As of Phase 4, the active runtime uses `RouterDecision` for real model loading and switching, and `/debug` translates its reason/warning/rejection codes into plain language. A `RouterDecision`'s model IDs are registry IDs, distinct from the WebLLM model IDs `ai-runtime`'s `loadModel()` expects — `apps/web/app/_runtime/routingOrchestration.ts` bridges the two everywhere a decision turns into an actual load.
+
+As of Phase 5, `/settings` exposes automatic (recommended) and manual model selection: manual selection sets `RouterInput.manualModelId`, and the router's own `manual_model_unknown`/`manual_model_ineligible` warnings (never a hard override of the eligibility gates) surface as a plain-language chat notice when a manual pick can no longer be honored. Normal `/chat` shows exactly one plain-language sentence explaining the current pick (`apps/web/app/_lib/friendlyRouteExplanation.ts`, priority-ordered from the decision's reason codes) rather than technical detail; the full reason/warning/rejection breakdown stays on `/debug` and behind the manual picker's per-model disclosure.

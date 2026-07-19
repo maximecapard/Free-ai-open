@@ -1,8 +1,8 @@
 "use client";
 
 import type { RuntimeState } from "@free-ai-open/ai-runtime";
+import { resolveModelStatusKey } from "../_lib/modelStatusLabel";
 import { useTranslations } from "../_i18n/LocaleContext";
-import type { TranslationKey } from "../_i18n/dictionary";
 
 const STATUS_COLOR_VAR: Record<RuntimeState["status"], string> = {
   idle: "var(--fo-muted-500)",
@@ -14,11 +14,28 @@ const STATUS_COLOR_VAR: Record<RuntimeState["status"], string> = {
   error: "var(--fo-danger)",
 };
 
-export function RuntimeStatusBadge({ state }: { state: RuntimeState }) {
+export interface RuntimeStatusBadgeProps {
+  state: RuntimeState;
+  isRoutingInProgress?: boolean;
+  isFallbackRetry?: boolean;
+  hasPendingModelSwitch?: boolean;
+}
+
+export function RuntimeStatusBadge({
+  state,
+  isRoutingInProgress = false,
+  isFallbackRetry = false,
+  hasPendingModelSwitch = false,
+}: RuntimeStatusBadgeProps) {
   const t = useTranslations();
   // Plain-language wording in the normal chat interface; raw status codes
   // stay in the debug dashboard's advanced/technical display only.
-  const statusKey = `runtimeStatusPlain.${state.status}` as TranslationKey;
+  const statusKey = resolveModelStatusKey({
+    runtimeStatus: state.status,
+    isRoutingInProgress,
+    isFallbackRetry,
+    pendingModelSwitch: hasPendingModelSwitch,
+  });
   const label =
     state.status === "loading_model" ? `${t(statusKey)} ${Math.round(state.loadProgress * 100)}%` : t(statusKey);
 

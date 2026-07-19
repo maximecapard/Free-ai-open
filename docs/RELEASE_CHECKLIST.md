@@ -71,6 +71,23 @@ Phase 0 adds types, package boundaries, and local persistence/migration only —
 - [ ] Confirm navigating Chat → Settings → Chat or Chat → Debug → Chat still keeps the same loaded model and does not trigger a spurious re-route or re-download.
 - [ ] Export a diagnostic report and confirm it still contains no prompt/response/conversation content — only technical routing and observation fields.
 
+## v0.7.0-alpha Phase 5 (Router UI)
+
+- [ ] On `/chat`, once a model is selected, confirm exactly one plain-language sentence explains why (e.g. "Chosen for faster responses on this device.") — no raw reason codes, no "score 73.4"-style output.
+- [ ] Confirm the model status pill/badge shows the mission's plain-language states as appropriate: Choosing a local model (briefly, before the first load), Preparing the local model (with progress), Trying a lighter model (during a fallback attempt), Ready on this device, Model unavailable — and never claims chat is blocked while a model is actually ready/generating/cancelling.
+- [ ] On `/settings`, confirm "Automatic — recommended" is selected by default and switching to a specific manual model updates the active chat model through the same consent flow as automatic routing (cached/default switches immediately; anything else shows the download prompt).
+- [ ] Confirm a model the router has rejected for this device appears disabled in the manual picker with the router's own plain-language rejection reason, not silently hidden or selectable.
+- [ ] Open a manual model's "Advanced technical details" disclosure and confirm it shows the exact WebLLM ID, language suitability, recommended tasks, and device suitability — and that this technical panel is not visible without opening it.
+- [ ] Pick "Automatic — recommended" after a manual selection and confirm chat returns to the router's own pick (through the same consent flow if that pick isn't cached).
+- [ ] On a device reporting mobile form factor, trigger a download-consent prompt for a model ≥500 MB and confirm the extra mobile-data warning line appears; confirm it does not appear for the same model on a desktop-reported device.
+- [ ] In `/settings`, confirm "Clear performance history" clears local model observations (verify via `/debug`'s observations count dropping to zero) without clearing conversations or the benchmark result.
+- [ ] In `/settings`, confirm the local benchmark panel shows a "last checked" date once a result exists, and that "Clear result" removes it (status returns to "Not run yet").
+- [ ] In a non-WebGPU browser (or with WebGPU disabled), confirm `/chat` shows a distinct "this browser can't run local AI models" message rather than the generic no-compatible-model notice.
+- [ ] Simulate offline (DevTools network throttling → Offline) during a model load that needs downloading, and confirm the error banner includes an offline-specific line in addition to the existing error message.
+- [ ] Manually select a model in Settings, then (for testing) make it ineligible — e.g. by simulating insufficient memory — and confirm `/chat` shows a notice that the manual pick was overridden, rather than silently falling back with no explanation.
+- [ ] Repeat the manual model picker and settings changes across French/English and light/dark/system; confirm no raw technical strings leak into the translated normal-chat surface.
+- [ ] Below 720px, confirm the manual model list has no page-wide horizontal overflow, each model's selectable area and the "Automatic" option meet 44×44px touch targets, and the technical-details disclosure opens without covering the rest of the page.
+
 ## Manual smoke tests (browser)
 
 - [ ] Chat: onboarding leads to `/chat`, the local model loads, and a prompt gets a streamed reply.

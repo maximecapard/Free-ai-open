@@ -192,6 +192,22 @@ describe("attemptModelLoadWithFallback", () => {
     expect(mocks.recordModelPerformanceObservation).toHaveBeenCalledTimes(2);
   });
 
+  it("reports each attempt's zero-based index via onAttempt before it loads", async () => {
+    const runtime = createFakeRuntime({
+      "Model-B-MLC": { status: "ready", modelId: "Model-B-MLC", loadProgress: 1, error: null },
+    });
+    const attempts: Array<{ registryId: string; attemptIndex: number }> = [];
+
+    await attemptModelLoadWithFallback(runtime, [CANDIDATE_A, CANDIDATE_B], {
+      onAttempt: (candidate, attemptIndex) => attempts.push({ registryId: candidate.registryId, attemptIndex }),
+    });
+
+    expect(attempts).toEqual([
+      { registryId: "model-a", attemptIndex: 0 },
+      { registryId: "model-b", attemptIndex: 1 },
+    ]);
+  });
+
   it("never retries a duplicate candidate id", async () => {
     const loadModel = vi.fn(async () => {});
     const runtime: InferenceRuntime = {

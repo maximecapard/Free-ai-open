@@ -34,6 +34,7 @@ import {
   getStoredActiveConversationId,
   setStoredActiveConversationId,
 } from "../_lib/activeConversationStorage";
+import { getStoredCapabilityProfile } from "../_lib/capabilityProfileStore";
 import { resolveConversationTask } from "../_lib/catalog";
 import { deriveConversationTitle, toChatMessageItems } from "../_lib/conversationMessages";
 import {
@@ -42,8 +43,18 @@ import {
   shouldPersistAssistantOutput,
 } from "../_lib/generationPersistence";
 import { getStoredPerformanceMode, setStoredPerformanceMode } from "../_lib/gettingStartedPreference";
+import {
+  getStoredManualModelPreference,
+  setAutomaticModelSelection,
+  setManualModelSelection,
+} from "../_lib/manualModelPreference";
+import type { ModelSelectionMode } from "../_lib/manualModelPreference";
 import { isModelSwitchBlockedStatus, resolveModelSwitch } from "../_lib/modelSwitchPolicy";
-import { getStoredModelPerformanceObservations, recordModelPerformanceObservation } from "../_lib/modelObservationStore";
+import {
+  clearStoredModelPerformanceObservations,
+  getStoredModelPerformanceObservations,
+  recordModelPerformanceObservation,
+} from "../_lib/modelObservationStore";
 import { buildGenerationObservation, isModelRepeatedlyFailing } from "../_lib/performanceObservationBuilder";
 import { isPerformanceModeChangeBlockedStatus } from "../_lib/performanceModeRuntimePolicy";
 import { buildRoutingCacheKey, shouldRecomputeRouterDecision } from "../_lib/routingDecisionCache";
@@ -99,6 +110,7 @@ export interface PendingModelSwitch {
   displayName: string;
   descriptionKey: TranslationKey;
   downloadSizeBytes?: number;
+  isMobileFormFactor: boolean;
 }
 
 interface RuntimeGenerationState {
@@ -114,6 +126,10 @@ interface AppRuntimeContextValue {
   routerDecision: RouterDecision | null;
   selectedModel: ModelRegistryRecord | null;
   pendingModelSwitch: PendingModelSwitch | null;
+  modelSelectionMode: ModelSelectionMode;
+  manualModelId: string | null;
+  isRoutingInProgress: boolean;
+  isFallbackRetry: boolean;
   conversations: ConversationMetadata[];
   activeConversationId: ConversationId | null;
   messages: ChatMessageItem[];
@@ -135,6 +151,9 @@ interface AppRuntimeContextValue {
   applyPerformanceMode: (mode: PerformanceMode) => Promise<PerformanceModeApplyResult>;
   confirmModelSwitch: () => Promise<void>;
   cancelModelSwitch: () => void;
+  setManualModel: (modelId: string) => Promise<void>;
+  setAutomaticModel: () => Promise<void>;
+  clearObservations: () => void;
 }
 
 const AppRuntimeContext = createContext<AppRuntimeContextValue | null>(null);
@@ -157,6 +176,7 @@ function toPendingModelSwitch(record: ModelRegistryRecord): PendingModelSwitch {
     displayName: record.displayName,
     descriptionKey: record.descriptionKey as TranslationKey,
     downloadSizeBytes: record.downloadSize.value,
+    isMobileFormFactor: getStoredCapabilityProfile()?.formFactor === "mobile",
   };
 }
 
@@ -177,6 +197,10 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     useState<TaskCategory>(DEFAULT_CONVERSATION_TASK);
   const [routerDecision, setRouterDecisionState] = useState<RouterDecision | null>(null);
   const [pendingModelSwitch, setPendingModelSwitchState] = useState<PendingModelSwitch | null>(null);
+  const [modelSelectionMode, setModelSelectionModeState] = useState<ModelSelectionMode>("automatic");
+  const [manualModelId, setManualModelIdState] = useState<string | null>(null);
+  const [isRoutingInProgress, setIsRoutingInProgress] = useState(false);
+  const [isFallbackRetry, setIsFallbackRetry] = useState(false);
   const [conversations, setConversations] = useState<ConversationMetadata[]>([]);
   const [activeConversationId, setActiveConversationIdState] = useState<ConversationId | null>(null);
   const [messages, setMessagesState] = useState<ChatMessageItem[]>([]);
@@ -195,6 +219,8 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
   const messagesRef = useRef(messages);
   const routerDecisionRef = useRef<RouterDecision | null>(null);
   const routingCacheKeyRef = useRef<string | null>(null);
+  const manualModelIdRef = useRef<string | null>(null);
+  const hasLoadedManualPreferenceRef = useRef(false);
   const activeGenerationRef = useRef<ActiveGenerationDescriptor | null>(null);
   const runtimeLoadEpochRef = useRef(0);
   const recoveryInProgressRef = useRef(false);
@@ -248,6 +274,11 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     setRouterDecisionState(next);
   }, []);
 
+  const setManualModelId = useCallback((next: string | null) => {
+    manualModelIdRef.current = next;
+    setManualModelIdState(next);
+  }, []);
+
   const refreshConversations = useCallback(async () => {
     setConversations(await listConversations());
   }, []);
@@ -266,53 +297,59 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     const mode = performanceModeRef.current;
     if (!mode) return routerDecisionRef.current;
 
-    const routerInput = await buildRouterInputContext({
-      task: activeConversationTaskRef.current,
-      locale: localeRef.current,
-      performanceMode: mode,
-    });
+    setIsRoutingInProgress(true);
+    try {
+      const routerInput = await buildRouterInputContext({
+        task: activeConversationTaskRef.current,
+        locale: localeRef.current,
+        performanceMode: mode,
+        manualModelId: manualModelIdRef.current ?? undefined,
+      });
 
-    if (!routerInput) {
-      setRouterDecision(null);
-      routingCacheKeyRef.current = null;
-      return null;
-    }
+      if (!routerInput) {
+        setRouterDecision(null);
+        routingCacheKeyRef.current = null;
+        return null;
+      }
 
-    const currentRegistryId = registryIdForWebllmModelId(modelRegistryV2, runtimeStateRef.current.modelId);
-    const cacheKey = buildRoutingCacheKey({
-      task: routerInput.task,
-      locale: routerInput.locale,
-      performanceMode: routerInput.performanceMode,
-      capabilityDetectedAt: routerInput.capability.detectedAt,
-      benchmarkMeasuredAt: routerInput.benchmark?.measuredAt,
-      manualModelId: routerInput.manualModelId,
-      cachedModelIds: routerInput.cachedModelIds,
-      registryVersion: routerInput.registryVersion,
-      currentModelRepeatedlyFailing: currentRegistryId
-        ? isModelRepeatedlyFailing(routerInput.observations, currentRegistryId)
-        : false,
-    });
-
-    if (!shouldRecomputeRouterDecision(routingCacheKeyRef.current, cacheKey)) {
-      return routerDecisionRef.current;
-    }
-
-    routingCacheKeyRef.current = cacheKey;
-    const decision = routeAdaptiveModel(routerInput);
-    setRouterDecision(decision);
-    logEvent(
-      createLogEvent("router_decision", "info", {
+      const currentRegistryId = registryIdForWebllmModelId(modelRegistryV2, runtimeStateRef.current.modelId);
+      const cacheKey = buildRoutingCacheKey({
         task: routerInput.task,
+        locale: routerInput.locale,
         performanceMode: routerInput.performanceMode,
-        selectedModelId: decision.selectedModelId,
-        fallbackModelIds: decision.fallbackModelIds,
-        reasonCodes: decision.reasons,
-        warningCodes: decision.warnings,
-        rejectedCount: decision.rejectedModels.length,
-        confidence: decision.confidence,
-      })
-    );
-    return decision;
+        capabilityDetectedAt: routerInput.capability.detectedAt,
+        benchmarkMeasuredAt: routerInput.benchmark?.measuredAt,
+        manualModelId: routerInput.manualModelId,
+        cachedModelIds: routerInput.cachedModelIds,
+        registryVersion: routerInput.registryVersion,
+        currentModelRepeatedlyFailing: currentRegistryId
+          ? isModelRepeatedlyFailing(routerInput.observations, currentRegistryId)
+          : false,
+      });
+
+      if (!shouldRecomputeRouterDecision(routingCacheKeyRef.current, cacheKey)) {
+        return routerDecisionRef.current;
+      }
+
+      routingCacheKeyRef.current = cacheKey;
+      const decision = routeAdaptiveModel(routerInput);
+      setRouterDecision(decision);
+      logEvent(
+        createLogEvent("router_decision", "info", {
+          task: routerInput.task,
+          performanceMode: routerInput.performanceMode,
+          selectedModelId: decision.selectedModelId,
+          fallbackModelIds: decision.fallbackModelIds,
+          reasonCodes: decision.reasons,
+          warningCodes: decision.warnings,
+          rejectedCount: decision.rejectedModels.length,
+          confidence: decision.confidence,
+        })
+      );
+      return decision;
+    } finally {
+      setIsRoutingInProgress(false);
+    }
   }, [setRouterDecision]);
 
   // First-ever load only: decides whether the router's pick can be loaded
@@ -395,9 +432,13 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
         return true;
       }
 
+      setIsFallbackRetry(false);
       try {
         await attemptModelLoadWithFallback(instance.runtime, candidates, {
           initialStatus: isRecovery ? "recovering" : "loading_model",
+          onAttempt: (_candidate, attemptIndex) => {
+            if (attemptIndex > 0) setIsFallbackRetry(true);
+          },
         });
       } catch {
         if (runtimeLoadEpoch === runtimeLoadEpochRef.current && lifecycle.getCurrentRuntime() === instance.runtime) {
@@ -534,6 +575,14 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
   }, [pathname, setPerformanceMode]);
 
   useEffect(() => {
+    if (hasLoadedManualPreferenceRef.current) return;
+    hasLoadedManualPreferenceRef.current = true;
+    const stored = getStoredManualModelPreference();
+    setModelSelectionModeState(stored.mode);
+    setManualModelId(stored.manualModelId);
+  }, [setManualModelId]);
+
+  useEffect(() => {
     if (!performanceMode || hasRequestedInitialRuntimeRef.current || !pathname?.startsWith("/chat")) return;
     hasRequestedInitialRuntimeRef.current = true;
     void initializeRuntime("initial");
@@ -586,7 +635,7 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [activeConversationTask, applyModelSwitchIfNeeded, evaluateRouting, locale, performanceMode]);
+  }, [activeConversationTask, applyModelSwitchIfNeeded, evaluateRouting, locale, manualModelId, performanceMode]);
 
   useEffect(() => {
     if (runtimeState.status !== "error" || !runtimeState.error || !activeGenerationRef.current) return;
@@ -852,6 +901,36 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     [applyModelSwitchIfNeeded, evaluateRouting, setPerformanceMode]
   );
 
+  // Manual selection still goes through the same consent flow as automatic
+  // routing (resolveModelSwitch/applyModelSwitchIfNeeded) — picking a model
+  // by hand is not itself consent to download it; the router also still
+  // applies its own hard eligibility gates and may warn (rather than bypass
+  // them) if the chosen model turns out to be ineligible for this device.
+  const setManualModel = useCallback(
+    async (modelId: string) => {
+      setManualModelSelection(modelId);
+      setModelSelectionModeState("manual");
+      setManualModelId(modelId);
+
+      const decision = await evaluateRouting();
+      if (decision) await applyModelSwitchIfNeeded(decision);
+    },
+    [applyModelSwitchIfNeeded, evaluateRouting, setManualModelId]
+  );
+
+  const setAutomaticModel = useCallback(async () => {
+    setAutomaticModelSelection();
+    setModelSelectionModeState("automatic");
+    setManualModelId(null);
+
+    const decision = await evaluateRouting();
+    if (decision) await applyModelSwitchIfNeeded(decision);
+  }, [applyModelSwitchIfNeeded, evaluateRouting, setManualModelId]);
+
+  const clearObservations = useCallback(() => {
+    clearStoredModelPerformanceObservations();
+  }, []);
+
   const selectedModel = useMemo<ModelRegistryRecord | null>(
     () => (routerDecision?.selectedModelId ? modelRegistryV2.find((record) => record.id === routerDecision.selectedModelId) ?? null : null),
     [routerDecision]
@@ -865,6 +944,10 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
       routerDecision,
       selectedModel,
       pendingModelSwitch,
+      modelSelectionMode,
+      manualModelId,
+      isRoutingInProgress,
+      isFallbackRetry,
       conversations,
       activeConversationId,
       messages,
@@ -886,18 +969,26 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
       applyPerformanceMode,
       confirmModelSwitch,
       cancelModelSwitch,
+      setManualModel,
+      setAutomaticModel,
+      clearObservations,
     }),
     [
       activeConversationId,
       activeConversationTask,
       applyPerformanceMode,
       cancelModelSwitch,
+      clearObservations,
       configureChatRoute,
       confirmModelSwitch,
       conversations,
       deleteConversationById,
       generation,
+      isFallbackRetry,
+      isRoutingInProgress,
+      manualModelId,
       messages,
+      modelSelectionMode,
       pendingModelSwitch,
       performanceMode,
       recoverRuntime,
@@ -909,6 +1000,8 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
       selectConversation,
       selectedModel,
       sendMessage,
+      setAutomaticModel,
+      setManualModel,
       startNewConversation,
       stopGeneration,
       storageNotice,

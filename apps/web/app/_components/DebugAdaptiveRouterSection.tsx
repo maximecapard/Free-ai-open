@@ -4,6 +4,7 @@ import type { ModelRegistryRecord } from "@free-ai-open/model-registry";
 import type { RouterDecision } from "@free-ai-open/model-router";
 import type { TranslationKey } from "../_i18n/dictionary";
 import { adaptiveReasonKey, adaptiveRejectionKey, adaptiveWarningKey } from "../_lib/adaptiveRouteExplanation";
+import type { ModelSelectionMode } from "../_lib/manualModelPreference";
 import type { ObservationsSummary } from "../_lib/observationsSummary";
 import { DebugField, DebugSection } from "./DebugSection";
 import { useTranslations } from "../_i18n/LocaleContext";
@@ -18,12 +19,20 @@ function displayNameFor(registry: readonly ModelRegistryRecord[], modelId: strin
   return registry.find((record) => record.id === modelId)?.displayName ?? modelId;
 }
 
+function withCacheLabel(name: string, modelId: string, cachedModelIds: ReadonlySet<string>, t: (key: TranslationKey) => string): string {
+  return `${name} (${cachedModelIds.has(modelId) ? t("debug.adaptiveCached") : t("debug.adaptiveNotCached")})`;
+}
+
 export function DebugAdaptiveRouterSection({
   decision,
   registry,
+  modelSelectionMode,
+  cachedModelIds,
 }: {
   decision: RouterDecision | null;
   registry: readonly ModelRegistryRecord[];
+  modelSelectionMode: ModelSelectionMode;
+  cachedModelIds: ReadonlySet<string>;
 }) {
   const t = useTranslations();
 
@@ -37,9 +46,16 @@ export function DebugAdaptiveRouterSection({
         <>
           <DebugField
             label={t("debug.adaptiveSelectedModel")}
-            value={decision.selectedModelId ? displayNameFor(registry, decision.selectedModelId) : t("debug.adaptiveNoSelection")}
+            value={
+              decision.selectedModelId
+                ? withCacheLabel(displayNameFor(registry, decision.selectedModelId), decision.selectedModelId, cachedModelIds, t)
+                : t("debug.adaptiveNoSelection")
+            }
           />
-          <DebugField label={t("debug.adaptiveMode")} value={t("debug.adaptiveModeAutomatic")} />
+          <DebugField
+            label={t("debug.adaptiveMode")}
+            value={t(modelSelectionMode === "manual" ? "debug.adaptiveModeManual" : "debug.adaptiveModeAutomatic")}
+          />
           <DebugField label={t("debug.adaptiveConfidence")} value={t(CONFIDENCE_KEYS[decision.confidence])} />
 
           <div style={{ marginTop: 12 }}>
@@ -57,7 +73,9 @@ export function DebugAdaptiveRouterSection({
               label={t("debug.adaptiveFallbackChain")}
               value={
                 decision.fallbackModelIds.length > 0
-                  ? decision.fallbackModelIds.map((modelId) => displayNameFor(registry, modelId)).join(" → ")
+                  ? decision.fallbackModelIds
+                      .map((modelId) => withCacheLabel(displayNameFor(registry, modelId), modelId, cachedModelIds, t))
+                      .join(" → ")
                   : t("debug.adaptiveNoFallback")
               }
             />

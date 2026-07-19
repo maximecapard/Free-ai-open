@@ -26,7 +26,10 @@ import { PrivacyNotice } from "../_components/PrivacyNotice";
 import { RuntimeStatusBadge } from "../_components/RuntimeStatusBadge";
 import { useMobileHistoryDrawer } from "../_components/useMobileHistoryDrawer";
 import { findModeLabelKey, findTaskLabelKey, isPerformanceMode, isTaskCategory } from "../_lib/catalog";
+import { resolveChatEmptyStateReason } from "../_lib/chatEmptyState";
 import { downloadTextFile } from "../_lib/downloadTextFile";
+import { pickFriendlyRouteExplanation } from "../_lib/friendlyRouteExplanation";
+import { useOnlineStatus } from "../_components/useOnlineStatus";
 import { isGettingStartedCompleted } from "../_lib/gettingStartedPreference";
 import { runtimeErrorKey } from "../_lib/runtimeErrorLabel";
 import { canSendChatMessage } from "../_lib/runtimeUiState";
@@ -39,6 +42,7 @@ function ChatContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const drawer = useMobileHistoryDrawer();
+  const isOnline = useOnlineStatus();
   const {
     runtimeState,
     performanceMode,
@@ -46,6 +50,8 @@ function ChatContent() {
     routerDecision,
     selectedModel,
     pendingModelSwitch,
+    isRoutingInProgress,
+    isFallbackRetry,
     conversations,
     activeConversationId,
     messages,
@@ -75,6 +81,14 @@ function ChatContent() {
   const taskLabel = taskLabelKey ? t(taskLabelKey) : null;
   const modeLabel = modeLabelKey ? t(modeLabelKey) : null;
   const storageNoticeText = storageNotice ? t(storageNotice.key, storageNotice.params) : null;
+  const friendlyExplanation = routerDecision
+    ? pickFriendlyRouteExplanation({
+        reasons: routerDecision.reasons,
+        taskLabel: taskLabel ?? activeConversationTask,
+        localeLabel: locale === "fr" ? t("friendlyRoute.localeName.fr") : t("friendlyRoute.localeName.en"),
+      })
+    : null;
+  const emptyStateReason = routerDecision ? resolveChatEmptyStateReason(routerDecision) : null;
 
   const [isSetupComplete, setIsSetupComplete] = useState<boolean | null>(null);
   const [message, setMessage] = useState("");
@@ -299,9 +313,22 @@ function ChatContent() {
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <ModelStatusPill taskLabel={taskLabel} modeLabel={modeLabel} modelName={selectedModel?.displayName} />
-              {performanceMode && <RuntimeStatusBadge state={runtimeState} />}
+              {performanceMode && (
+                <RuntimeStatusBadge
+                  state={runtimeState}
+                  isRoutingInProgress={isRoutingInProgress}
+                  isFallbackRetry={isFallbackRetry}
+                  hasPendingModelSwitch={Boolean(pendingModelSwitch)}
+                />
+              )}
             </div>
           </div>
+
+          {performanceMode && selectedModel && friendlyExplanation && (
+            <p role="status" className="fo-muted" style={{ margin: "0 0 16px", fontSize: 13 }}>
+              {t(friendlyExplanation.key, friendlyExplanation.params)}
+            </p>
+          )}
 
           {storageNoticeText && (
             <section
@@ -328,17 +355,33 @@ function ChatContent() {
 
           {/* Reason codes, warnings, and rejected models are technical detail —
               kept on /debug so normal chat stays simple. This only surfaces
-              the one case a chatting user needs to act on: nothing to load. */}
+              the cases a chatting user needs to act on: nothing to load, or
+              why WebGPU specifically blocks every model on this browser. */}
           {performanceMode && routerDecision && !selectedModel && (
             <section role="alert" className="fo-inline-notice" style={{ marginBottom: 16 }}>
-              <strong>{t("chat.noModelAvailable")}</strong>
-              <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>
-                {t("router.noCompatible", {
-                  task: taskLabel ?? activeConversationTask,
-                  count: routerDecision.rejectedModels.length,
-                })}
-              </p>
+              {emptyStateReason === "webgpu_unavailable" ? (
+                <>
+                  <strong>{t("chat.webgpuUnavailableTitle")}</strong>
+                  <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>{t("chat.webgpuUnavailableBody")}</p>
+                </>
+              ) : (
+                <>
+                  <strong>{t("chat.noModelAvailable")}</strong>
+                  <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>
+                    {t("router.noCompatible", {
+                      task: taskLabel ?? activeConversationTask,
+                      count: routerDecision.rejectedModels.length,
+                    })}
+                  </p>
+                </>
+              )}
             </section>
+          )}
+
+          {performanceMode && emptyStateReason === "manual_model_ineligible" && (
+            <p role="status" className="fo-muted" style={{ margin: "0 0 16px", fontSize: 13 }}>
+              {t("chat.manualModelIneligibleNotice")}
+            </p>
           )}
 
           {pendingModelSwitch && (
@@ -353,6 +396,9 @@ function ChatContent() {
             <section role="alert" className="fo-inline-notice" style={{ borderColor: "var(--fo-danger)", background: "var(--fo-danger-soft)", marginBottom: 16 }}>
               <strong>{t("chat.localModelUnavailable")}</strong>
               <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>{t(runtimeErrorKey(runtimeState.error.code))}</p>
+              {!isOnline && (
+                <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>{t("chat.offlineNotice")}</p>
+              )}
               <button type="button" className="fo-button fo-button-secondary" onClick={() => void reloadRuntime()} style={{ marginTop: 8 }}>
                 {t("chat.reloadModel")}
               </button>
