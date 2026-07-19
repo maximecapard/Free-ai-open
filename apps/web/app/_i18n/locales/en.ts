@@ -408,8 +408,8 @@ export const en = {
     model_load_failed: "The model failed to load. Check your connection and try again.",
     generation_interrupted: "Generation was stopped.",
     cancel_timeout: "Cancellation is taking longer than expected. The local model may be unresponsive.",
-    generation_stalled: "The local model stopped responding while generating a reply.",
-    generation_timeout: "Generation took too long and was stopped.",
+    generation_stalled: "The local model stopped responding.",
+    generation_exceeded_safety_limit: "Generation exceeded the maximum allowed duration and was stopped.",
     degenerate_output: "Generation stopped because the model output became unstable.",
     out_of_memory: "Your device ran out of memory running the model. Try closing other tabs.",
     unknown: "Something went wrong with the local AI runtime.",
@@ -426,6 +426,8 @@ export const en = {
       "Generation stopped. The partial response was not saved, and the local model is being recycled before the next message.",
     generationUnstable: "Generation stopped because the model output became unstable. The partial response was not saved.",
     generationTimedOut: "Generation stopped because the local model stopped responding. The partial response was not saved.",
+    generationIncomplete:
+      "Generation stopped because the local model stopped responding partway through. The response below may be incomplete — you can try sending your message again.",
     generationFailed: "Generation failed. The partial response was not saved.",
   },
   debug: {

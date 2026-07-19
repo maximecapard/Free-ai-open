@@ -99,6 +99,17 @@ Phase 0 adds types, package boundaries, and local persistence/migration only —
 - [ ] Export diagnostics and confirm current top-level runtime/recommended/loaded values are used even if older local logs refer to another model. Confirm `contentLogged: false` and no prompt/response/conversation/document/raw GPU string appears.
 - [ ] Inspect the loaded WebLLM engine options in the runtime unit/smoke harness and confirm the router's context window is applied within the verified registry preset; output tokens must remain at or below the global safety cap.
 
+## v0.7.1-alpha (generation timeout/stall watchdog hotfix)
+
+- [ ] Run `packages/ai-runtime/src/generationWatchdog.test.ts` and `runtime.test.ts` and confirm the regression test ("completes successfully when chunks keep streaming continuously past the old absolute-duration threshold") passes — this test is documented to fail against the pre-fix implementation.
+- [ ] Start a real chat generation and let it run past 90 seconds while it keeps producing visible text (a long request to a slower model is a good way to reach this); confirm it completes normally instead of being cut off.
+- [ ] Confirm a first-token timeout (no output at all) still shows "Local model needs attention" with the existing empty-bubble behavior — no partial text to preserve.
+- [ ] If a genuine stall can be forced in a test/dev build (e.g. by briefly disconnecting the worker mid-stream), confirm the partial reply already shown stays visible, is saved, and shows an "incomplete" notice rather than disappearing.
+- [ ] Background the tab during an active generation, wait past 45 seconds, return to the tab, and confirm the generation was not declared stalled purely from being backgrounded.
+- [ ] Confirm `Stop` still interrupts a generation normally and `Reload model` recovery still works exactly as before (this hotfix must not change Stop/recovery behavior).
+- [ ] Export a diagnostic report and confirm it still contains no prompt/response content, and that a safety-limit interruption (if reproduced) does not appear as a "stalled" outcome.
+- [ ] Confirm French and English show the new "may be incomplete" notice correctly when a partial reply is preserved.
+
 ## Manual smoke tests (browser)
 
 - [ ] Chat: onboarding leads to `/chat`, the local model loads, and a prompt gets a streamed reply.

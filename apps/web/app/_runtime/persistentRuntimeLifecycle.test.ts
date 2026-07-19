@@ -12,6 +12,7 @@ function createFakeRuntime(): InferenceRuntime {
     loadModel: vi.fn(async () => {}),
     generate: vi.fn(async function* (): AsyncGenerator<GenerateChunk> {}),
     stopGeneration: vi.fn(),
+    setGenerationWatchdogSuspended: vi.fn(),
     dispose: vi.fn(async () => {}),
   };
 }

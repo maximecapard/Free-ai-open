@@ -46,13 +46,16 @@ describe("classifyGenerationOutcome", () => {
     expect(classifyGenerationOutcome(null, "degenerate_output")).toBe("degenerate");
   });
 
-  it("classifies stalls and timeouts as stalled", () => {
+  it("classifies a genuine stall as stalled", () => {
     expect(classifyGenerationOutcome(null, "generation_stalled")).toBe("stalled");
-    expect(classifyGenerationOutcome(null, "generation_timeout")).toBe("stalled");
   });
 
   it("classifies out-of-memory distinctly", () => {
     expect(classifyGenerationOutcome(null, "out_of_memory")).toBe("out_of_memory");
+  });
+
+  it("does not classify the absolute safety-limit cap as a model failure (a false timeout must not count as a stall)", () => {
+    expect(classifyGenerationOutcome(null, "generation_exceeded_safety_limit")).toBe("completed");
   });
 
   it("falls back to stalled for an unclassified runtime error rather than inventing a new outcome", () => {

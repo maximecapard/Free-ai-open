@@ -15,7 +15,7 @@ export type RuntimeErrorCode =
   | "generation_interrupted"
   | "cancel_timeout"
   | "generation_stalled"
-  | "generation_timeout"
+  | "generation_exceeded_safety_limit"
   | "degenerate_output"
   | "out_of_memory"
   | "unknown";

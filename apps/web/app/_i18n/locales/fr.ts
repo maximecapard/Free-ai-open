@@ -413,8 +413,8 @@ export const fr: Dictionary = {
     model_load_failed: "Le chargement du modèle a échoué. Vérifiez votre connexion et réessayez.",
     generation_interrupted: "La génération a été arrêtée.",
     cancel_timeout: "L'annulation prend plus de temps que prévu. Le modèle local est peut-être bloqué.",
-    generation_stalled: "Le modèle local a cessé de répondre pendant la génération.",
-    generation_timeout: "La génération a pris trop de temps et a été arrêtée.",
+    generation_stalled: "Le modèle local a cessé de répondre.",
+    generation_exceeded_safety_limit: "La génération a dépassé la durée maximale autorisée et a été arrêtée.",
     degenerate_output: "Génération arrêtée car la sortie du modèle est devenue instable.",
     out_of_memory: "Votre appareil a manqué de mémoire en exécutant le modèle. Essayez de fermer d'autres onglets.",
     unknown: "Une erreur est survenue dans le moteur d'IA local.",
@@ -433,6 +433,8 @@ export const fr: Dictionary = {
       "Génération arrêtée car la sortie du modèle est devenue instable. La réponse partielle n'a pas été enregistrée.",
     generationTimedOut:
       "Génération arrêtée car le modèle local a cessé de répondre. La réponse partielle n'a pas été enregistrée.",
+    generationIncomplete:
+      "Génération arrêtée car le modèle local a cessé de répondre en cours de route. La réponse ci-dessous est peut-être incomplète — vous pouvez essayer d'envoyer votre message à nouveau.",
     generationFailed: "La génération a échoué. La réponse partielle n'a pas été enregistrée.",
   },
   debug: {
