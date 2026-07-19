@@ -23,4 +23,5 @@ export type {
   ConversationStoreLimits,
   CreateConversationInput,
   MessageRole,
+  MessageStatus,
 } from "./types";

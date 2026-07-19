@@ -183,6 +183,55 @@ describe("conversation export/import", () => {
     expect(prepared[0]?.task).toBe("coding");
   });
 
+  it("preserves incomplete assistant provenance through export and import", () => {
+    const incompleteConversation: Conversation = {
+      ...baseConversation,
+      messages: baseConversation.messages.map((message, index) =>
+        index === 1 ? { ...message, status: "incomplete" as const } : message
+      ),
+    };
+
+    const exportData = buildConversationExport([incompleteConversation], { now });
+    expect(exportData.conversations[0]?.messages[1]?.status).toBe("incomplete");
+
+    const parsed = parseConversationImport(serializeConversationExport(exportData));
+    const prepared = prepareImportedConversations(parsed, {
+      now,
+      idFactory: (prefix) => `${prefix}-incomplete`,
+    });
+
+    expect(prepared[0]?.messages[1]?.status).toBe("incomplete");
+  });
+
+  it("preserves an explicit completed status when present", () => {
+    const completedConversation: Conversation = {
+      ...baseConversation,
+      messages: baseConversation.messages.map((message, index) =>
+        index === 1 ? { ...message, status: "complete" as const } : message
+      ),
+    };
+
+    const exportData = buildConversationExport([completedConversation], { now });
+    expect(exportData.conversations[0]?.messages[1]?.status).toBe("complete");
+
+    const prepared = prepareImportedConversations(exportData, {
+      now,
+      idFactory: (prefix) => `${prefix}-complete`,
+    });
+
+    expect(prepared[0]?.messages[1]?.status).toBe("complete");
+  });
+
+  it("rejects unknown message completion statuses", () => {
+    const data = JSON.parse(validExportJson()) as {
+      conversations: Array<{ messages: Array<Record<string, unknown>> }>;
+    };
+    data.conversations[0]!.messages[1]!.status = "streaming";
+
+    expect(validateConversationExport(data)).toMatchObject({ valid: false });
+    expect(() => parseConversationImport(JSON.stringify(data))).toThrow(/Invalid conversation import data/);
+  });
+
   it("remains a valid, importable export when task is absent (older export format)", () => {
     const exportData = buildConversationExport([baseConversation], { now });
     expect(exportData.conversations[0]?.task).toBeUndefined();

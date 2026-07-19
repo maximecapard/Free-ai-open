@@ -5,7 +5,7 @@ export function toChatMessageItems(conversation: Conversation): ChatMessageItem[
   const items: ChatMessageItem[] = [];
   for (const message of conversation.messages) {
     if (message.role === "user" || message.role === "assistant") {
-      items.push({ id: message.id, role: message.role, content: message.content });
+      items.push({ id: message.id, role: message.role, content: message.content, status: message.status });
     }
   }
   return items;

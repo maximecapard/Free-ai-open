@@ -78,6 +78,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
   let generationEpoch = 0;
   let cancelTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
   let safetyLimitTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  const forcedRecoveryErrors = new Map<number, RuntimeError>();
   // The single in-flight generation's watchdog (see generationWatchdog.ts).
   // Only one generation can ever be active at a time (generate() refuses to
   // start a new one unless status is "ready"), so this — like the timeout
@@ -114,6 +115,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
   // state, but only if nothing has resolved this same generation already.
   function forceRecovery(expectedEpoch: number, error: RuntimeError, event: string, localModelId: string | undefined): void {
     if (expectedEpoch !== generationEpoch) return;
+    forcedRecoveryErrors.set(expectedEpoch, error);
     generationEpoch += 1;
     clearCancelTimeout();
     disposeWatchdog();
@@ -128,6 +130,12 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       runtimeStatus: "error",
       errorCode: toLocalLogErrorCode(error.code),
     });
+  }
+
+  function takeForcedRecoveryError(expectedEpoch: number): RuntimeError | null {
+    const error = forcedRecoveryErrors.get(expectedEpoch) ?? null;
+    forcedRecoveryErrors.delete(expectedEpoch);
+    return error;
   }
 
   function buildGenerationMetrics(generationStartedAt: number, firstTokenAt: number | null, tokenCount: number) {
@@ -331,6 +339,12 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       let outputForSafety = "";
 
       for await (const chunk of stream) {
+        if (myEpoch !== generationEpoch) {
+          const forcedError = takeForcedRecoveryError(myEpoch);
+          if (forcedError) yield { type: "error", error: forcedError };
+          return;
+        }
+
         const choice = chunk.choices[0];
         const text = choice?.delta?.content ?? "";
         if (text) {
@@ -372,7 +386,11 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       // A cancel confirmation or a watchdog/safety-limit timeout already
       // force-resolved this generation while we were waiting on the stream;
       // don't overwrite the recovered state with this late confirmation.
-      if (myEpoch !== generationEpoch) return;
+      if (myEpoch !== generationEpoch) {
+        const forcedError = takeForcedRecoveryError(myEpoch);
+        if (forcedError) yield { type: "error", error: forcedError };
+        return;
+      }
       clearCancelTimeout();
       disposeWatchdog();
       clearSafetyLimitTimeout();
@@ -397,7 +415,11 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         performanceMetrics: { firstTokenMs, tokensPerSecond, totalTimeMs },
       });
     } catch (rawError) {
-      if (myEpoch !== generationEpoch) return;
+      if (myEpoch !== generationEpoch) {
+        const forcedError = takeForcedRecoveryError(myEpoch);
+        if (forcedError) yield { type: "error", error: forcedError };
+        return;
+      }
       clearCancelTimeout();
       disposeWatchdog();
       clearSafetyLimitTimeout();
@@ -463,6 +485,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     clearCancelTimeout();
     disposeWatchdog();
     clearSafetyLimitTimeout();
+    forcedRecoveryErrors.clear();
     generationEpoch += 1;
 
     try {

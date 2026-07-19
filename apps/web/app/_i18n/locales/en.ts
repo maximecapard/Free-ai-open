@@ -334,6 +334,7 @@ export const en = {
     scrollToLatest: "Scroll to latest",
     youLabel: "You",
     assistantLabel: "Local assistant",
+    incompleteMessageLabel: "Incomplete response",
     composerLabel: "Message",
     composerHint: "Enter to send, Shift+Enter for a new line.",
   },
@@ -428,6 +429,9 @@ export const en = {
     generationTimedOut: "Generation stopped because the local model stopped responding. The partial response was not saved.",
     generationIncomplete:
       "Generation stopped because the local model stopped responding partway through. The response below may be incomplete — you can try sending your message again.",
+    generationSafetyLimit: "Generation stopped after reaching the maximum allowed duration. No response was saved.",
+    generationSafetyLimitIncomplete:
+      "Generation reached the maximum allowed duration. The partial response was saved locally and marked incomplete.",
     generationFailed: "Generation failed. The partial response was not saved.",
   },
   debug: {

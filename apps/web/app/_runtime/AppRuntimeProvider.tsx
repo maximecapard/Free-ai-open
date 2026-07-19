@@ -36,6 +36,7 @@ import { resolveConversationTask } from "../_lib/catalog";
 import { deriveConversationTitle, toChatMessageItems } from "../_lib/conversationMessages";
 import {
   generationNoticeKey,
+  isIncompleteAssistantOutput,
   shouldDiscardPartialAssistantOutput,
   shouldPersistAssistantOutput,
 } from "../_lib/generationPersistence";
@@ -309,11 +310,10 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     const errorCode = runtimeState.error.code;
     // This effect fires for watchdog-forced errors (cancel_timeout,
     // generation_stalled, generation_exceeded_safety_limit): the runtime's
-    // generate() loop was abandoned mid-stream by forceRecovery() rather
-    // than yielding its own "done"/"error" chunk, so sendMessage()'s own
-    // completion handling never runs for these — this is the only place
-    // that sees them. Whatever assistant text already streamed is still
-    // sitting in React state, keyed by the active generation's message id.
+    // A forced recovery may leave the worker stream pending indefinitely.
+    // This effect is the fallback path when generate() cannot deliver its
+    // terminal error chunk; the generation identity prevents this path and
+    // sendMessage() from finalizing the same response twice.
     const assistantMessage = messagesRef.current.find(
       (message) => message.id === activeGeneration.assistantMessageId
     );
@@ -335,15 +335,27 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     } else if (assistantMessage) {
       // A genuine watchdog interruption that already produced visible
       // output: keep it in the transcript and persist it as the (marked
-      // incomplete via storageNotice) assistant reply, instead of
+      // incomplete in durable message metadata) assistant reply, instead of
       // discarding legitimately-generated content the user was reading.
+      setMessages((previous) =>
+        previous.map((message) =>
+          message.id === activeGeneration.assistantMessageId ? { ...message, status: "incomplete" } : message
+        )
+      );
       void addMessage(activeGeneration.conversationId, {
         id: assistantMessage.id,
         role: "assistant",
         content: assistantMessage.content,
-      }).then((saved) => {
-        if (saved) void refreshConversations();
-      });
+        status: "incomplete",
+      })
+        .then((saved) => {
+          if (saved) {
+            void refreshConversations();
+          } else {
+            setStorageNoticeState({ key: "storageNotice.couldNotSaveReply" });
+          }
+        })
+        .catch(() => setStorageNoticeState({ key: "storageNotice.couldNotSaveReply" }));
     }
     if (noticeKey) setStorageNoticeState({ key: noticeKey });
     if (errorCode === "cancel_timeout") {
@@ -539,7 +551,10 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
         void evaluateRouting().then((decision) => applyModelSwitchIfNeeded(decision));
       }
 
-      if (shouldDiscardPartialAssistantOutput(stopReason, runtimeErrorCode)) {
+      const hasPartialOutput = assistantText.length > 0;
+      const isIncompleteOutput = isIncompleteAssistantOutput(runtimeErrorCode, hasPartialOutput);
+
+      if (shouldDiscardPartialAssistantOutput(stopReason, runtimeErrorCode, hasPartialOutput)) {
         setActiveGeneration(null);
         setMessages((previous) => removeAssistantMessage(previous, assistantId));
         const noticeKey =
@@ -553,14 +568,29 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
         return true;
       }
 
+      if (isIncompleteOutput) {
+        setMessages((previous) =>
+          previous.map((message) =>
+            message.id === assistantId ? { ...message, status: "incomplete" } : message
+          )
+        );
+        const noticeKey = generationNoticeKey(stopReason, runtimeErrorCode, true);
+        if (noticeKey) setStorageNoticeState({ key: noticeKey });
+      }
+
       setActiveGeneration(null);
       if (stopReason === "completed" && assistantText.length === 0) {
         setMessages((previous) => removeAssistantMessage(previous, assistantId));
         return true;
       }
 
-      if (shouldPersistAssistantOutput(stopReason, assistantText)) {
-        if (!(await addMessage(conversationId, { id: assistantId, role: "assistant", content: assistantText }))) {
+      if (shouldPersistAssistantOutput(stopReason, assistantText, runtimeErrorCode)) {
+        if (!(await addMessage(conversationId, {
+          id: assistantId,
+          role: "assistant",
+          content: assistantText,
+          ...(isIncompleteOutput ? { status: "incomplete" as const } : {}),
+        }))) {
           setStorageNoticeState({ key: "storageNotice.couldNotSaveReply" });
         } else {
           await refreshConversations();

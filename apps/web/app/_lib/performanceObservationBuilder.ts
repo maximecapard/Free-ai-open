@@ -54,14 +54,12 @@ export function classifyGenerationOutcome(
   if (errorCode === "out_of_memory") {
     return "out_of_memory";
   }
-  // The absolute safety limit is a deliberately rare, conservatively large
-  // emergency cap on total duration (see packages/ai-runtime/src/runtime.ts)
-  // — unlike a genuine stall, it can only fire while the model is actively
-  // producing output. Counting it as "stalled" would penalize a model that
-  // was behaving normally, which is exactly the false-failure-observation
-  // problem this classification exists to avoid.
+  // The absolute safety limit is a system interruption, not evidence of
+  // either model instability or successful completion. Reuse the neutral
+  // cancelled bucket so adaptive routing excludes it from success/failure
+  // scoring without inventing a new persisted observation outcome.
   if (errorCode === "generation_exceeded_safety_limit") {
-    return "completed";
+    return "cancelled";
   }
   if (stopReason === "completed" && !errorCode) {
     return "completed";

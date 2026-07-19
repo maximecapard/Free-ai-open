@@ -65,6 +65,16 @@ export function createIndexedDbConversationStore(): ConversationStore | null {
     async getAll() {
       return runTransaction("readonly", async (store) => requestToPromise(store.getAll()) as Promise<Conversation[]>);
     },
+    async update(id, updater) {
+      return runTransaction("readwrite", async (store) => {
+        const current = (await requestToPromise(store.get(id))) as Conversation | undefined;
+        if (!current) return null;
+        const updated = updater(current);
+        if (!updated) return null;
+        await requestToPromise(store.put(updated));
+        return updated;
+      });
+    },
     async delete(id) {
       await runTransaction("readwrite", async (store) => {
         await requestToPromise(store.delete(id));

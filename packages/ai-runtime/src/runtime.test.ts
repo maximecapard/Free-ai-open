@@ -524,11 +524,21 @@ describe("createInferenceRuntime", () => {
 
         // The stalled stream now "arrives late" with its abort confirmation.
         releaseStalledChunk?.();
-        await consume;
+        const chunks = await consume;
 
         // The late confirmation must not overwrite the already-recovered state.
         expect(runtime.getState().status).toBe("error");
         expect(runtime.getState().error?.code).toBe("cancel_timeout");
+        expect(chunks).toEqual([
+          { type: "token", text: "Par" },
+          {
+            type: "error",
+            error: {
+              code: "cancel_timeout",
+              message: "Cancellation is taking longer than expected. The local model may be unresponsive.",
+            },
+          },
+        ]);
         expect(mocks.addLocalLog).not.toHaveBeenCalledWith(expect.objectContaining({ event: "inference.cancelled" }));
       } finally {
         vi.useRealTimers();
@@ -632,6 +642,50 @@ describe("createInferenceRuntime", () => {
         );
 
         void consume;
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("drops a non-empty worker chunk that arrives after stall recovery and emits the forced error", async () => {
+      let releaseLateChunk: (() => void) | undefined;
+      mocks.mockEngine.chat.completions.create.mockResolvedValueOnce(
+        (async function* () {
+          yield { choices: [{ delta: { content: "Hel" }, finish_reason: null }] };
+          await new Promise<void>((resolve) => {
+            releaseLateChunk = resolve;
+          });
+          yield { choices: [{ delta: { content: "late-content" }, finish_reason: null }] };
+        })()
+      );
+
+      const runtime = createInferenceRuntime(fakeWorker());
+      await runtime.loadModel("test-model");
+
+      vi.useFakeTimers();
+      try {
+        const consume = drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+
+        await vi.advanceTimersByTimeAsync(45_000);
+        expect(runtime.getState().error?.code).toBe("generation_stalled");
+
+        releaseLateChunk?.();
+        const chunks = await consume;
+
+        expect(chunks).toEqual([
+          { type: "token", text: "Hel" },
+          {
+            type: "error",
+            error: {
+              code: "generation_stalled",
+              message: "The local model stopped responding. Try reloading it.",
+            },
+          },
+        ]);
+        expect(chunks).not.toContainEqual({ type: "token", text: "late-content" });
       } finally {
         vi.useRealTimers();
       }

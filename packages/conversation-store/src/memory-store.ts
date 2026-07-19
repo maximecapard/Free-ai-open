@@ -21,6 +21,14 @@ export function createMemoryConversationStore(): ConversationStore {
     async getAll() {
       return [...records.values()].map(cloneConversation);
     },
+    async update(id, updater) {
+      const current = records.get(id);
+      if (!current) return null;
+      const updated = updater(cloneConversation(current));
+      if (!updated) return null;
+      records.set(id, cloneConversation(updated));
+      return cloneConversation(updated);
+    },
     async delete(id) {
       records.delete(id);
     },

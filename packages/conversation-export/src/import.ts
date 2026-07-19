@@ -54,6 +54,7 @@ export function prepareImportedConversations(
       role: message.role,
       content: message.content,
       createdAt: message.createdAt,
+      ...(message.status !== undefined ? { status: message.status } : {}),
     }));
 
     return {
