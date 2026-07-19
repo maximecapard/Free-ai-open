@@ -249,6 +249,22 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // FreeAI Open intentionally keeps generation alive while the tab is
+  // backgrounded (see runtimeLifecyclePolicy.ts's "visibility_hidden" being
+  // a non-disposal trigger) — but background tab throttling can delay timer
+  // firing and worker message delivery in ways that look identical to a
+  // genuine stall. This is the app layer's half of that: ai-runtime stays
+  // platform-independent and exposes setGenerationWatchdogSuspended(), and
+  // only this hook reads document.visibilityState. Suspending/resuming is a
+  // no-op whenever no generation is active.
+  useEffect(() => {
+    function handleVisibilityChange(): void {
+      lifecycleRef.current.getCurrentRuntime()?.setGenerationWatchdogSuspended(document.hidden);
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [lifecycleRef]);
+
   useEffect(() => {
     if (performanceModeRef.current) return;
     const storedMode = getStoredPerformanceMode();
@@ -290,26 +306,61 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     if (runtimeState.status !== "error" || !runtimeState.error || !activeGenerationRef.current) return;
 
     const activeGeneration = activeGenerationRef.current;
-    const noticeKey = generationNoticeKey(null, runtimeState.error.code);
+    const errorCode = runtimeState.error.code;
+    // This effect fires for watchdog-forced errors (cancel_timeout,
+    // generation_stalled, generation_exceeded_safety_limit): the runtime's
+    // generate() loop was abandoned mid-stream by forceRecovery() rather
+    // than yielding its own "done"/"error" chunk, so sendMessage()'s own
+    // completion handling never runs for these — this is the only place
+    // that sees them. Whatever assistant text already streamed is still
+    // sitting in React state, keyed by the active generation's message id.
+    const assistantMessage = messagesRef.current.find(
+      (message) => message.id === activeGeneration.assistantMessageId
+    );
+    const hasPartialOutput = Boolean(assistantMessage && assistantMessage.content.length > 0);
+    const noticeKey = generationNoticeKey(null, errorCode, hasPartialOutput);
     const currentRegistryId = registryIdForWebllmModelId(modelRegistryV2, runtimeState.modelId);
     if (currentRegistryId) {
       recordModelPerformanceObservation(
         buildGenerationObservation({
           modelId: currentRegistryId,
           stopReason: null,
-          errorCode: runtimeState.error.code,
+          errorCode,
         })
       );
     }
     setActiveGeneration(null);
-    setMessages((previous) => removeAssistantMessage(previous, activeGeneration.assistantMessageId));
+    if (shouldDiscardPartialAssistantOutput(null, errorCode, hasPartialOutput)) {
+      setMessages((previous) => removeAssistantMessage(previous, activeGeneration.assistantMessageId));
+    } else if (assistantMessage) {
+      // A genuine watchdog interruption that already produced visible
+      // output: keep it in the transcript and persist it as the (marked
+      // incomplete via storageNotice) assistant reply, instead of
+      // discarding legitimately-generated content the user was reading.
+      void addMessage(activeGeneration.conversationId, {
+        id: assistantMessage.id,
+        role: "assistant",
+        content: assistantMessage.content,
+      }).then((saved) => {
+        if (saved) void refreshConversations();
+      });
+    }
     if (noticeKey) setStorageNoticeState({ key: noticeKey });
-    if (runtimeState.error.code === "cancel_timeout") {
+    if (errorCode === "cancel_timeout") {
       void recoverRuntime();
     } else {
       void refreshRoutingDecision();
     }
-  }, [recoverRuntime, refreshRoutingDecision, runtimeState.error, runtimeState.modelId, runtimeState.status, setActiveGeneration, setMessages]);
+  }, [
+    recoverRuntime,
+    refreshConversations,
+    refreshRoutingDecision,
+    runtimeState.error,
+    runtimeState.modelId,
+    runtimeState.status,
+    setActiveGeneration,
+    setMessages,
+  ]);
 
   const configureChatRoute = useCallback(
     (task: TaskCategory | null, mode: PerformanceMode | null) => {

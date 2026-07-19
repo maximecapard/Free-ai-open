@@ -71,12 +71,12 @@ The `/chat` export/import UI enforces this at the app layer too: it calls only `
 The WebLLM runtime includes alpha safeguards for unstable model output:
 
 - bounded `max_tokens` for generation requests;
-- maximum generation duration;
+- a first-token-timeout/stall-timeout generation watchdog that detects only absence of progress, never total duration alone (`packages/ai-runtime/src/generationWatchdog.ts` — see `docs/architecture.md`'s "Generation timeout and stall watchdog"), plus a wholly separate, much larger emergency duration cap (`generation_exceeded_safety_limit`) for a truly runaway generation;
 - output character limits;
 - detection for long unbroken sequences, repeated characters, and repeated punctuation/symbol blocks;
-- technical-only events such as `inference.degenerate-output` and `inference.generation-timeout`.
+- technical-only events such as `inference.degenerate-output`, `inference.first-token-timeout`, `inference.stall-timeout`, and `inference.generation-safety-limit`.
 
-When these safeguards fire, partial assistant output is not stored as a completed assistant message. Technical events, local logs, and diagnostic reports must contain only technical metadata such as error codes, runtime status, lengths where applicable, and timing metrics, never prompt or generated response text.
+When Stop, degenerate-output detection, or a first-token timeout (no output ever produced) fires, partial assistant output is not stored as a completed assistant message. A genuine stall or safety-limit interruption that had already produced visible assistant text is the one exception: that partial reply is preserved and saved, marked incomplete via a notice, rather than discarded. Technical events, local logs, and diagnostic reports must contain only technical metadata such as error codes, runtime status, lengths where applicable, and timing metrics, never prompt or generated response text.
 
 The chat transcript renderer may batch generated text briefly in memory before updating React state. This is a UI-only performance buffer, not a logging or diagnostic path, and must not be connected to telemetry, local technical logs, diagnostic reports, or server endpoints.
 

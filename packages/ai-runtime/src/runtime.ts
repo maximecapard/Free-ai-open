@@ -4,10 +4,12 @@ import { detectWebGPUAvailability } from "@free-ai-open/device-profiler";
 import { createLogEvent, logEvent } from "@free-ai-open/logger";
 import { classifyRuntimeError } from "./errors";
 import { detectDegenerateOutput, GENERATION_SAFETY_LIMITS } from "./generation-safety";
+import { createGenerationWatchdog } from "./generationWatchdog";
 import { getRuntimeLanguageInstruction } from "./language-instruction";
 import { recordLocalLog, toLocalLogErrorCode, toLocalLogModelId } from "./local-log-bridge";
 import { DEFAULT_MODEL_ID } from "./model";
 import type { DegenerateOutputReason } from "./generation-safety";
+import type { GenerationWatchdog } from "./generationWatchdog";
 import type { GenerateChunk, GenerateInput, InferenceChatWorker, RuntimeError, RuntimeState, RuntimeStatus } from "./types";
 
 export interface LoadModelOptions {
@@ -21,6 +23,12 @@ export interface InferenceRuntime {
   loadModel(modelId?: string, options?: LoadModelOptions): Promise<void>;
   generate(input: GenerateInput): AsyncGenerator<GenerateChunk>;
   stopGeneration(): void;
+  // Lets the app layer (which owns document.visibilityState — see
+  // docs/architecture.md's watchdog section) pause inactivity detection
+  // while the tab is hidden. Background tab throttling can delay both timer
+  // firing and worker message delivery in ways that look identical to a
+  // genuine stall; this is a no-op when no generation is active.
+  setGenerationWatchdogSuspended(suspended: boolean): void;
   dispose(): Promise<void>;
 }
 
@@ -34,13 +42,27 @@ const IDLE_STATE: RuntimeState = { status: "idle", modelId: null, loadProgress: 
 // before surfacing a recoverable error instead of hanging indefinitely.
 const CANCEL_TIMEOUT_MS = 15_000;
 
-// A separate, more generous safety net: even without ever clicking Stop, a
-// generation can occasionally wedge the underlying worker/engine (observed
-// after a prior interrupted generation) and never emit a single token. This
-// only fires if literally nothing has streamed back yet, so it never cuts
-// off a response that is merely slow but making progress.
+// Two distinct "no progress" watchdog phases, both driven by
+// generationWatchdog.ts. FIRST_TOKEN_TIMEOUT_MS bounds how long we wait for
+// the very first token/chunk after inference starts (covers model
+// prefill/tokenization time). STALL_TIMEOUT_MS bounds the gap between any
+// two subsequent tokens/chunks once streaming has begun, and is re-armed on
+// every one of them — it is a genuine inactivity detector, not a duration
+// cap, so a generation that keeps producing output never trips it no matter
+// how long it runs in total.
+const FIRST_TOKEN_TIMEOUT_MS = 45_000;
 const STALL_TIMEOUT_MS = 45_000;
-const GENERATION_TIMEOUT_MS = GENERATION_SAFETY_LIMITS.maxDurationMs;
+
+// A wholly separate, much larger emergency cap on total generation
+// duration, kept only to bound truly pathological runaway execution (e.g. a
+// stream that keeps producing progress events fast enough to dodge the
+// stall watchdog forever). It intentionally does not share a name or an
+// error code with the stall/first-token watchdog above: it must never fire
+// against a healthy, actively-streaming generation under normal conditions,
+// so it is set far above the worst-case time to exhaust
+// GENERATION_SAFETY_LIMITS.maxTokens even on a very slow device. See
+// docs/architecture.md's watchdog section.
+const ABSOLUTE_GENERATION_SAFETY_LIMIT_MS = 600_000;
 
 // Must only be called from a Client Component, never from a Server Component.
 export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRuntime {
@@ -55,8 +77,13 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
   // generation can never clobber state that has already moved on.
   let generationEpoch = 0;
   let cancelTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
-  let stallTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
-  let generationTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  let safetyLimitTimeoutHandle: ReturnType<typeof setTimeout> | null = null;
+  // The single in-flight generation's watchdog (see generationWatchdog.ts).
+  // Only one generation can ever be active at a time (generate() refuses to
+  // start a new one unless status is "ready"), so this — like the timeout
+  // handles above — is safely runtime-scoped rather than per-call.
+  let currentWatchdog: GenerationWatchdog | null = null;
+  let watchdogSuspended = false;
 
   function setState(next: Partial<RuntimeState>): void {
     state = { ...state, ...next };
@@ -70,29 +97,27 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     }
   }
 
-  function clearStallTimeout(): void {
-    if (stallTimeoutHandle !== null) {
-      clearTimeout(stallTimeoutHandle);
-      stallTimeoutHandle = null;
+  function clearSafetyLimitTimeout(): void {
+    if (safetyLimitTimeoutHandle !== null) {
+      clearTimeout(safetyLimitTimeoutHandle);
+      safetyLimitTimeoutHandle = null;
     }
   }
 
-  function clearGenerationTimeout(): void {
-    if (generationTimeoutHandle !== null) {
-      clearTimeout(generationTimeoutHandle);
-      generationTimeoutHandle = null;
-    }
+  function disposeWatchdog(): void {
+    currentWatchdog?.dispose();
+    currentWatchdog = null;
   }
 
-  // Shared by the cancel-confirmation timeout and the stall timeout: forces
-  // the runtime into a recoverable error state, but only if nothing has
-  // resolved this same generation in the meantime.
+  // Shared by the cancel-confirmation timeout, the generation watchdog, and
+  // the absolute safety limit: forces the runtime into a recoverable error
+  // state, but only if nothing has resolved this same generation already.
   function forceRecovery(expectedEpoch: number, error: RuntimeError, event: string, localModelId: string | undefined): void {
     if (expectedEpoch !== generationEpoch) return;
     generationEpoch += 1;
     clearCancelTimeout();
-    clearStallTimeout();
-    clearGenerationTimeout();
+    disposeWatchdog();
+    clearSafetyLimitTimeout();
     engine?.interruptGenerate();
     setState({ status: "error", error });
     logEvent(createLogEvent(event, "error", { errorCode: error.code }));
@@ -132,8 +157,8 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     if (expectedEpoch !== generationEpoch) return error;
     generationEpoch += 1;
     clearCancelTimeout();
-    clearStallTimeout();
-    clearGenerationTimeout();
+    disposeWatchdog();
+    clearSafetyLimitTimeout();
     engine?.interruptGenerate();
     setState({ status: "error", error });
     logEvent(
@@ -239,32 +264,52 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     let firstTokenAt: number | null = null;
     let tokenCount = 0;
 
-    stallTimeoutHandle = setTimeout(() => {
-      stallTimeoutHandle = null;
-      if (firstTokenAt !== null) return; // already producing output; not stalled
-      forceRecovery(
-        myEpoch,
-        {
-          code: "generation_stalled",
-          message: "The local model stopped responding. Try reloading it.",
-        },
-        "inference.stall.timeout",
-        localModelId
-      );
-    }, STALL_TIMEOUT_MS);
+    const watchdog = createGenerationWatchdog({
+      generationId: `generation-${myEpoch}`,
+      firstTokenTimeoutMs: FIRST_TOKEN_TIMEOUT_MS,
+      stallTimeoutMs: STALL_TIMEOUT_MS,
+      onFirstTokenTimeout: () => {
+        forceRecovery(
+          myEpoch,
+          {
+            code: "generation_stalled",
+            message: "The local model didn't respond in time. Try reloading it.",
+          },
+          "inference.first-token-timeout",
+          localModelId
+        );
+      },
+      onStallTimeout: () => {
+        forceRecovery(
+          myEpoch,
+          {
+            code: "generation_stalled",
+            message: "The local model stopped responding. Try reloading it.",
+          },
+          "inference.stall-timeout",
+          localModelId
+        );
+      },
+    });
+    currentWatchdog = watchdog;
+    if (watchdogSuspended) watchdog.suspend();
 
-    generationTimeoutHandle = setTimeout(() => {
-      generationTimeoutHandle = null;
+    // A wholly separate, much larger emergency cap — see
+    // ABSOLUTE_GENERATION_SAFETY_LIMIT_MS above. Unlike the watchdog, this
+    // is a flat wall-clock timer: it is not reset by progress, because its
+    // entire purpose is bounding total duration regardless of activity.
+    safetyLimitTimeoutHandle = setTimeout(() => {
+      safetyLimitTimeoutHandle = null;
       forceRecovery(
         myEpoch,
         {
-          code: "generation_timeout",
-          message: "Generation took too long and was stopped. Try reloading the model if this repeats.",
+          code: "generation_exceeded_safety_limit",
+          message: "Generation exceeded the maximum allowed duration and was stopped.",
         },
-        "inference.generation-timeout",
+        "inference.generation-safety-limit",
         localModelId
       );
-    }, GENERATION_TIMEOUT_MS);
+    }, ABSOLUTE_GENERATION_SAFETY_LIMIT_MS);
 
     try {
       const stream = await engine.chat.completions.create({
@@ -289,10 +334,12 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         const choice = chunk.choices[0];
         const text = choice?.delta?.content ?? "";
         if (text) {
-          if (firstTokenAt === null) {
-            firstTokenAt = Date.now();
-            clearStallTimeout();
-          }
+          if (firstTokenAt === null) firstTokenAt = Date.now();
+          // The watchdog heartbeat, updated straight from this raw worker
+          // chunk — never gated on UI buffering/rendering (see
+          // apps/web/app/_lib/streamingBuffer.ts, which flushes text to
+          // React on its own schedule downstream of this yield).
+          watchdog.recordProgress();
           tokenCount += 1;
           const nextOutput = outputForSafety + text;
           const degenerate = detectDegenerateOutput(nextOutput);
@@ -322,13 +369,13 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         }
       }
 
-      // A cancel or stall timeout already force-resolved this generation
-      // while we were waiting on the stream; don't overwrite the recovered
-      // state with this late confirmation.
+      // A cancel confirmation or a watchdog/safety-limit timeout already
+      // force-resolved this generation while we were waiting on the stream;
+      // don't overwrite the recovered state with this late confirmation.
       if (myEpoch !== generationEpoch) return;
       clearCancelTimeout();
-      clearStallTimeout();
-      clearGenerationTimeout();
+      disposeWatchdog();
+      clearSafetyLimitTimeout();
 
       const { firstTokenMs, tokensPerSecond, totalTimeMs } = buildGenerationMetrics(generationStartedAt, firstTokenAt, tokenCount);
 
@@ -352,8 +399,8 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     } catch (rawError) {
       if (myEpoch !== generationEpoch) return;
       clearCancelTimeout();
-      clearStallTimeout();
-      clearGenerationTimeout();
+      disposeWatchdog();
+      clearSafetyLimitTimeout();
 
       const error = classifyRuntimeError(rawError, "generate");
       const cancelled = error.code === "generation_interrupted";
@@ -382,10 +429,10 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     const epochAtRequest = generationEpoch;
     const localModelId = state.modelId ? toLocalLogModelId(state.modelId) : undefined;
 
-    // Once the user asks to stop, "did a first token ever arrive" is no
-    // longer the relevant question — only "did the cancellation confirm".
-    clearStallTimeout();
-    clearGenerationTimeout();
+    // Once the user asks to stop, "did progress ever happen" is no longer
+    // the relevant question — only "did the cancellation confirm".
+    disposeWatchdog();
+    clearSafetyLimitTimeout();
 
     setState({ status: "cancelling" });
     logEvent(createLogEvent("inference.cancel.requested", "info", {}));
@@ -414,8 +461,8 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
 
   async function dispose(): Promise<void> {
     clearCancelTimeout();
-    clearStallTimeout();
-    clearGenerationTimeout();
+    disposeWatchdog();
+    clearSafetyLimitTimeout();
     generationEpoch += 1;
 
     try {
@@ -430,6 +477,15 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     }
   }
 
+  function setGenerationWatchdogSuspended(suspended: boolean): void {
+    watchdogSuspended = suspended;
+    if (suspended) {
+      currentWatchdog?.suspend();
+    } else {
+      currentWatchdog?.resume();
+    }
+  }
+
   return {
     getState: () => state,
     subscribe(listener) {
@@ -439,6 +495,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     loadModel,
     generate,
     stopGeneration,
+    setGenerationWatchdogSuspended,
     dispose,
   };
 }

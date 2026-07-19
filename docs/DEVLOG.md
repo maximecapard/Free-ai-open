@@ -853,6 +853,32 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - Real token-rate observations remain unset until `ai-runtime` exposes tokenizer-backed counts. WebGPU device loss is still mapped through the current out-of-memory error classification.
 - Registry v2 remains a small five-model alpha catalog. Full desktop/mobile acceptance testing, including real model downloads and repeated fallback/recovery cycles, remains required before tagging.
 
+## Sprint 6.21 - v0.7.1-alpha: generation timeout/stall watchdog hotfix
+
+### Root cause
+
+- `packages/ai-runtime/src/runtime.ts` armed a single absolute timer (`GENERATION_SAFETY_LIMITS.maxDurationMs`, 90s) at the start of every generation and never reset it on progress. Any generation running longer than that — including one actively streaming healthy output — was force-cancelled with a `generation_timeout` error, even though nothing was actually wrong. A user could watch a reply streaming in and still have it cut off purely because of elapsed wall-clock time.
+- A second, related gap: the previous stall timer was cleared for good the moment the first token arrived and was never re-armed afterward, so a genuine stall beginning mid-stream (after some output had already streamed) was never caught as a stall — only the unrelated absolute-duration timer would eventually, and misleadingly, catch it instead.
+
+### Fixed
+
+- Added `packages/ai-runtime/src/generationWatchdog.ts`: a first-token-timeout phase (armed only before the first token/chunk, allowing prefill/tokenization time) and a stall-timeout phase (armed only after streaming begins, re-armed on every subsequent token/chunk). A generation that keeps producing output — whitespace/punctuation chunks count as progress — never trips either phase no matter its total duration.
+- Every watchdog check recomputes real elapsed time since the latest recorded progress before declaring a timeout; if the full inactivity window hasn't actually elapsed (e.g. because the callback fired late due to a busy main thread), it re-arms for the remaining time instead of firing a false positive.
+- Kept a wholly separate, much larger emergency safety cap (10 minutes) for a truly pathological runaway generation, under its own distinct `generation_exceeded_safety_limit` error code — never `generation_stalled`, and the old `generation_timeout` code is retired. Unlike a real stall, it is classified as `completed` (not `stalled`) in local performance observations, since the generation was healthy right up to the cutoff.
+- A genuine stall/safety-limit interruption that already produced visible assistant text now preserves and saves that partial reply (with a new "may be incomplete" notice) instead of discarding it; an interruption with no output at all still discards the empty bubble, matching prior behavior.
+- Added `InferenceRuntime.setGenerationWatchdogSuspended()`, wired from a new `visibilitychange` listener in `AppRuntimeProvider.tsx`, so a backgrounded tab pauses inactivity detection and gets a fresh detection window on return instead of risking a stall declared purely from background timer/message throttling. `ai-runtime` stays platform-independent; only the app layer reads `document.visibilityState`.
+
+### Tests
+
+- Added `generationWatchdog.test.ts` with a fake-clock harness that tests the actual elapsed-time recompute-and-re-arm logic (including a deliberately delayed callback), not just timer creation, plus suspend/resume and disposal.
+- Extended `runtime.test.ts` with a regression test proving continuous streaming past the old 90s threshold now completes successfully (fails against the pre-fix code), and coverage for genuine mid-stream stalls, a slow downstream UI buffer never affecting the watchdog, stale-timer generation isolation, Stop/completion/recovery clearing every timer, the new safety limit, watchdog suspension, and log privacy.
+- Extended `generationPersistence.test.ts` and `performanceObservationBuilder.test.ts` for partial-output preservation and the safety-limit-is-not-a-failure classification.
+
+### Remaining limits
+
+- The absolute safety-limit duration (10 minutes) and the first-token/stall thresholds (45s each) remain judgment calls, not measured from real hardware; they may need tuning once broader device testing exists.
+- Background-tab suspension pauses inactivity *detection*; it does not and cannot guarantee the browser keeps running worker/generation code while backgrounded — that remains platform-dependent.
+
 ## Cross-cutting remaining work
 
 - Re-verify and expand Model Registry v2 only when an exact artifact, source, license, and supported-device case can be substantiated.

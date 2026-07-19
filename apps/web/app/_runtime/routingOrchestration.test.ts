@@ -148,6 +148,7 @@ function createFakeRuntime(outcomes: Record<string, RuntimeState>): InferenceRun
     },
     generate: async function* () {},
     stopGeneration: () => {},
+    setGenerationWatchdogSuspended: () => {},
     dispose: async () => {},
   };
 }
@@ -240,6 +241,7 @@ describe("attemptModelLoadWithFallback", () => {
       loadModel,
       generate: async function* () {},
       stopGeneration: () => {},
+      setGenerationWatchdogSuspended: () => {},
       dispose: async () => {},
     };
 

@@ -46,6 +46,35 @@ Versions are alpha milestones while the MVP is still under active development.
 - Export/import has no browser end-to-end coverage yet (verified manually); encrypted export is not implemented.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
 
+## [0.7.1-alpha] - 2026-07-19 (generation timeout/stall watchdog hotfix)
+
+A release-blocking bug report: a response could be actively streaming visible text and still get abruptly stopped by a false "generation timeout." This release fixes the watchdog so a timeout can only mean absence of runtime progress, never merely that a generation ran long while still producing output. `v0.7.0-alpha` itself is unchanged and its release notes above are not rewritten — the bug described here was present in that release.
+
+### Fixed
+
+- Fixed the false generation timeout: `packages/ai-runtime/src/runtime.ts` used to arm a single absolute timer (`GENERATION_SAFETY_LIMITS.maxDurationMs`, 90s) at generation start and never reset it on progress. Any generation that kept streaming past that mark — even while actively producing tokens — was force-cancelled and mislabeled `generation_timeout`, discarding the reply the user was reading.
+- Fixed a related, previously undetected gap: the old stall timer only ever protected against a generation that never produced a single token. Once the first token arrived, it was cleared permanently and never re-armed, so a genuine stall that began mid-stream (after some output had already streamed) went completely undetected as a stall — only the unrelated absolute-duration timer above would eventually, and inaccurately, catch it.
+
+### Changed
+
+- Replaced the single absolute timer with `@free-ai-open/ai-runtime`'s new `generationWatchdog.ts`: an explicit first-token-timeout phase (armed only before the first token/chunk arrives, allowing for model prefill/tokenization time) and a stall-timeout phase (armed only after streaming has begun, and re-armed on every subsequent token/chunk). A generation that keeps producing output — whitespace/punctuation chunks count — never trips either phase, no matter how long it runs in total.
+- Every watchdog check recomputes real elapsed time against the latest recorded progress before declaring a timeout, and re-arms for the remaining duration if it hasn't actually elapsed yet. This makes the watchdog robust to a delayed timer callback (a busy main thread, throttled background timers) firing "late" — it self-corrects instead of producing a false positive.
+- Kept a wholly separate, much more conservative emergency safety cap (10 minutes, `ABSOLUTE_GENERATION_SAFETY_LIMIT_MS`) to bound a truly pathological runaway generation. It uses its own distinct `generation_exceeded_safety_limit` error code — never `generation_stalled`, and the old `generation_timeout` code is retired entirely — and, unlike a real stall, is never counted as a model failure in local performance observations (see "Security and Privacy").
+- A genuine stall or safety-limit interruption that already produced visible assistant text now preserves and locally saves that partial reply — marked incomplete via a new notice — instead of silently discarding legitimately-generated content. An interruption with no output at all (a true first-token timeout) still discards the empty bubble, matching prior behavior. Stop and degenerate-output handling are unchanged.
+- Added `InferenceRuntime.setGenerationWatchdogSuspended()`: the app layer can pause inactivity detection while the browser tab is hidden and grant a fresh detection window when it becomes visible again, so background tab throttling of timers or worker messages cannot be mistaken for a stalled model. `packages/ai-runtime` remains platform-independent; only `apps/web/app/_runtime/AppRuntimeProvider.tsx` reads `document.visibilityState`, via a `visibilitychange` listener that calls the new method.
+
+### Security and Privacy
+
+- The new watchdog log events (`inference.first-token-timeout`, `inference.stall-timeout`, `inference.generation-safety-limit`) carry only the same technical fields as the events they replace (event name, severity, error code, model ID, timings) — never prompt or generated response content.
+- The absolute safety-limit cap firing on an otherwise-healthy, actively-streaming generation is classified as `completed`, not `stalled`, in local `ModelPerformanceObservation`s (`apps/web/app/_lib/performanceObservationBuilder.ts`), so a false timeout can never look like model instability to the adaptive router.
+- No `fetch`, `sendBeacon`, Supabase, Google Drive, cloud sync, new server endpoint, or model-registry change was made. No router scoring logic changed; the one classification adjustment above lives in the app layer's observation builder, not `@free-ai-open/model-router`.
+
+### Tests
+
+- Added `packages/ai-runtime/src/generationWatchdog.test.ts`: first-token/stall phase transitions, the elapsed-time recompute-and-re-arm logic exercised across a deliberately delayed/stale timer callback, suspend/resume behavior, and disposal — testing the actual elapsed-time check, not just timer creation.
+- Extended `packages/ai-runtime/src/runtime.test.ts` with a regression test proving a generation streaming continuously past the old absolute-duration threshold completes successfully (this test fails against the pre-fix implementation with a false `generation_timeout`), plus coverage for a genuine mid-stream stall, a slow downstream UI buffer never affecting the watchdog, a stale timer from an abandoned generation being unable to affect a new one, Stop/completion/runtime-recovery clearing every timer, the new absolute safety limit and its distinct error code, watchdog suspend/resume, and privacy of the new log events.
+- Extended `apps/web/app/_lib/generationPersistence.test.ts` (partial-output preservation for a genuine watchdog interruption with visible text, still-discarded for Stop/degenerate output or empty output) and `apps/web/app/_lib/performanceObservationBuilder.test.ts` (the safety-limit-is-not-a-failure classification).
+
 ## [0.7.0-alpha] - 2026-07-19 (adaptive router phases complete)
 
 This release was built in phases for the "Adaptive Model Router v1." Phases 0 through 5 now provide contracts, static profiling, Registry v2, a local benchmark, the pure adaptive-router core, real runtime integration, and the public-facing router UI — `AppRuntimeProvider` uses `RouterDecision` to load, switch, and observe real models, and `/settings`/`/chat` expose automatic/manual selection and plain-language explanations. Remaining `v0.7.0-alpha` work is review/testing/release only — see `docs/roadmap.md`.
@@ -395,7 +424,8 @@ This release was built in phases for the "Adaptive Model Router v1." Phases 0 th
 - Added a simple local chat flow using the browser runtime.
 - Added runtime error classification and privacy safety tests.
 
-[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.7.0-alpha...HEAD
+[Unreleased]: https://github.com/maximecapard/Free-ai-open/compare/v0.7.1-alpha...HEAD
+[0.7.1-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.7.0-alpha...v0.7.1-alpha
 [0.7.0-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.6-alpha...v0.7.0-alpha
 [0.6.6-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.5-alpha...v0.6.6-alpha
 [0.6.5-alpha]: https://github.com/maximecapard/Free-ai-open/compare/v0.6.4-alpha...v0.6.5-alpha

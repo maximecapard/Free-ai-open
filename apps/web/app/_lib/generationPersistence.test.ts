@@ -21,11 +21,23 @@ describe("generation persistence decisions", () => {
     expect(generationNoticeKey("degenerate_output")).toBe("storageNotice.generationUnstable");
   });
 
-  it("does not save stalled or timed-out generation output as a completed reply", () => {
+  it("discards a stall/safety-limit interruption that produced no output at all", () => {
     expect(shouldDiscardPartialAssistantOutput(null, "generation_stalled")).toBe(true);
-    expect(shouldDiscardPartialAssistantOutput(null, "generation_timeout")).toBe(true);
+    expect(shouldDiscardPartialAssistantOutput(null, "generation_exceeded_safety_limit")).toBe(true);
     expect(generationNoticeKey(null, "generation_stalled")).toBe("storageNotice.generationTimedOut");
-    expect(generationNoticeKey(null, "generation_timeout")).toBe("storageNotice.generationTimedOut");
+    expect(generationNoticeKey(null, "generation_exceeded_safety_limit")).toBe("storageNotice.generationTimedOut");
+  });
+
+  it("preserves partial output from a genuine stall or safety-limit interruption instead of discarding it", () => {
+    expect(shouldDiscardPartialAssistantOutput(null, "generation_stalled", true)).toBe(false);
+    expect(shouldDiscardPartialAssistantOutput(null, "generation_exceeded_safety_limit", true)).toBe(false);
+    expect(generationNoticeKey(null, "generation_stalled", true)).toBe("storageNotice.generationIncomplete");
+    expect(generationNoticeKey(null, "generation_exceeded_safety_limit", true)).toBe("storageNotice.generationIncomplete");
+  });
+
+  it("still discards a cancellation or degenerate-output interruption even when partial output exists", () => {
+    expect(shouldDiscardPartialAssistantOutput("cancelled", undefined, true)).toBe(true);
+    expect(shouldDiscardPartialAssistantOutput("degenerate_output", undefined, true)).toBe(true);
   });
 
   it("does not leave failed generation output as a completed reply", () => {
