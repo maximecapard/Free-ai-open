@@ -14,6 +14,7 @@ export interface ChatMessageItem {
   id: string;
   role: "user" | "assistant";
   content: string;
+  status?: "complete" | "incomplete";
 }
 
 interface ChatTranscriptProps {
@@ -139,6 +140,11 @@ const ChatMessageBubble = memo(function ChatMessageBubble({ message }: { message
           explicit for screen readers, since layout alone isn't announced. */}
       <span className="fo-visually-hidden">{message.role === "user" ? t("chat.youLabel") : t("chat.assistantLabel")}</span>
       {message.content || (message.role === "assistant" ? "…" : "")}
+      {message.role === "assistant" && message.status === "incomplete" && (
+        <span className="fo-muted" style={{ display: "block", marginTop: 8, fontSize: "0.8125rem" }}>
+          {t("chat.incompleteMessageLabel")}
+        </span>
+      )}
     </div>
   );
 });

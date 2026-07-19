@@ -105,9 +105,11 @@ Phase 0 adds types, package boundaries, and local persistence/migration only —
 - [ ] Start a real chat generation and let it run past 90 seconds while it keeps producing visible text (a long request to a slower model is a good way to reach this); confirm it completes normally instead of being cut off.
 - [ ] Confirm a first-token timeout (no output at all) still shows "Local model needs attention" with the existing empty-bubble behavior — no partial text to preserve.
 - [ ] If a genuine stall can be forced in a test/dev build (e.g. by briefly disconnecting the worker mid-stream), confirm the partial reply already shown stays visible, is saved, and shows an "incomplete" notice rather than disappearing.
+- [ ] Refresh after preserving a stalled partial reply, then export and re-import it; confirm the incomplete label remains visible and the JSON message status is preserved.
+- [ ] Delete a conversation while an assistant write is pending in the IndexedDB test harness and confirm the late write cannot recreate the deleted conversation.
 - [ ] Background the tab during an active generation, wait past 45 seconds, return to the tab, and confirm the generation was not declared stalled purely from being backgrounded.
 - [ ] Confirm `Stop` still interrupts a generation normally and `Reload model` recovery still works exactly as before (this hotfix must not change Stop/recovery behavior).
-- [ ] Export a diagnostic report and confirm it still contains no prompt/response content, and that a safety-limit interruption (if reproduced) does not appear as a "stalled" outcome.
+- [ ] Export a diagnostic report and confirm it still contains no prompt/response content, and that a safety-limit interruption (if reproduced) is a neutral cancelled observation rather than success, failure, or stall.
 - [ ] Confirm French and English show the new "may be incomplete" notice correctly when a partial reply is preserved.
 
 ## Manual smoke tests (browser)
@@ -121,7 +123,7 @@ Phase 0 adds types, package boundaries, and local persistence/migration only —
 - [ ] Persistent runtime debug navigation: load the model in `/chat`, navigate to `/debug`, return to `/chat`, and confirm the model did not unload or reload solely because of the internal route change.
 - [ ] Generation across navigation: start a long generation, navigate to `/settings`, confirm a small global status appears with "Return to conversation", return to `/chat`, and confirm the response continued or completed in the same conversation.
 - [ ] Background tab behavior: start a generation, switch to another browser tab/app, return, and confirm FreeAI Open did not intentionally unload the model or cancel the generation. Note that the browser/mobile OS may throttle or pause background work.
-- [ ] Generation safety: stopped, stalled, timed-out, or unstable partial assistant output is removed from the transcript and is not saved/exported as a completed answer.
+- [ ] Generation safety: Stop, failed, degenerate, and empty first-token-timeout output is removed; a genuine stall or safety-limit partial reply stays visible only with a durable incomplete label and is never exported as a normal completed answer.
 - [ ] Message layout: long unbroken strings and repeated punctuation stay inside chat bubbles on desktop and mobile; any `pre`/`code` content scrolls horizontally instead of expanding the page.
 - [ ] Refresh conversation: after sending a message, refreshing the page resumes the same conversation with its full message history.
 - [ ] Delete conversation: deleting a conversation asks for confirmation, then removes it from the history sidebar and IndexedDB.

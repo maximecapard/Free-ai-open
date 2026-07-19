@@ -6,6 +6,8 @@ export type GenerationNoticeKey =
   | "storageNotice.generationUnstable"
   | "storageNotice.generationTimedOut"
   | "storageNotice.generationIncomplete"
+  | "storageNotice.generationSafetyLimit"
+  | "storageNotice.generationSafetyLimitIncomplete"
   | "storageNotice.generationFailed";
 
 // The two watchdog outcomes that represent "the model stopped responding"
@@ -18,8 +20,19 @@ const INTERRUPTIBLE_WATCHDOG_CODES = new Set<RuntimeErrorCode | undefined>([
   "generation_exceeded_safety_limit",
 ]);
 
-export function shouldPersistAssistantOutput(reason: GenerationStopReason | null, output: string): boolean {
-  return reason === "completed" && output.length > 0;
+export function isIncompleteAssistantOutput(
+  errorCode?: RuntimeErrorCode,
+  hasPartialOutput = false
+): boolean {
+  return hasPartialOutput && INTERRUPTIBLE_WATCHDOG_CODES.has(errorCode);
+}
+
+export function shouldPersistAssistantOutput(
+  reason: GenerationStopReason | null,
+  output: string,
+  errorCode?: RuntimeErrorCode
+): boolean {
+  return output.length > 0 && (reason === "completed" || isIncompleteAssistantOutput(errorCode, true));
 }
 
 // hasPartialOutput reflects whether any assistant text had already streamed
@@ -50,8 +63,14 @@ export function generationNoticeKey(
     return "storageNotice.generationUnstable";
   }
 
-  if (INTERRUPTIBLE_WATCHDOG_CODES.has(errorCode)) {
+  if (errorCode === "generation_stalled") {
     return hasPartialOutput ? "storageNotice.generationIncomplete" : "storageNotice.generationTimedOut";
+  }
+
+  if (errorCode === "generation_exceeded_safety_limit") {
+    return hasPartialOutput
+      ? "storageNotice.generationSafetyLimitIncomplete"
+      : "storageNotice.generationSafetyLimit";
   }
 
   if (errorCode) return "storageNotice.generationFailed";

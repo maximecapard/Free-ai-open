@@ -12,7 +12,7 @@ import type {
 
 const ROOT_KEYS = new Set(["format", "version", "exportedAt", "source", "conversations"]);
 const CONVERSATION_KEYS = new Set(["id", "title", "schemaVersion", "createdAt", "updatedAt", "messages", "task"]);
-const MESSAGE_KEYS = new Set(["id", "role", "content", "createdAt"]);
+const MESSAGE_KEYS = new Set(["id", "role", "content", "createdAt", "status"]);
 const VALID_ROLES = new Set(["user", "assistant", "system"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -72,6 +72,10 @@ function validateExportMessage(
 
   if (typeof value.role !== "string" || !VALID_ROLES.has(value.role)) {
     errors.push(`${path}.role: must be user, assistant, or system`);
+  }
+
+  if (value.status !== undefined && value.status !== "complete" && value.status !== "incomplete") {
+    errors.push(`${path}.status: must be complete or incomplete`);
   }
 
   if (!isCanonicalIsoDateTime(value.createdAt)) {

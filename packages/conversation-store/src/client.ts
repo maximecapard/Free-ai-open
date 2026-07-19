@@ -41,6 +41,7 @@ function normalizeTitle(title: string | undefined, maxLength: number): string {
 
 function normalizeMessage(input: AddConversationMessageInput, idFactory: () => string, nowIso: string, maxLength: number): ConversationMessage | null {
   if (input.role !== "user" && input.role !== "assistant" && input.role !== "system") return null;
+  if (input.status !== undefined && input.status !== "complete" && input.status !== "incomplete") return null;
   const content = input.content.slice(0, maxLength);
   if (content.length === 0) return null;
 
@@ -49,6 +50,7 @@ function normalizeMessage(input: AddConversationMessageInput, idFactory: () => s
     role: input.role,
     content,
     createdAt: input.createdAt ?? nowIso,
+    ...(input.status !== undefined ? { status: input.status } : {}),
   };
 }
 
@@ -72,6 +74,9 @@ function normalizeConversation(conversation: Conversation, limits: ConversationS
   const messages = conversation.messages.slice(-limits.maxMessagesPerConversation).map((message) => ({
     ...message,
     content: message.content.slice(0, limits.maxMessageLength),
+    ...(message.status === "complete" || message.status === "incomplete"
+      ? { status: message.status }
+      : { status: undefined }),
   }));
 
   return {
@@ -144,42 +149,35 @@ export class ConversationStoreClient {
   }
 
   async addMessage(conversationId: ConversationId, input: AddConversationMessageInput): Promise<Conversation | null> {
-    const conversation = await this.getConversation(conversationId);
-    if (!conversation) return null;
-
     const nowIso = this.now().toISOString();
     const message = normalizeMessage(input, () => createId("message"), nowIso, this.limits.maxMessageLength);
     if (!message) return null;
 
-    const messages = [...conversation.messages, message].slice(-this.limits.maxMessagesPerConversation);
-    const updated: Conversation = {
-      ...conversation,
-      updatedAt: nowIso,
-      messageCount: messages.length,
-      messages,
-    };
-
     try {
-      await this.store.put(updated);
-      return updated;
+      const updated = await this.store.update(conversationId, (storedConversation) => {
+        const conversation = normalizeConversation(storedConversation, this.limits);
+        const messages = [...conversation.messages, message].slice(-this.limits.maxMessagesPerConversation);
+        return {
+          ...conversation,
+          updatedAt: nowIso,
+          messageCount: messages.length,
+          messages,
+        };
+      });
+      return updated ? normalizeConversation(updated, this.limits) : null;
     } catch {
       return null;
     }
   }
 
   async updateConversationTitle(conversationId: ConversationId, title: string): Promise<Conversation | null> {
-    const conversation = await this.getConversation(conversationId);
-    if (!conversation) return null;
-
-    const updated: Conversation = {
-      ...conversation,
-      title: normalizeTitle(title, this.limits.maxTitleLength),
-      updatedAt: this.now().toISOString(),
-    };
-
     try {
-      await this.store.put(updated);
-      return updated;
+      const updated = await this.store.update(conversationId, (storedConversation) => ({
+        ...normalizeConversation(storedConversation, this.limits),
+        title: normalizeTitle(title, this.limits.maxTitleLength),
+        updatedAt: this.now().toISOString(),
+      }));
+      return updated ? normalizeConversation(updated, this.limits) : null;
     } catch {
       return null;
     }

@@ -54,8 +54,8 @@ describe("classifyGenerationOutcome", () => {
     expect(classifyGenerationOutcome(null, "out_of_memory")).toBe("out_of_memory");
   });
 
-  it("does not classify the absolute safety-limit cap as a model failure (a false timeout must not count as a stall)", () => {
-    expect(classifyGenerationOutcome(null, "generation_exceeded_safety_limit")).toBe("completed");
+  it("classifies the absolute safety-limit cap as a neutral cancellation rather than success or failure", () => {
+    expect(classifyGenerationOutcome(null, "generation_exceeded_safety_limit")).toBe("cancelled");
   });
 
   it("falls back to stalled for an unclassified runtime error rather than inventing a new outcome", () => {

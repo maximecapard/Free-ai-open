@@ -29,6 +29,18 @@ class MemoryTestStore implements ConversationStore {
     }));
   }
 
+  async update(
+    id: ConversationId,
+    updater: (conversation: Conversation) => Conversation | null
+  ): Promise<Conversation | null> {
+    const current = this.records.get(id);
+    if (!current) return null;
+    const updated = updater({ ...current, messages: current.messages.map((message) => ({ ...message })) });
+    if (!updated) return null;
+    await this.put(updated);
+    return { ...updated, messages: updated.messages.map((message) => ({ ...message })) };
+  }
+
   async delete(id: ConversationId): Promise<void> {
     this.records.delete(id);
   }
@@ -48,6 +60,10 @@ class FailingConversationStore implements ConversationStore {
   }
 
   async getAll(): Promise<Conversation[]> {
+    throw new Error("storage failed");
+  }
+
+  async update(): Promise<Conversation | null> {
     throw new Error("storage failed");
   }
 
@@ -214,6 +230,50 @@ describe("conversation store", () => {
 
     expect(updated?.messageCount).toBe(2);
     expect(updated?.messages.map((message) => message.content)).toEqual(["private answer", "latest private prompt"]);
+  });
+
+  it("preserves an incomplete assistant status and keeps legacy messages compatible", async () => {
+    const store = new MemoryTestStore();
+    const client = createTestClient(store);
+    const conversation = await client.createConversation();
+
+    await client.addMessage(conversation!.id, {
+      role: "assistant",
+      content: "partial local reply",
+      status: "incomplete",
+    });
+
+    await expect(client.getConversation(conversation!.id)).resolves.toMatchObject({
+      messages: [expect.objectContaining({ content: "partial local reply", status: "incomplete" })],
+    });
+
+    const stored = store.records.get(conversation!.id)!;
+    stored.messages.push({
+      id: "legacy-message",
+      role: "assistant",
+      content: "legacy completed reply",
+      createdAt: baseNow.toISOString(),
+    });
+    stored.messageCount = stored.messages.length;
+
+    const reloaded = await client.getConversation(conversation!.id);
+    expect(reloaded?.messages.at(-1)?.status).toBeUndefined();
+  });
+
+  it("does not recreate an IndexedDB conversation when delete races an atomic append", async () => {
+    await withFakeIndexedDb(async () => {
+      const client = createConversationStoreClient({
+        now: () => baseNow,
+        idFactory: () => "conversation-race",
+      });
+      const conversation = await client.createConversation({ title: "Delete during append" });
+
+      const append = client.addMessage(conversation!.id, { role: "assistant", content: "partial reply" });
+      const deletion = client.deleteConversation(conversation!.id);
+      await Promise.all([append, deletion]);
+
+      await expect(client.getConversation(conversation!.id)).resolves.toBeNull();
+    });
   });
 
   it("renames a conversation", async () => {

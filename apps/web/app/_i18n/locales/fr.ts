@@ -337,6 +337,7 @@ export const fr: Dictionary = {
     scrollToLatest: "Aller au dernier message",
     youLabel: "Vous",
     assistantLabel: "Assistant local",
+    incompleteMessageLabel: "Réponse incomplète",
     composerLabel: "Message",
     composerHint: "Entrée pour envoyer, Maj+Entrée pour un saut de ligne.",
   },
@@ -435,6 +436,10 @@ export const fr: Dictionary = {
       "Génération arrêtée car le modèle local a cessé de répondre. La réponse partielle n'a pas été enregistrée.",
     generationIncomplete:
       "Génération arrêtée car le modèle local a cessé de répondre en cours de route. La réponse ci-dessous est peut-être incomplète — vous pouvez essayer d'envoyer votre message à nouveau.",
+    generationSafetyLimit:
+      "Génération arrêtée après avoir atteint la durée maximale autorisée. Aucune réponse n'a été enregistrée.",
+    generationSafetyLimitIncomplete:
+      "La génération a atteint la durée maximale autorisée. La réponse partielle a été enregistrée localement et marquée comme incomplète.",
     generationFailed: "La génération a échoué. La réponse partielle n'a pas été enregistrée.",
   },
   debug: {

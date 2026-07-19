@@ -1,4 +1,4 @@
-import type { Conversation, ConversationId, MessageRole } from "@free-ai-open/conversation-store";
+import type { Conversation, ConversationId, MessageRole, MessageStatus } from "@free-ai-open/conversation-store";
 import type {
   CONVERSATION_EXPORT_FORMAT,
   CONVERSATION_EXPORT_SOURCE,
@@ -19,6 +19,7 @@ export interface ConversationExportMessage {
   role: MessageRole;
   content: string;
   createdAt: string;
+  status?: MessageStatus;
 }
 
 export interface ConversationExportConversation {

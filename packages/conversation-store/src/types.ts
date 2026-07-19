@@ -1,12 +1,14 @@
 export type ConversationId = string & { readonly __brand: "ConversationId" };
 
 export type MessageRole = "user" | "assistant" | "system";
+export type MessageStatus = "complete" | "incomplete";
 
 export interface ConversationMessage {
   id: string;
   role: MessageRole;
   content: string;
   createdAt: string;
+  status?: MessageStatus;
 }
 
 export interface ConversationMetadata {
@@ -41,6 +43,7 @@ export interface AddConversationMessageInput {
   role: MessageRole;
   content: string;
   createdAt?: string;
+  status?: MessageStatus;
 }
 
 export interface ConversationStoreLimits {
@@ -61,6 +64,10 @@ export interface ConversationStore {
   put(conversation: Conversation): Promise<void>;
   get(id: ConversationId): Promise<Conversation | null>;
   getAll(): Promise<Conversation[]>;
+  update(
+    id: ConversationId,
+    updater: (conversation: Conversation) => Conversation | null
+  ): Promise<Conversation | null>;
   delete(id: ConversationId): Promise<void>;
   clear(): Promise<void>;
 }

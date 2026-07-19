@@ -26,6 +26,7 @@ function toExportData(conversations: Conversation[], exportedAt: string): Conver
         role: message.role,
         content: message.content,
         createdAt: message.createdAt,
+        ...(message.status !== undefined ? { status: message.status } : {}),
       })),
       ...(conversation.task ? { task: conversation.task } : {}),
     })),
