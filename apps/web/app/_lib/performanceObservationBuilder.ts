@@ -16,12 +16,12 @@ type ObservationOutcome = ModelPerformanceObservation["outcome"];
 // on every route call), just a cheap trigger for "a routing moment likely
 // occurred" so the provider knows to ask the router again promptly instead of
 // waiting for the next task/mode/locale change.
-const FATAL_OUTCOMES = new Set<ObservationOutcome>(["out_of_memory", "device_lost"]);
+const REROUTE_OUTCOMES = new Set<ObservationOutcome>(["out_of_memory", "device_lost", "stalled"]);
 const RECENT_FAILURE_THRESHOLD = 2;
 
 export function isModelRepeatedlyFailing(observations: readonly ModelPerformanceObservation[], modelId: string): boolean {
   const fatalCount = observations.filter(
-    (observation) => observation.modelId === modelId && FATAL_OUTCOMES.has(observation.outcome)
+    (observation) => observation.modelId === modelId && REROUTE_OUTCOMES.has(observation.outcome)
   ).length;
   return fatalCount >= RECENT_FAILURE_THRESHOLD;
 }

@@ -23,7 +23,7 @@ Browser LLM runtimes make local AI possible without a native app, but the produc
 Implemented in the current alpha:
 
 - A coherent application shell (compact desktop navigation rail, safe-area-aware mobile top bar) and a product-wide visual redesign based on the FreeAI Open brand system, with plain-language device/runtime status by default and technical detail available on demand. On desktop, `/chat` is a fixed-height workspace with an independently scrolling conversation list and message transcript and an anchored composer.
-- A first-run "Getting Started" flow (device detection, performance mode confirmation) shown once and persisted locally, plus a `/settings` page to change performance mode, language, theme, re-check the device, or reset first-time setup.
+- A first-run "Getting Started" flow (device detection, optional short local benchmark, first-model download disclosure, performance mode confirmation) shown once and persisted locally, plus a `/settings` page to change performance mode, language, theme, re-check the device, or reset first-time setup.
 - Per-conversation usage selection: starting a new chat asks what it's for (general conversation, writing, rewriting, summarizing, translation, coding, or learning) instead of a single upfront choice, and the answer is preserved through local export/import.
 - Browser-local WebLLM runtime through a Web Worker, owned by a stable app-level provider so the loaded local model survives normal internal navigation between Chat, Settings, and Debug.
 - Streaming chat UI with a multiline composer.
@@ -33,9 +33,9 @@ Implemented in the current alpha:
 - IndexedDB conversation storage with an in-memory fallback when IndexedDB is unavailable.
 - Local conversation export/import in the `/chat` history sidebar: export the current conversation, export all conversations, or import a JSON export file, entirely on-device.
 - Local technical logs stored in the browser.
-- A short, optional local WebGPU capability check during setup, cached for seven days and rerunnable from Settings; results remain on-device and do not select a model yet.
+- A short, optional local WebGPU capability check during setup, cached for seven days and rerunnable or clearable from Settings; its coarse result remains on-device and informs the adaptive router alongside capability data and real local model observations.
 - Privacy-safe diagnostic report generation and export.
-- `/debug` dashboard for runtime status, device information, technical logs, and diagnostics.
+- `/debug` dashboard for the current runtime/router state, device information, technical logs, and privacy-safe diagnostics.
 - Device profiling, a local capability benchmark, a five-model Registry v2, and an adaptive router that drives real model loading, safe switching, and local observation recording. A `/settings` panel offers automatic (recommended) or manual model selection with friendly model info, and chat shows a short plain-language reason for the model that was picked; a non-default, non-cached model always asks for confirmation (approximate size, that it runs locally) before downloading.
 - Strict schemas and redaction utilities for privacy-sensitive telemetry and logs.
 - English/French UI language toggle (defaults to the browser's language, persisted locally) across the public app surfaces.

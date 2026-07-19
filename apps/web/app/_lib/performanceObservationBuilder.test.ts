@@ -140,14 +140,21 @@ describe("isModelRepeatedlyFailing", () => {
     expect(isModelRepeatedlyFailing(observations, "qwen3-4b-q4f16")).toBe(true);
   });
 
-  it("does not count cancellations, stalls, or successes toward the fatal threshold", () => {
+  it("does not count cancellations or successes toward the reroute threshold", () => {
     const observations = [
       observation("qwen3-4b-q4f16", "cancelled"),
-      observation("qwen3-4b-q4f16", "stalled"),
       observation("qwen3-4b-q4f16", "completed"),
       observation("qwen3-4b-q4f16", "out_of_memory"),
     ];
     expect(isModelRepeatedlyFailing(observations, "qwen3-4b-q4f16")).toBe(false);
+  });
+
+  it("triggers rerouting after repeated generation stalls", () => {
+    const observations = [
+      observation("qwen3-4b-q4f16", "stalled"),
+      observation("qwen3-4b-q4f16", "stalled"),
+    ];
+    expect(isModelRepeatedlyFailing(observations, "qwen3-4b-q4f16")).toBe(true);
   });
 
   it("ignores fatal observations that belong to a different model", () => {

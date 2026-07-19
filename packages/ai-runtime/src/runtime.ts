@@ -12,6 +12,7 @@ import type { GenerateChunk, GenerateInput, InferenceChatWorker, RuntimeError, R
 
 export interface LoadModelOptions {
   initialStatus?: Extract<RuntimeStatus, "loading_model" | "recovering">;
+  contextWindowTokens?: number;
 }
 
 export interface InferenceRuntime {
@@ -181,11 +182,16 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     }
 
     try {
-      engine = await CreateWebWorkerMLCEngine(worker, modelId, {
+      const engineConfig = {
         initProgressCallback: (report: InitProgressReport) => {
           setState({ loadProgress: report.progress });
         },
-      });
+      };
+      engine = options.contextWindowTokens !== undefined
+        ? await CreateWebWorkerMLCEngine(worker, modelId, engineConfig, {
+            context_window_size: options.contextWindowTokens,
+          })
+        : await CreateWebWorkerMLCEngine(worker, modelId, engineConfig);
       const loadTimeMs = Date.now() - loadStartedAt;
       setState({ status: "ready", loadProgress: 1 });
       logEvent(createLogEvent("model.load.completed", "info", { modelId }));

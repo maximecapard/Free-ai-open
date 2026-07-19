@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRoutingCacheKey, shouldRecomputeRouterDecision } from "./routingDecisionCache";
+import { buildObservationRevision, buildRoutingCacheKey, shouldRecomputeRouterDecision } from "./routingDecisionCache";
 import type { RoutingCacheKeyInput } from "./routingDecisionCache";
 
 const BASE_INPUT: RoutingCacheKeyInput = {
@@ -12,6 +12,7 @@ const BASE_INPUT: RoutingCacheKeyInput = {
   cachedModelIds: ["smollm2-360m-instruct-q4f32", "qwen3-0.6b-q4f16"],
   registryVersion: "0.7.0-alpha.1",
   currentModelRepeatedlyFailing: false,
+  observationsRevision: "[]",
 };
 
 describe("routing decision cache key", () => {
@@ -55,6 +56,29 @@ describe("routing decision cache key", () => {
   it("changes when a manual override is set or cleared", () => {
     const next: RoutingCacheKeyInput = { ...BASE_INPUT, manualModelId: "qwen3-4b-q4f16" };
     expect(buildRoutingCacheKey(BASE_INPUT)).not.toBe(buildRoutingCacheKey(next));
+  });
+
+  it("changes whenever a technical observation changes", () => {
+    const next: RoutingCacheKeyInput = { ...BASE_INPUT, observationsRevision: "[[\"model-a\",\"completed\"]]" };
+    expect(buildRoutingCacheKey(BASE_INPUT)).not.toBe(buildRoutingCacheKey(next));
+  });
+});
+
+describe("buildObservationRevision", () => {
+  it("uses only allowlisted technical observation fields", () => {
+    const revision = buildObservationRevision([
+      {
+        schemaVersion: 1,
+        modelId: "model-a",
+        observedAt: "2026-07-18T00:00:00.000Z",
+        loadSucceeded: true,
+        outcome: "completed",
+        prompt: "private prompt",
+      } as never,
+    ]);
+    expect(revision).toContain("model-a");
+    expect(revision).not.toContain("private prompt");
+    expect(revision).not.toContain("prompt");
   });
 });
 

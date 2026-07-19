@@ -22,6 +22,17 @@ describe("resolveModelStatusKey", () => {
     expect(resolveModelStatusKey({ ...BASE, runtimeStatus: "loading_model" })).toBe("modelStatus.preparing");
   });
 
+  it("keeps active loading progress ahead of a pending upgrade notice", () => {
+    expect(
+      resolveModelStatusKey({
+        ...BASE,
+        runtimeStatus: "loading_model",
+        pendingModelSwitch: true,
+        isRoutingInProgress: true,
+      })
+    ).toBe("modelStatus.preparing");
+  });
+
   it("shows 'ready' once the model is usable", () => {
     expect(resolveModelStatusKey({ ...BASE, runtimeStatus: "ready" })).toBe("modelStatus.ready");
   });

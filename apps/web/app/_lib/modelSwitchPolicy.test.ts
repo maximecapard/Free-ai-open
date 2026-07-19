@@ -87,4 +87,17 @@ describe("resolveModelSwitch", () => {
       })
     ).toEqual({ type: "needs_consent" });
   });
+
+  it("does not ask again after the user declines the same download", () => {
+    expect(
+      resolveModelSwitch({
+        currentModelId: "smollm2-360m-instruct-q4f32",
+        selectedModelId: "qwen3-4b-q4f16",
+        runtimeStatus: "ready",
+        isCached: false,
+        isDownloadDeclined: true,
+        isPreDisclosedDefault: false,
+      })
+    ).toEqual({ type: "declined" });
+  });
 });

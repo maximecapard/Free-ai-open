@@ -42,10 +42,19 @@ export default function OnboardingDevicePage() {
         </div>
       )}
 
-      {profile && (!profile.staticCapabilityProfile || benchmarkSettled) && (
-        <Link href="/onboarding/mode" className="fo-button fo-button-primary" style={{ marginTop: 32 }}>
-          {t("common.continue")}
-        </Link>
+      {profile && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 32 }}>
+          {(!profile.staticCapabilityProfile || benchmarkSettled) && (
+            <Link href="/onboarding/mode" className="fo-button fo-button-primary">
+              {t("common.continue")}
+            </Link>
+          )}
+          {profile.staticCapabilityProfile && !benchmarkSettled && (
+            <Link href="/onboarding/mode" className="fo-button fo-button-secondary">
+              {t("benchmark.skip")}
+            </Link>
+          )}
+        </div>
       )}
 
       <p className="fo-muted" style={{ marginTop: 32, fontSize: 13 }}>

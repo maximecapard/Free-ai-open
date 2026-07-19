@@ -77,7 +77,7 @@ const records = [
     license: {
       id: "apache-2.0",
       name: APACHE_LICENSE_NAME,
-      sourceUrl: "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct/blob/main/LICENSE",
+      sourceUrl: "https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct#license",
       attributionRequired: true,
     },
     source: {

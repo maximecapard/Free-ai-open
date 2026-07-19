@@ -17,7 +17,11 @@ export interface BuildDebugDiagnosticReportInputOptions {
   appVersion?: string;
   deviceProfile: DeviceProfile | null;
   routeResult: ModelRouterResult | null;
-  mode: PerformanceMode;
+  mode?: PerformanceMode | null;
+  runtimeStatus?: DiagnosticReportInput["runtimeStatus"];
+  task?: TaskCategory;
+  recommendedModelId?: string;
+  loadedModelId?: string;
   logs: LocalLogRecord[];
   localBenchmark?: LocalBenchmarkResult | null;
 }
@@ -42,17 +46,22 @@ export function buildDebugDiagnosticReportInput({
   deviceProfile,
   routeResult,
   mode,
+  runtimeStatus,
+  task,
+  recommendedModelId,
+  loadedModelId,
   logs,
   localBenchmark,
 }: BuildDebugDiagnosticReportInputOptions): DiagnosticReportInput {
   return {
     appVersion,
-    runtimeStatus: findLastRuntimeStatus(logs)?.status,
+    runtimeStatus: runtimeStatus ?? findLastRuntimeStatus(logs)?.status,
     deviceProfile: deviceProfile ?? undefined,
-    performanceMode: mode,
-    task: DEBUG_PREVIEW_TASK,
+    performanceMode: mode ?? undefined,
+    task: task ?? DEBUG_PREVIEW_TASK,
+    recommendedModelId,
     routerResult: routeResult ? { selectedModel: routeResult.selectedModel, fallbackModel: routeResult.fallbackModel } : null,
-    loadedModelId: findLoadedModelId(logs) ?? undefined,
+    loadedModelId: loadedModelId ?? findLoadedModelId(logs) ?? undefined,
     recentErrors: toRecentErrors(logs),
     localLogs: logs,
     metrics: buildMetrics(logs),

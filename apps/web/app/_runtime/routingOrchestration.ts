@@ -73,6 +73,8 @@ export interface AttemptModelLoadResult {
   registryId: string | null;
   webllmModelId: string | null;
   succeeded: boolean;
+  attemptedRegistryIds: string[];
+  failedRegistryIds: string[];
 }
 
 // Turns a RouterDecision's [selectedModelId, ...fallbackModelIds] (registry
@@ -93,6 +95,27 @@ export function buildLoadCandidatesFromDecision(
   return candidates;
 }
 
+export interface DisclosedLoadCandidateOptions {
+  approvedRegistryIds?: ReadonlySet<string>;
+  preDisclosedRegistryIds?: ReadonlySet<string>;
+}
+
+export async function filterDisclosedLoadCandidates(
+  candidates: readonly ModelLoadCandidate[],
+  options: DisclosedLoadCandidateOptions = {}
+): Promise<ModelLoadCandidate[]> {
+  const approved = options.approvedRegistryIds ?? new Set<string>();
+  const preDisclosed = options.preDisclosedRegistryIds ?? new Set<string>();
+  const result: ModelLoadCandidate[] = [];
+
+  for (const candidate of candidates) {
+    if (approved.has(candidate.registryId) || preDisclosed.has(candidate.registryId) || await isModelCached(candidate.webllmModelId)) {
+      result.push(candidate);
+    }
+  }
+  return result;
+}
+
 // The inverse lookup: RuntimeState.modelId is a WebLLM ID, but model-switch
 // policy (modelSwitchPolicy.ts) compares registry IDs. Returns null for an
 // unloaded runtime or a WebLLM ID no longer present in the registry.
@@ -106,6 +129,7 @@ export function registryIdForWebllmModelId(
 
 export interface AttemptModelLoadOptions {
   initialStatus?: "loading_model" | "recovering";
+  contextWindowTokens?: number;
   now?: () => Date;
   // Fired synchronously right before each candidate's loadModel() call, with
   // its zero-based position in the list. Lets the UI show "Trying a lighter
@@ -132,6 +156,8 @@ export async function attemptModelLoadWithFallback(
 ): Promise<AttemptModelLoadResult> {
   const now = options.now ?? (() => new Date());
   const seen = new Set<string>();
+  const attemptedRegistryIds: string[] = [];
+  const failedRegistryIds: string[] = [];
   let attemptIndex = 0;
 
   for (const candidate of candidates) {
@@ -140,9 +166,13 @@ export async function attemptModelLoadWithFallback(
 
     options.onAttempt?.(candidate, attemptIndex);
     attemptIndex += 1;
+    attemptedRegistryIds.push(candidate.registryId);
 
     const startedAt = now().getTime();
-    await runtime.loadModel(candidate.webllmModelId, { initialStatus: options.initialStatus });
+    await runtime.loadModel(candidate.webllmModelId, {
+      initialStatus: options.initialStatus,
+      contextWindowTokens: options.contextWindowTokens,
+    });
     const state = runtime.getState();
     const succeeded = state.status === "ready" && state.modelId === candidate.webllmModelId;
 
@@ -157,9 +187,16 @@ export async function attemptModelLoadWithFallback(
     );
 
     if (succeeded) {
-      return { registryId: candidate.registryId, webllmModelId: candidate.webllmModelId, succeeded: true };
+      return {
+        registryId: candidate.registryId,
+        webllmModelId: candidate.webllmModelId,
+        succeeded: true,
+        attemptedRegistryIds,
+        failedRegistryIds,
+      };
     }
+    failedRegistryIds.push(candidate.registryId);
   }
 
-  return { registryId: null, webllmModelId: null, succeeded: false };
+  return { registryId: null, webllmModelId: null, succeeded: false, attemptedRegistryIds, failedRegistryIds };
 }

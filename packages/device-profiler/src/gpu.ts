@@ -1,3 +1,4 @@
+import { gpuLimitKeys } from "@free-ai-open/types";
 import type {
   ExperimentalMemoryClass,
   GpuAdapterLike,
@@ -10,16 +11,6 @@ import type {
   NavigatorLike,
   NormalizedGpuProfile,
 } from "./types";
-
-const SELECTED_LIMIT_KEYS = [
-  "maxBufferSize",
-  "maxStorageBufferBindingSize",
-  "maxComputeWorkgroupStorageSize",
-  "maxComputeInvocationsPerWorkgroup",
-  "maxBindGroups",
-  "maxBindingsPerBindGroup",
-  "maxStorageBuffersPerShaderStage",
-] as const;
 
 const FEATURE_ALIASES: Record<string, GpuFeatureClass> = {
   "shader-f16": "shader-f16",
@@ -198,7 +189,7 @@ export function normalizeGpuLimitClasses(limits: GpuAdapterLike["limits"]): Reco
   const source = asRecord(limits);
   if (!source) return normalized;
 
-  for (const key of SELECTED_LIMIT_KEYS) {
+  for (const key of gpuLimitKeys) {
     const value = asFiniteNumber(source[key]);
     if (value !== undefined) {
       normalized[key] = bucketGenericLimit(key, value);

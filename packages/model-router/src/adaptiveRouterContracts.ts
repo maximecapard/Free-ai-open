@@ -68,6 +68,7 @@ export type RouterRejectionCode =
   | "task_unsupported"
   | "metadata_incomplete"
   | "repeated_oom"
+  | "repeated_stall"
   | "repeated_device_loss";
 
 export interface RouterRejectedModel {

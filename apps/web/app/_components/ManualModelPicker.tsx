@@ -10,6 +10,7 @@ import { resolveManualModelEligibility } from "../_lib/manualModelEligibility";
 import { formatApproximateDownloadSize } from "../_lib/modelDownloadDisclosure";
 import { adaptiveRejectionKey } from "../_lib/adaptiveRouteExplanation";
 import { findTaskLabelKey } from "../_lib/catalog";
+import { localizedModelName } from "../_lib/modelDisplayName";
 import { useTranslations } from "../_i18n/LocaleContext";
 import type { TranslationKey } from "../_i18n/dictionary";
 
@@ -93,6 +94,7 @@ export function ManualModelPicker({
           const cached = cachedByModelId[record.id] ?? false;
           const tasks = recommendedTasks(record);
           const isExperimental = record.status !== "verified";
+          const displayName = localizedModelName(record, t);
 
           return (
             <div
@@ -100,7 +102,6 @@ export function ManualModelPicker({
               className="fo-card"
               style={{
                 padding: 14,
-                opacity: eligibility.eligible ? 1 : 0.6,
                 borderColor: isSelected ? "var(--fo-accent)" : undefined,
                 background: isSelected ? "var(--fo-accent-soft)" : undefined,
               }}
@@ -118,7 +119,7 @@ export function ManualModelPicker({
                 style={{ display: "block", width: "100%", textAlign: "left", background: "none", border: "none", padding: 0 }}
               >
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                  <strong>{record.displayName}</strong>
+                  <strong>{displayName}</strong>
                   <span className="fo-muted" style={{ fontSize: 13 }}>
                     {size ? `${size.value} ${size.unit}` : t("modelDownload.sizeUnknown")}
                     {cached ? ` · ${t("manualModel.cached")}` : ""}
@@ -136,17 +137,20 @@ export function ManualModelPicker({
               )}
 
               {!eligibility.eligible && (
-                <p role="status" style={{ margin: "6px 0 0", fontSize: 12, color: "var(--fo-danger)" }}>
-                  {t("manualModel.ineligible")}:{" "}
-                  {eligibility.rejectionReasons.map((reason) => t(adaptiveRejectionKey(reason))).join(", ")}
+                <p role="status" style={{ margin: "6px 0 0", fontSize: 12, color: "var(--fo-text)" }}>
+                  {eligibility.pending
+                    ? t("manualModel.checkingEligibility")
+                    : `${t("manualModel.ineligible")}: ${eligibility.rejectionReasons
+                        .map((reason) => t(adaptiveRejectionKey(reason)))
+                        .join(", ")}`}
                 </p>
               )}
 
               <details style={{ marginTop: 8 }}>
-                <summary className="fo-muted" style={{ cursor: "pointer", fontSize: 12 }}>
+                <summary className="fo-muted" style={{ cursor: "pointer", fontSize: 12, minHeight: 44, display: "flex", alignItems: "center" }}>
                   {t("onboarding.advancedDetails")}
                 </summary>
-                <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", marginTop: 8 }}>
+                <dl style={{ display: "grid", gridTemplateColumns: "minmax(0, auto) minmax(0, 1fr)", gap: "4px 12px", marginTop: 8 }}>
                   <dt className="fo-muted">{t("settings.modelId")}</dt>
                   <dd className="fo-technical-value">{record.webllmModelId}</dd>
                   <dt className="fo-muted">{t("manualModel.languagesLabel")}</dt>

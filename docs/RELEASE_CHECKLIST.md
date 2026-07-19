@@ -66,7 +66,7 @@ Phase 0 adds types, package boundaries, and local persistence/migration only —
 - [ ] After a successful chat exchange, open `/debug` and confirm "Local performance observations" shows a non-zero count with a `completed` outcome for the loaded model, and that no prompt/response text appears anywhere on the page.
 - [ ] Cancel a generation (Stop) and confirm `/debug`'s observations record the outcome as `cancelled`, not a model failure.
 - [ ] Confirm `/debug`'s new "Adaptive router" panel shows the selected model, confidence, reason/warning codes, fallback chain, and rejected models with reasons, and that the French UI shows translated text — no raw reason/warning/rejection codes visible outside `/debug`'s own technical-value styling.
-- [ ] Confirm the existing v0.6 "Recommended model" panel on `/debug` still renders independently and unchanged, alongside the new adaptive panel.
+- [ ] Confirm `/debug` shows the same adaptive recommendation, actually loaded model, runtime status, task, performance mode, and automatic/manual mode as the persistent app runtime; it must not construct an independent legacy preview.
 - [ ] Switch UI language mid-session and confirm the next routing decision uses the new locale (check `/debug`), without rewriting past messages or affecting the hidden runtime language instruction.
 - [ ] Confirm navigating Chat → Settings → Chat or Chat → Debug → Chat still keeps the same loaded model and does not trigger a spurious re-route or re-download.
 - [ ] Export a diagnostic report and confirm it still contains no prompt/response/conversation content — only technical routing and observation fields.
@@ -87,6 +87,17 @@ Phase 0 adds types, package boundaries, and local persistence/migration only —
 - [ ] Manually select a model in Settings, then (for testing) make it ineligible — e.g. by simulating insufficient memory — and confirm `/chat` shows a notice that the manual pick was overridden, rather than silently falling back with no explanation.
 - [ ] Repeat the manual model picker and settings changes across French/English and light/dark/system; confirm no raw technical strings leak into the translated normal-chat surface.
 - [ ] Below 720px, confirm the manual model list has no page-wide horizontal overflow, each model's selectable area and the "Automatic" option meet 44×44px touch targets, and the technical-details disclosure opens without covering the rest of the page.
+
+## v0.7.0-alpha Phase 6 (Global review corrections)
+
+- [ ] Clear site data and repeat Getting Started: confirm the benchmark can be skipped, and confirm the compact first-model disclosure names the friendly model, approximate size, local browser cache, and separate consent for any other uncached model.
+- [ ] During the first non-default recommendation, confirm the compact disclosed fallback loads while the upgrade waits for consent; cancel the prompt and complete another generation, then confirm the same prompt does not immediately reappear in a loop.
+- [ ] Force the recommended model and one fallback to fail. Confirm each model is attempted at most once and no uncached, unapproved fallback starts downloading silently.
+- [ ] Confirm loading progress has priority over a pending download/routing notice, and that Chat distinguishes the actually loaded model from a different pending recommendation.
+- [ ] In Settings, confirm manual model buttons remain disabled with a compatibility-check message until the first capability-backed decision exists. Re-check the device, rerun/clear the benchmark, and clear performance history; each action should refresh the adaptive decision without unloading a same-model runtime unnecessarily.
+- [ ] Generate successful, cancelled, stalled, and failed outcomes. Confirm loads are not counted as generations, cancellation remains neutral, repeated stalls can change eligibility, and `/debug` updates from the live provider state.
+- [ ] Export diagnostics and confirm current top-level runtime/recommended/loaded values are used even if older local logs refer to another model. Confirm `contentLogged: false` and no prompt/response/conversation/document/raw GPU string appears.
+- [ ] Inspect the loaded WebLLM engine options in the runtime unit/smoke harness and confirm the router's context window is applied within the verified registry preset; output tokens must remain at or below the global safety cap.
 
 ## Manual smoke tests (browser)
 

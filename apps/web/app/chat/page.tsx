@@ -32,6 +32,7 @@ import { pickFriendlyRouteExplanation } from "../_lib/friendlyRouteExplanation";
 import { useOnlineStatus } from "../_components/useOnlineStatus";
 import { isGettingStartedCompleted } from "../_lib/gettingStartedPreference";
 import { runtimeErrorKey } from "../_lib/runtimeErrorLabel";
+import { localizedModelName } from "../_lib/modelDisplayName";
 import { canSendChatMessage } from "../_lib/runtimeUiState";
 import { useLocale, useTranslations } from "../_i18n/LocaleContext";
 import { useAppRuntime } from "../_runtime/AppRuntimeProvider";
@@ -49,6 +50,7 @@ function ChatContent() {
     activeConversationTask,
     routerDecision,
     selectedModel,
+    loadedModel,
     pendingModelSwitch,
     isRoutingInProgress,
     isFallbackRetry,
@@ -89,6 +91,8 @@ function ChatContent() {
       })
     : null;
   const emptyStateReason = routerDecision ? resolveChatEmptyStateReason(routerDecision) : null;
+  const selectedModelName = selectedModel ? localizedModelName(selectedModel, t) : null;
+  const loadedModelName = loadedModel ? localizedModelName(loadedModel, t) : null;
 
   const [isSetupComplete, setIsSetupComplete] = useState<boolean | null>(null);
   const [message, setMessage] = useState("");
@@ -312,7 +316,12 @@ function ChatContent() {
               </h1>
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <ModelStatusPill taskLabel={taskLabel} modeLabel={modeLabel} modelName={selectedModel?.displayName} />
+              <ModelStatusPill
+                taskLabel={taskLabel}
+                modeLabel={modeLabel}
+                activeModelName={loadedModelName}
+                recommendedModelName={selectedModelName}
+              />
               {performanceMode && (
                 <RuntimeStatusBadge
                   state={runtimeState}
@@ -324,7 +333,7 @@ function ChatContent() {
             </div>
           </div>
 
-          {performanceMode && selectedModel && friendlyExplanation && (
+          {performanceMode && selectedModel && loadedModel?.id === selectedModel.id && friendlyExplanation && (
             <p role="status" className="fo-muted" style={{ margin: "0 0 16px", fontSize: 13 }}>
               {t(friendlyExplanation.key, friendlyExplanation.params)}
             </p>

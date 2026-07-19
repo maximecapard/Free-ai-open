@@ -828,6 +828,31 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - Added unit coverage for every new pure module: `manualModelPreference.ts`, `friendlyRouteExplanation.ts`, `modelStatusLabel.ts`, `manualModelEligibility.ts`, `chatEmptyState.ts`, and the `isLargeMobileDownload()`/`onAttempt` additions to `modelDownloadDisclosure.ts`/`routingOrchestration.ts`.
 - Full monorepo `pnpm -r typecheck`, `pnpm -r test`, `pnpm lint`, and `pnpm build` all pass; i18n lockstep test covers every new EN/FR string.
 
+## Sprint 6.20 - v0.7.0-alpha Phase 6: global review corrections
+
+### Corrected
+
+- Rebuilt persisted capability profiles, model observations, direct router capability input, and diagnostic capability fields from strict technical allowlists. Unknown GPU classes/limit keys, raw-like fields, private text placed in a nominally technical field, malformed timestamps, future profiles, and unexpected observation fields are rejected or removed instead of being trusted through a TypeScript cast.
+- Centralized capability category constants and the coarse capability-profile key in `@free-ai-open/types`, so profiler persistence, benchmark matching, router normalization, and diagnostic sanitation use the same categories. A benchmark now applies only to the exact current coarse profile and valid date interval.
+- Separated load-attempt and generation denominators in adaptive observation aggregation. Load success no longer inflates generation completion, user cancellation remains neutral, and repeated stalls join repeated OOM/device-loss outcomes as a hard reliability signal.
+- Applied `RouterDecision.recommendedContextTokens` to WebLLM engine creation with a verified registry-preset cap. The existing output-token value still only tightens the global generation-safety cap.
+- Restricted fallback load candidates to models that are cached, explicitly approved, or disclosed during first-run setup. Declined and failed upgrades are remembered for the session, preventing repeated consent/failure loops; late routing/model-switch completions are isolated with epochs.
+- Extracted adaptive routing, consent, model switching, recovery, and runtime initialization from `AppRuntimeProvider` into the focused `useAdaptiveRuntimeRouting` hook. The provider remains responsible for conversation and generation coordination, avoiding a single oversized orchestration component.
+- Re-evaluate routing after real generation observations and after Settings actions that change local evidence (device re-check, benchmark rerun/clear, observation clear). The routing cache includes a deterministic technical observation revision.
+- Aligned `/chat`, `/settings`, and `/debug` with the persistent provider as one source of truth. They distinguish the live loaded model from a recommendation, localize friendly Registry v2 names, keep manual choices disabled until capability routing completes, and export current runtime/recommended/loaded diagnostic values rather than reconstructing a legacy preview from stale logs.
+- Added a benchmark skip path and an honest first-run disclosure for the compact compatibility model's local download/cache. Download consent uses truthful inline-region semantics and accessible text contrast; technical IDs wrap instead of causing narrow-screen overflow.
+- Replaced the broken SmolLM2 repository `LICENSE` URL with the upstream model card's explicit Apache-2.0 license section.
+
+### Tests
+
+- Added regression tests for strict capability/router/diagnostic/observation sanitation, invalid/future dates, benchmark-profile mismatch, correct load-versus-generation aggregation, repeated stalls, numeric GPU-limit gates, context-window forwarding, disclosed fallback filtering, session decline policy, routing-cache observation revisions, conservative pending manual eligibility, localized model names, status priority, and live values in diagnostic exports.
+
+### Remaining limits
+
+- Browser APIs still do not expose exact VRAM consistently; capability and memory fit remain conservative estimates.
+- Real token-rate observations remain unset until `ai-runtime` exposes tokenizer-backed counts. WebGPU device loss is still mapped through the current out-of-memory error classification.
+- Registry v2 remains a small five-model alpha catalog. Full desktop/mobile acceptance testing, including real model downloads and repeated fallback/recovery cycles, remains required before tagging.
+
 ## Cross-cutting remaining work
 
 - Re-verify and expand Model Registry v2 only when an exact artifact, source, license, and supported-device case can be substantiated.

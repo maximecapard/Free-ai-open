@@ -8,6 +8,7 @@ import type { RuntimeStatus } from "@free-ai-open/ai-runtime";
 export type ModelSwitchDecision =
   | { type: "noop" }
   | { type: "blocked_active_generation" }
+  | { type: "declined" }
   | { type: "needs_consent" }
   | { type: "switch_now" };
 
@@ -23,6 +24,7 @@ export interface ResolveModelSwitchInput {
   selectedModelId: string;
   runtimeStatus: RuntimeStatus;
   isCached: boolean;
+  isDownloadDeclined?: boolean;
   // The v0.6 default model (SmolLM2-360M) already has an existing, disclosed
   // first-run download flow (Getting Started) predating the adaptive router —
   // routing straight to it never needs a *new* consent prompt.
@@ -35,6 +37,9 @@ export function resolveModelSwitch(input: ResolveModelSwitchInput): ModelSwitchD
   }
   if (isModelSwitchBlockedStatus(input.runtimeStatus)) {
     return { type: "blocked_active_generation" };
+  }
+  if (input.isDownloadDeclined) {
+    return { type: "declined" };
   }
   if (input.isCached || input.isPreDisclosedDefault) {
     return { type: "switch_now" };

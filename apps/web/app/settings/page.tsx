@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { DEFAULT_MODEL_ID } from "@free-ai-open/ai-runtime";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import { modelRegistryV2 } from "@free-ai-open/model-registry";
 import type { PerformanceMode } from "@free-ai-open/types";
@@ -28,11 +27,14 @@ export default function SettingsPage() {
     performanceMode: savedMode,
     applyPerformanceMode,
     routerDecision,
+    loadedModel,
     modelSelectionMode,
     manualModelId,
     setManualModel,
     setAutomaticModel,
     clearObservations,
+    refreshRoutingDecision,
+    isRoutingInProgress,
     pendingModelSwitch,
     confirmModelSwitch,
     cancelModelSwitch,
@@ -73,9 +75,11 @@ export default function SettingsPage() {
     setModeSavedNotice(true);
   }
 
-  function handleRecheckDevice() {
+  async function handleRecheckDevice() {
     setProfile(null);
-    detectAndStoreDeviceProfile().then(setProfile);
+    const nextProfile = await detectAndStoreDeviceProfile();
+    setProfile(nextProfile);
+    await refreshRoutingDecision();
   }
 
   function handleResetGettingStarted() {
@@ -84,8 +88,8 @@ export default function SettingsPage() {
     router.push("/onboarding");
   }
 
-  function handleClearObservations() {
-    clearObservations();
+  async function handleClearObservations() {
+    await clearObservations();
     setObservationsClearedNotice(true);
   }
 
@@ -161,7 +165,11 @@ export default function SettingsPage() {
           routerDecision={routerDecision}
           modelSelectionMode={modelSelectionMode}
           manualModelId={manualModelId}
-          disabled={isPerformanceModeChangeBlockedStatus(runtimeState.status)}
+          disabled={
+            isPerformanceModeChangeBlockedStatus(runtimeState.status) ||
+            isRoutingInProgress ||
+            !routerDecision
+          }
           onSelectAutomatic={() => void setAutomaticModel()}
           onSelectManual={(modelId) => void setManualModel(modelId)}
         />
@@ -191,7 +199,7 @@ export default function SettingsPage() {
         <div style={{ margin: "8px 0 16px" }}>
           <DeviceCapabilitySummary profile={profile} />
         </div>
-        <button type="button" className="fo-button fo-button-secondary" onClick={handleRecheckDevice}>
+        <button type="button" className="fo-button fo-button-secondary" onClick={() => void handleRecheckDevice()}>
           {t("settings.recheckDevice")}
         </button>
       </section>
@@ -201,6 +209,7 @@ export default function SettingsPage() {
           <LocalBenchmarkPanel
             profile={profile.staticCapabilityProfile}
             disabled={isPerformanceModeChangeBlockedStatus(runtimeState.status)}
+            onSettled={() => void refreshRoutingDecision()}
           />
         </section>
       )}
@@ -211,7 +220,7 @@ export default function SettingsPage() {
           {t("settings.performanceHistoryBody")}
         </p>
         <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-          <button type="button" className="fo-button fo-button-secondary" onClick={handleClearObservations}>
+          <button type="button" className="fo-button fo-button-secondary" onClick={() => void handleClearObservations()}>
             {t("settings.clearObservations")}
           </button>
           {observationsClearedNotice && (
@@ -245,14 +254,14 @@ export default function SettingsPage() {
       </section>
 
       <details className="fo-card" style={{ padding: 20 }}>
-        <summary className="fo-muted" style={{ cursor: "pointer", fontSize: 14 }}>
+        <summary className="fo-muted" style={{ cursor: "pointer", fontSize: 14, minHeight: 44, display: "flex", alignItems: "center" }}>
           {t("onboarding.advancedDetails")}
         </summary>
-        <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", marginTop: 12 }}>
+        <dl style={{ display: "grid", gridTemplateColumns: "minmax(0, auto) minmax(0, 1fr)", gap: "4px 12px", marginTop: 12 }}>
           <dt className="fo-muted">{t("settings.exactMode")}</dt>
           <dd className="fo-technical-value">{savedMode ?? t("common.unknown")}</dd>
           <dt className="fo-muted">{t("settings.modelId")}</dt>
-          <dd className="fo-technical-value">{DEFAULT_MODEL_ID}</dd>
+          <dd className="fo-technical-value">{loadedModel?.webllmModelId ?? t("common.unknown")}</dd>
           <dt className="fo-muted">{t("onboarding.preferredBackend")}</dt>
           <dd className="fo-technical-value">{profile?.preferredBackend ?? t("common.unknown")}</dd>
           <dt className="fo-muted">{t("onboarding.deviceTier")}</dt>

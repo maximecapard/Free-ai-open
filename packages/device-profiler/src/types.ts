@@ -7,6 +7,7 @@ import type {
   FormFactor,
   GpuArchitectureClass,
   GpuDescriptionClass,
+  GpuFeatureClass,
   GpuLimitClass,
   GpuVendorClass,
   LogicalProcessorClass,
@@ -37,15 +38,7 @@ export type {
 };
 export type CpuConcurrencyClass = LogicalProcessorClass;
 
-export type GpuFeatureClass =
-  | "shader-f16"
-  | "timestamp-query"
-  | "texture-compression-bc"
-  | "texture-compression-etc2"
-  | "texture-compression-astc"
-  | "subgroups"
-  | "storage-textures"
-  | "unknown";
+export type { GpuFeatureClass };
 
 export interface GpuInfoLike {
   vendor?: unknown;

@@ -1,3 +1,14 @@
+import {
+  browserFamilies,
+  experimentalMemoryClasses,
+  gpuArchitectureClasses,
+  gpuDescriptionClasses,
+  gpuFeatureClasses,
+  gpuLimitClasses,
+  gpuLimitKeys,
+  gpuVendorClasses,
+  osFamilies,
+} from "@free-ai-open/types";
 import type { StaticCapabilityProfile } from "@free-ai-open/types";
 
 // v0.7.0-alpha "Adaptive Model Router v1" contract (Phase 0: persistence
@@ -11,8 +22,17 @@ import type { StaticCapabilityProfile } from "@free-ai-open/types";
 const STORAGE_KEY = "free-ai-open:capability-profile";
 const SCHEMA_VERSION = 2;
 const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+const MAX_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
-const GPU_LIMIT_CLASSES = new Set(["low", "medium", "high", "very_high", "unknown"]);
+const BROWSER_FAMILIES = new Set<string>(browserFamilies);
+const OS_FAMILIES = new Set<string>(osFamilies);
+const GPU_VENDOR_CLASSES = new Set<string>(gpuVendorClasses);
+const GPU_ARCHITECTURE_CLASSES = new Set<string>(gpuArchitectureClasses);
+const GPU_DESCRIPTION_CLASSES = new Set<string>(gpuDescriptionClasses);
+const GPU_FEATURE_CLASSES = new Set<string>(gpuFeatureClasses);
+const GPU_LIMIT_KEYS = new Set<string>(gpuLimitKeys);
+const GPU_LIMIT_CLASSES = new Set<string>(gpuLimitClasses);
+const EXPERIMENTAL_MEMORY_CLASSES = new Set<string>(experimentalMemoryClasses);
 
 function isCapabilityConfidence(value: unknown): value is StaticCapabilityProfile["confidence"] {
   return value === "low" || value === "medium" || value === "high";
@@ -73,15 +93,23 @@ function capabilityClassForTier(tier: StaticCapabilityProfile["deviceTier"]): St
 
 function addDefaultExpiry(detectedAt: string): string {
   const time = Date.parse(detectedAt);
-  const source = Number.isNaN(time) ? 0 : time;
-  return new Date(source + MAX_AGE_MS).toISOString();
+  return new Date(time + MAX_AGE_MS).toISOString();
+}
+
+function isIsoDate(value: unknown): value is string {
+  return typeof value === "string" && Number.isFinite(Date.parse(value));
+}
+
+function isOptionalBoundedNumber(value: unknown, maximum: number): value is number | undefined {
+  return value === undefined || (typeof value === "number" && Number.isFinite(value) && value > 0 && value <= maximum);
 }
 
 function sanitizeLimitClasses(value: unknown): StaticCapabilityProfile["gpu"]["limitClasses"] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   const result: StaticCapabilityProfile["gpu"]["limitClasses"] = {};
   for (const [key, limitClass] of Object.entries(value)) {
-    if (GPU_LIMIT_CLASSES.has(String(limitClass))) {
+    if (!GPU_LIMIT_KEYS.has(key)) continue;
+    if (typeof limitClass === "string" && GPU_LIMIT_CLASSES.has(limitClass)) {
       result[key] = limitClass as StaticCapabilityProfile["gpu"]["limitClasses"][string];
     } else if (typeof limitClass === "number") {
       result[key] = "unknown";
@@ -93,19 +121,28 @@ function sanitizeLimitClasses(value: unknown): StaticCapabilityProfile["gpu"]["l
 function normalizeGpu(candidate: Record<string, unknown>): StaticCapabilityProfile["gpu"] | null {
   if (!isGpuShape(candidate.gpu)) return null;
   const gpu = candidate.gpu as Record<string, unknown>;
+  const vendorClass = typeof gpu.vendorClass === "string" && GPU_VENDOR_CLASSES.has(gpu.vendorClass)
+    ? gpu.vendorClass as StaticCapabilityProfile["gpu"]["vendorClass"]
+    : undefined;
+  const architectureClass = typeof gpu.architectureClass === "string" && GPU_ARCHITECTURE_CLASSES.has(gpu.architectureClass)
+    ? gpu.architectureClass as StaticCapabilityProfile["gpu"]["architectureClass"]
+    : undefined;
+  const descriptionClass = typeof gpu.descriptionClass === "string" && GPU_DESCRIPTION_CLASSES.has(gpu.descriptionClass)
+    ? gpu.descriptionClass as StaticCapabilityProfile["gpu"]["descriptionClass"]
+    : undefined;
+  const experimentalMemoryClass =
+    typeof gpu.experimentalMemoryClass === "string" && EXPERIMENTAL_MEMORY_CLASSES.has(gpu.experimentalMemoryClass)
+      ? gpu.experimentalMemoryClass as StaticCapabilityProfile["gpu"]["experimentalMemoryClass"]
+      : undefined;
   return {
-    ...(typeof gpu.vendorClass === "string" ? { vendorClass: gpu.vendorClass as StaticCapabilityProfile["gpu"]["vendorClass"] } : {}),
-    ...(typeof gpu.architectureClass === "string"
-      ? { architectureClass: gpu.architectureClass as StaticCapabilityProfile["gpu"]["architectureClass"] }
-      : {}),
-    ...(typeof gpu.descriptionClass === "string"
-      ? { descriptionClass: gpu.descriptionClass as StaticCapabilityProfile["gpu"]["descriptionClass"] }
-      : {}),
-    featureClasses: (gpu.featureClasses as unknown[]).filter((item): item is string => typeof item === "string").sort(),
+    ...(vendorClass ? { vendorClass } : {}),
+    ...(architectureClass ? { architectureClass } : {}),
+    ...(descriptionClass ? { descriptionClass } : {}),
+    featureClasses: (gpu.featureClasses as unknown[])
+      .filter((item): item is string => typeof item === "string" && GPU_FEATURE_CLASSES.has(item))
+      .sort(),
     limitClasses: sanitizeLimitClasses(gpu.limitClasses),
-    ...(typeof gpu.experimentalMemoryClass === "string"
-      ? { experimentalMemoryClass: gpu.experimentalMemoryClass as StaticCapabilityProfile["gpu"]["experimentalMemoryClass"] }
-      : {}),
+    ...(experimentalMemoryClass ? { experimentalMemoryClass } : {}),
     ...(gpu.experimentalMemoryConfidence === "low" ? { experimentalMemoryConfidence: "low" as const } : {}),
   };
 }
@@ -119,21 +156,27 @@ export function migrateStaticCapabilityProfile(raw: unknown): StaticCapabilityPr
   const candidate = raw as Record<string, unknown>;
 
   if (candidate.schemaVersion !== 1 && candidate.schemaVersion !== SCHEMA_VERSION) return null;
-  if (typeof candidate.detectedAt !== "string") return null;
+  if (!isIsoDate(candidate.detectedAt)) return null;
   if (!isFormFactor(candidate.formFactor)) return null;
   if (!isArchitectureClass(candidate.architectureClass)) return null;
-  if (typeof candidate.browserFamily !== "string" || typeof candidate.osFamily !== "string") return null;
+  if (typeof candidate.browserFamily !== "string" || !BROWSER_FAMILIES.has(candidate.browserFamily)) return null;
+  if (typeof candidate.osFamily !== "string" || !OS_FAMILIES.has(candidate.osFamily)) return null;
   if (typeof candidate.webgpuAvailable !== "boolean" || typeof candidate.wasmAvailable !== "boolean") return null;
   const gpu = normalizeGpu(candidate);
   if (!gpu) return null;
   if (!isCapabilityConfidence(candidate.confidence)) return null;
+  if (!isOptionalBoundedNumber(candidate.approximateMemoryGB, 1024)) return null;
+  if (!isOptionalBoundedNumber(candidate.logicalProcessors, 1024)) return null;
+
+  const expiresAt = candidate.expiresAt === undefined ? addDefaultExpiry(candidate.detectedAt) : candidate.expiresAt;
+  if (!isIsoDate(expiresAt) || Date.parse(expiresAt) <= Date.parse(candidate.detectedAt)) return null;
 
   const deviceTier = isDeviceTier(candidate.deviceTier) ? candidate.deviceTier : candidate.webgpuAvailable ? 1 : 0;
 
   return {
     schemaVersion: SCHEMA_VERSION,
     detectedAt: candidate.detectedAt,
-    expiresAt: typeof candidate.expiresAt === "string" ? candidate.expiresAt : addDefaultExpiry(candidate.detectedAt),
+    expiresAt,
     formFactor: candidate.formFactor,
     architectureClass: candidate.architectureClass,
     browserFamily: candidate.browserFamily,
@@ -158,7 +201,11 @@ export function isCapabilityProfileExpired(
   profile: StaticCapabilityProfile,
   now: () => Date = () => new Date()
 ): boolean {
-  return Date.parse(profile.expiresAt) <= now().getTime();
+  const detectedAt = Date.parse(profile.detectedAt);
+  const expiresAt = Date.parse(profile.expiresAt);
+  const currentTime = now().getTime();
+  return !Number.isFinite(detectedAt) || !Number.isFinite(expiresAt) ||
+    expiresAt <= detectedAt || expiresAt <= currentTime || detectedAt > currentTime + MAX_CLOCK_SKEW_MS;
 }
 
 export function shouldRedetectCapabilityProfile(
@@ -188,7 +235,9 @@ export function getStoredCapabilityProfile(now: () => Date = () => new Date()): 
 export function setStoredCapabilityProfile(profile: StaticCapabilityProfile): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...profile, schemaVersion: SCHEMA_VERSION }));
+    const sanitized = migrateStaticCapabilityProfile({ ...profile, schemaVersion: SCHEMA_VERSION });
+    if (!sanitized) return;
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitized));
   } catch {
     // Storage may be unavailable (private browsing, quota, disabled).
   }

@@ -16,7 +16,7 @@ Model Registry v2 contains five curated records verified with `@mlc-ai/web-llm` 
 
 Download estimates describe model artifacts, while runtime-memory estimates come from WebLLM's `vram_required_MB` metadata. They are different measurements and neither predicts model-weight bytes, KV-cache growth, total browser memory, or operating-system memory use. No separate model-weight byte estimate is claimed. The 4B download estimate has medium confidence; the other listed download estimates have high confidence. All installed records were loaded with WebLLM's 4,096-token context override on a desktop-class test environment, but the smoke run was not a full 4,096-token context stress test; larger upstream context claims are not exposed by this registry.
 
-The active v0.6 recommendation UI still reads the legacy `sampleModels` records. Model Registry v2 is ready for the later adaptive-router phase, but it does not yet select or silently download a model. Until runtime integration lands, `ai-runtime` uses the fixed verified compatibility default `SmolLM2-360M-Instruct-q4f32_1-MLC`.
+The active v0.7 adaptive router reads these records and drives client-side model loading through `AppRuntimeProvider`. The verified compact SmolLM2 record remains the pre-disclosed compatibility fallback. A different uncached model is never downloaded solely because the router selected it: the user must confirm the disclosed model name and approximate size first.
 
 ## V2 contract
 
@@ -34,7 +34,7 @@ Each `ModelRegistryRecord` includes:
 - upstream source, MLC artifact, WebLLM library, and license URLs;
 - ordered fallback model IDs.
 
-`modelRegistryV2Schema` rejects unknown fields, malformed metadata, duplicate internal or WebLLM IDs, missing fallback targets, and fallback cycles. Only records with `status: "verified"`, a verification date, and a matching WebLLM version are eligible for future automatic routing. Experimental, deprecated, and unavailable records remain excluded.
+`modelRegistryV2Schema` rejects unknown fields, malformed metadata, duplicate internal or WebLLM IDs, missing fallback targets, and fallback cycles. Only records with `status: "verified"`, a verification date, and a matching WebLLM version are eligible for automatic routing. Experimental, deprecated, and unavailable records remain excluded.
 
 ## Verification and licensing
 

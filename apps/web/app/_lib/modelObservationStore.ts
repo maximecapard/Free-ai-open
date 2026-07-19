@@ -6,6 +6,10 @@ import type { ModelPerformanceObservation } from "@free-ai-open/types";
 // code only, never prompt/response content — see docs/privacy.md.
 const STORAGE_KEY = "free-ai-open:model-performance-observations";
 const SCHEMA_VERSION = 1;
+const MODEL_ID_PATTERN = /^[a-z0-9][a-z0-9._-]{0,159}$/;
+const MAX_TIMING_MS = 24 * 60 * 60 * 1_000;
+const MAX_TOKEN_RATE = 100_000;
+const MAX_CONTEXT_TOKENS = 10_000_000;
 
 // Keeps local history useful for future routing decisions without growing
 // unbounded; oldest observations are dropped first, mirroring
@@ -22,18 +26,40 @@ const VALID_OUTCOMES = new Set([
   "load_failed",
 ]);
 
-function isValidObservation(value: unknown): value is ModelPerformanceObservation {
-  if (!value || typeof value !== "object") return false;
-  const candidate = value as Record<string, unknown>;
+function asOptionalMetric(value: unknown, maximum: number): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= maximum ? value : undefined;
+}
 
-  return (
-    candidate.schemaVersion === SCHEMA_VERSION &&
-    typeof candidate.modelId === "string" &&
-    typeof candidate.observedAt === "string" &&
-    typeof candidate.loadSucceeded === "boolean" &&
-    typeof candidate.outcome === "string" &&
-    VALID_OUTCOMES.has(candidate.outcome)
-  );
+function sanitizeObservation(value: unknown): ModelPerformanceObservation | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.schemaVersion !== SCHEMA_VERSION) return null;
+  if (typeof candidate.modelId !== "string" || !MODEL_ID_PATTERN.test(candidate.modelId)) return null;
+  if (typeof candidate.observedAt !== "string" || !Number.isFinite(Date.parse(candidate.observedAt))) return null;
+  if (typeof candidate.loadSucceeded !== "boolean") return null;
+  if (typeof candidate.outcome !== "string" || !VALID_OUTCOMES.has(candidate.outcome)) return null;
+
+  const observation: ModelPerformanceObservation = {
+    schemaVersion: SCHEMA_VERSION,
+    modelId: candidate.modelId,
+    observedAt: candidate.observedAt,
+    loadSucceeded: candidate.loadSucceeded,
+    outcome: candidate.outcome as ModelPerformanceObservation["outcome"],
+  };
+  const metrics = {
+    loadTimeMs: asOptionalMetric(candidate.loadTimeMs, MAX_TIMING_MS),
+    firstTokenTimeMs: asOptionalMetric(candidate.firstTokenTimeMs, MAX_TIMING_MS),
+    promptTokensPerSecond: asOptionalMetric(candidate.promptTokensPerSecond, MAX_TOKEN_RATE),
+    generationTokensPerSecond: asOptionalMetric(candidate.generationTokensPerSecond, MAX_TOKEN_RATE),
+    generationDurationMs: asOptionalMetric(candidate.generationDurationMs, MAX_TIMING_MS),
+    testedContextTokens: asOptionalMetric(candidate.testedContextTokens, MAX_CONTEXT_TOKENS),
+  } satisfies Partial<ModelPerformanceObservation>;
+  for (const [key, metric] of Object.entries(metrics)) {
+    if (metric !== undefined) {
+      (observation as unknown as Record<string, unknown>)[key] = metric;
+    }
+  }
+  return observation;
 }
 
 // Pure migration function: silently drops entries that don't match the
@@ -41,7 +67,7 @@ function isValidObservation(value: unknown): value is ModelPerformanceObservatio
 // throwing on a single corrupted or future-schema record.
 export function migrateModelPerformanceObservations(raw: unknown): ModelPerformanceObservation[] {
   if (!Array.isArray(raw)) return [];
-  return raw.filter(isValidObservation);
+  return raw.map(sanitizeObservation).filter((observation): observation is ModelPerformanceObservation => observation !== null);
 }
 
 export function getStoredModelPerformanceObservations(): ModelPerformanceObservation[] {
@@ -65,8 +91,10 @@ function writeObservations(observations: ModelPerformanceObservation[]): void {
 }
 
 export function recordModelPerformanceObservation(observation: ModelPerformanceObservation): void {
+  const sanitized = sanitizeObservation({ ...observation, schemaVersion: SCHEMA_VERSION });
+  if (!sanitized) return;
   const current = getStoredModelPerformanceObservations();
-  writeObservations([...current, { ...observation, schemaVersion: SCHEMA_VERSION }]);
+  writeObservations([...current, sanitized]);
 }
 
 export function clearStoredModelPerformanceObservations(): void {

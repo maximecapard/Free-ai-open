@@ -2,22 +2,13 @@ import type {
   FormFactor,
   LocalBenchmarkResponsiveness,
   LocalBenchmarkStability,
-  StaticCapabilityProfile,
 } from "@free-ai-open/types";
+export { buildCapabilityProfileKey } from "@free-ai-open/types";
 import { DESKTOP_WORKLOAD, REDUCED_WORKLOAD } from "./constants";
 import type { BenchmarkWorkloadConfig } from "./types";
 
 export function workloadForFormFactor(formFactor: FormFactor): BenchmarkWorkloadConfig {
   return formFactor === "desktop" ? { ...DESKTOP_WORKLOAD } : { ...REDUCED_WORKLOAD };
-}
-
-export function buildCapabilityProfileKey(profile: StaticCapabilityProfile): string {
-  return [
-    profile.formFactor,
-    profile.capabilityClass,
-    profile.webgpuAvailable ? "webgpu" : "no-webgpu",
-    profile.fallbackAdapter ? "fallback" : "native",
-  ].join(":");
 }
 
 export function median(values: readonly number[]): number {

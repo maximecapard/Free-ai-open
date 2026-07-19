@@ -1,4 +1,12 @@
 import {
+  browserFamilies,
+  experimentalMemoryClasses,
+  gpuArchitectureClasses,
+  gpuDescriptionClasses,
+  gpuFeatureClasses,
+  gpuLimitKeys,
+  gpuVendorClasses,
+  osFamilies,
   taskCategories,
   type Backend,
   type CapabilityClass,
@@ -25,6 +33,15 @@ const FORM_FACTORS = new Set<FormFactor>(["mobile", "tablet", "desktop", "unknow
 const CAPABILITY_CLASSES = new Set<CapabilityClass>(["compatibility", "light", "balanced", "performance"]);
 const CAPABILITY_CONFIDENCES = new Set<CapabilityConfidence>(["low", "medium", "high"]);
 const COARSE_CLASSES = new Set(["low", "medium", "high", "very_high", "unknown"]);
+const ARCHITECTURE_CLASSES = new Set(["arm", "x86", "unknown"]);
+const BROWSER_FAMILIES = new Set<string>(browserFamilies);
+const OS_FAMILIES = new Set<string>(osFamilies);
+const GPU_VENDOR_CLASSES = new Set<string>(gpuVendorClasses);
+const GPU_ARCHITECTURE_CLASSES = new Set<string>(gpuArchitectureClasses);
+const GPU_DESCRIPTION_CLASSES = new Set<string>(gpuDescriptionClasses);
+const GPU_FEATURE_CLASSES = new Set<string>(gpuFeatureClasses);
+const GPU_LIMIT_KEYS = new Set<string>(gpuLimitKeys);
+const EXPERIMENTAL_MEMORY_CLASSES = new Set<string>(experimentalMemoryClasses);
 const TASKS = new Set<TaskCategory>(taskCategories);
 const SEVERITIES = new Set<DiagnosticSeverity>(["debug", "info", "warn", "error", "critical"]);
 const ERROR_SEVERITIES = new Set<DiagnosticSeverity>(["warn", "error", "critical"]);
@@ -96,6 +113,46 @@ export function asCapabilityConfidence(value: unknown): CapabilityConfidence | u
 
 export function asCoarseClass(value: unknown): string | undefined {
   return typeof value === "string" && COARSE_CLASSES.has(value) ? value : undefined;
+}
+
+function asAllowlistedString(value: unknown, allowed: ReadonlySet<string>): string | undefined {
+  return typeof value === "string" && allowed.has(value) ? value : undefined;
+}
+
+export function asArchitectureClass(value: unknown): string | undefined {
+  return asAllowlistedString(value, ARCHITECTURE_CLASSES);
+}
+
+export function asBrowserFamily(value: unknown): string | undefined {
+  return asAllowlistedString(value, BROWSER_FAMILIES);
+}
+
+export function asOsFamily(value: unknown): string | undefined {
+  return asAllowlistedString(value, OS_FAMILIES);
+}
+
+export function asGpuVendorClass(value: unknown): string | undefined {
+  return asAllowlistedString(value, GPU_VENDOR_CLASSES);
+}
+
+export function asGpuArchitectureClass(value: unknown): string | undefined {
+  return asAllowlistedString(value, GPU_ARCHITECTURE_CLASSES);
+}
+
+export function asGpuDescriptionClass(value: unknown): string | undefined {
+  return asAllowlistedString(value, GPU_DESCRIPTION_CLASSES);
+}
+
+export function asGpuFeatureClass(value: unknown): string | undefined {
+  return asAllowlistedString(value, GPU_FEATURE_CLASSES);
+}
+
+export function asGpuLimitKey(value: unknown): string | undefined {
+  return asAllowlistedString(value, GPU_LIMIT_KEYS);
+}
+
+export function asExperimentalMemoryClass(value: unknown): string | undefined {
+  return asAllowlistedString(value, EXPERIMENTAL_MEMORY_CLASSES);
 }
 
 export function asTask(value: unknown): TaskCategory | undefined {
