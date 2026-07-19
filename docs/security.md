@@ -145,6 +145,13 @@ Contracts and local persistence shapes exist, Phase 1A implements the static cap
 - `attemptModelLoadWithFallback()` walks a candidate list already bounded by the router's own `maxFallbacks`, deduplicates candidates defensively, and records one observation per attempt — it cannot retry the same model or loop unbounded even if called with a malformed decision.
 - No cloud model profiling was added: capability, benchmark, and observation data used for routing are read from local storage only; nothing about device capability or model performance is sent to a server as part of this integration.
 
+## v0.7.0-alpha Phase 5 (router UI) security notes
+
+- Manual model selection does not bypass the download-consent flow: `setManualModel()` still resolves through the same `resolveModelSwitch()` gate as automatic routing, so a manually chosen, non-cached, non-default model still requires explicit confirmation before downloading, and a manual pick still cannot bypass the router's hard eligibility gates (a manually requested but ineligible model produces a warning and an automatic fallback, never a forced load).
+- `apps/web/app/_components/ManualModelPicker.tsx` disables selection for a model the latest `RouterDecision` has rejected, using the router's own `rejectedModels` output rather than a separate UI-layer eligibility re-implementation, so the disabled state can never drift from what the router would actually reject.
+- The manual model picker's per-model card structures the selectable button and the technical-details `<details>` disclosure as siblings rather than nesting the disclosure inside the button, avoiding invalid interactive-in-interactive markup that could produce inconsistent hydration/click behavior across browsers.
+- The new local manual-selection preference contains only a mode flag and a public registry model ID — no conversation content, no device fingerprint — and follows the same schema-versioned, `try`/`catch`-guarded `localStorage` convention as every other local preference store in this codebase.
+
 ## Runtime language instruction
 
 The selected UI locale is converted to a hidden runtime-only system instruction before local inference. This instruction is allowed to enter the local WebLLM message list, but it must not be persisted in conversation history, exported in conversation backups, included in diagnostics, or written to local technical logs. Language adherence remains best effort and depends on the selected model.

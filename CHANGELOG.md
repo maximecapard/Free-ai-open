@@ -45,9 +45,9 @@ Versions are alpha milestones while the MVP is still under active development.
 - Export/import has no browser end-to-end coverage yet (verified manually); encrypted export is not implemented.
 - End-to-end browser coverage for persisted chat sessions and debug workflows is still limited.
 
-## [0.7.0-alpha] - 2026-07-18 (adaptive router phases in progress)
+## [0.7.0-alpha] - 2026-07-19 (adaptive router phases complete)
 
-This release is being built in phases for the "Adaptive Model Router v1." Phases 0 through 4 now provide contracts, static profiling, Registry v2, a local benchmark, the pure adaptive-router core, and real runtime integration — `AppRuntimeProvider` now uses `RouterDecision` to load, switch, and observe real models. Router UI (manual override, richer explanations) remains Phase 5 — see `docs/roadmap.md`.
+This release was built in phases for the "Adaptive Model Router v1." Phases 0 through 5 now provide contracts, static profiling, Registry v2, a local benchmark, the pure adaptive-router core, real runtime integration, and the public-facing router UI — `AppRuntimeProvider` uses `RouterDecision` to load, switch, and observe real models, and `/settings`/`/chat` expose automatic/manual selection and plain-language explanations. Remaining `v0.7.0-alpha` work is review/testing/release only — see `docs/roadmap.md`.
 
 ### Added
 
@@ -72,12 +72,22 @@ This release is being built in phases for the "Adaptive Model Router v1." Phases
 - Added `@free-ai-open/ai-runtime`'s `isModelCached()` (real Cache Storage lookup, never guessed from registry metadata) and an optional `maxOutputTokens` on `generate()` that only ever tightens the existing alpha `GENERATION_SAFETY_LIMITS.maxTokens` cap, now fed from `RouterDecision.recommendedMaxOutputTokens`.
 - Added a `model_replacement` runtime-disposal trigger, reusing the existing safe worker dispose-then-recreate sequence for model switches so a switch can never leave two workers alive at once.
 - Extended `/debug` with an adaptive-router diagnostics panel (selected model, confidence, translated reason/warning codes, fallback chain, rejected models with reasons, recommended context/output token budgets, decision/registry version) and a local observations summary, both additive alongside the existing v0.6 preview panel.
+- **Phase 5 — Router UI.** Added a `/settings` "Model selection" section: "Automatic — recommended" plus a manual model picker (`ManualModelPicker`) listing every registry model with friendly name, approximate size, live cache status, and a technical-details disclosure (exact WebLLM ID, per-language suitability, recommended tasks, device suitability). A model the adaptive router currently rejects for this device is shown disabled with the router's own reason, never hidden.
+- Added a plain-language recommendation line on `/chat`: exactly one sentence explaining the current model pick (`apps/web/app/_lib/friendlyRouteExplanation.ts`), chosen by priority from the decision's reason codes — a fallback story first, then language match, task fit, device/speed fit, or "already on this device."
+- Added the mission's named model-status wording (Choosing a local model, Download required, Preparing the local model, Trying a lighter model, Model unavailable) to the chat status badge, including new fallback-attempt progress tracking (`attemptModelLoadWithFallback`'s `onAttempt` callback) so "Trying a lighter model" only shows during an actual fallback attempt.
+- Added local "performance history" controls in `/settings`: "Clear performance history" (clears local model observations) and a "last checked" date plus "Clear result" on the local benchmark panel.
+- Added distinct plain-language empty/error states: a WebGPU-specific notice when every candidate model was rejected for backend availability specifically, a notice when a manually selected model is no longer eligible and an automatic fallback was used instead, and an offline-specific line on the existing model-unavailable error banner.
+- Added a mobile-data download warning: a model at or above 500 MB shows an additional line in the download-consent prompt when the device is detected as mobile.
+- Extended `/debug`'s adaptive-router panel with per-model cache status and the real automatic/manual selection mode.
 
 ### Changed
 
 - Moved `FormFactor`/`ArchitectureClass` from `@free-ai-open/device-profiler` into `@free-ai-open/types` (device-profiler re-exports both, so every existing `import type { FormFactor } from "@free-ai-open/device-profiler"` call site is unaffected). This lets the new `StaticCapabilityProfile` contract reuse the same coarse categories instead of duplicating them.
 - Replaced the fixed tiny Phase 0 test-model default with the verified compact `SmolLM2-360M-Instruct-q4f32_1-MLC` WebLLM variant. Runtime selection is still fixed; this does not implement adaptive routing or silent model downloads.
 - `/chat`'s model-status notice now reflects `RouterDecision` instead of the legacy `ModelRouterResult`; the detailed reason/rejection breakdown moved to `/debug` to keep the normal chat surface simple, matching Phase 4's own "keep normal chat simple" guidance — chat now only surfaces the one case a user needs to act on (no compatible model).
+- Fixed an invalid-markup bug in an earlier `ManualModelPicker` draft: a `<details>` technical-info disclosure was nested inside the model-selection `<button>`, which HTML disallows. The selectable button and the disclosure are now siblings.
+- Fixed a real bug found by live browser testing, present since the Phase 1B registry was written: the five model registry `descriptionKey` values had no matching `en.ts`/`fr.ts` entries, so `/settings` crashed as soon as `ManualModelPicker` tried to render any model's description. Added the missing `modelRegistry` translation namespace (five descriptions, EN/FR).
+- `ModelDownloadConsent` now also renders on `/settings` (previously `/chat` only), so a manual pick that needs a fresh download shows the consent prompt wherever it was triggered.
 
 ### Security and Privacy
 
@@ -93,6 +103,8 @@ This release is being built in phases for the "Adaptive Model Router v1." Phases
 - A model switch is never applied while the runtime is busy (loading, generating, cancelling, or recovering); it is deferred to the next safe routing moment instead of interrupting an in-flight reply or starting a second concurrent load.
 - `ModelPerformanceObservation`s recorded this phase remain technical-only (model ID, timings, outcome code) — no conversation content — verified by an explicit allowlist test on the observation builder's output shape, matching the discipline already established for local logs and diagnostic reports.
 - No cloud model profiling was added: capability, benchmark, and observation data used for routing are read from local storage only.
+- Manual model selection does not bypass download consent or the router's hard eligibility gates: `setManualModel()` resolves through the same `resolveModelSwitch()` path as automatic routing, and an ineligible manual pick produces a warning and an automatic fallback rather than a forced load.
+- The new manual-selection local preference contains only a mode flag and a public registry model ID — no conversation content, no device fingerprint.
 
 ### Tests
 
@@ -103,6 +115,7 @@ This release is being built in phases for the "Adaptive Model Router v1." Phases
 - Added Model Registry v2 schema and graph tests for exact task coverage, ordered context presets, verified metadata, strict unknown-field rejection, estimate uncertainty, unique IDs, missing fallbacks, fallback cycles, automatic-eligibility rules, conservative language/form-factor metadata, privacy-safe field names, and exact agreement with WebLLM `prebuiltAppConfig`.
 - Added an adaptive-router matrix covering mobile/desktop memory parity, weak mobile and strong desktop modes, French writing, English coding, unknown/WASM/fallback-adapter devices, benchmark confidence, cache influence, large downloads, recent/stale observations, cancellations, repeated OOM/device loss, manual selection, hard feature/limit/memory gates, fallback order/cycles, invalid registries, determinism, defensive normalization, and private-field exclusion.
 - Added Phase 4 unit coverage for every new pure module (routing cache key, model switch policy, observation builder and outcome classification, download-size formatting, reason/warning/rejection-code translation-key mapping, observations summary) and for `routingOrchestration.ts` (router-input assembly, fallback-chain loading including registry-ID/WebLLM-ID handling and candidate deduplication). Full monorepo `pnpm -r typecheck`, `pnpm -r test`, `pnpm lint`, and `pnpm build` all pass.
+- Added Phase 5 unit coverage for every new pure module: manual model preference persistence, friendly-explanation priority selection, model-status label resolution, manual-model eligibility (mirroring the router's own rejection reasons), chat empty-state reason resolution, and the mobile large-download threshold. Full monorepo checks and the i18n EN/FR lockstep test all pass.
 
 ## [0.6.6-alpha] - 2026-07-16
 

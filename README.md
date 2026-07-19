@@ -36,7 +36,7 @@ Implemented in the current alpha:
 - A short, optional local WebGPU capability check during setup, cached for seven days and rerunnable from Settings; results remain on-device and do not select a model yet.
 - Privacy-safe diagnostic report generation and export.
 - `/debug` dashboard for runtime status, device information, technical logs, and diagnostics.
-- Device profiling, a local capability benchmark, a five-model Registry v2, and a pure deterministic adaptive-router core. Runtime model loading still uses the fixed compatibility default; adaptive decisions are not connected to WebLLM yet.
+- Device profiling, a local capability benchmark, a five-model Registry v2, and an adaptive router that drives real model loading, safe switching, and local observation recording. A `/settings` panel offers automatic (recommended) or manual model selection with friendly model info, and chat shows a short plain-language reason for the model that was picked; a non-default, non-cached model always asks for confirmation (approximate size, that it runs locally) before downloading.
 - Strict schemas and redaction utilities for privacy-sensitive telemetry and logs.
 - English/French UI language toggle (defaults to the browser's language, persisted locally) across the public app surfaces.
 - Best-effort local model response language based on the selected UI locale through a hidden runtime-only instruction. Actual language quality depends on the selected model.
@@ -50,7 +50,7 @@ The following are not implemented in this alpha:
 - Supabase or other cloud conversation storage.
 - Account system.
 - Encrypted conversation export/import backups (current exports are plain, unencrypted JSON).
-- Production-scale catalog and adaptive runtime model selection (the current Registry v2 is a curated five-model foundation; the runtime still uses one fixed verified compatibility default).
+- A production-scale model catalog (the current Registry v2 is a curated five-model foundation).
 - Desktop or mobile apps.
 - Broad browser end-to-end test coverage.
 - Guaranteed multilingual model quality across every model.

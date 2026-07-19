@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LocalBenchmarkResult, StaticCapabilityProfile } from "@free-ai-open/types";
 import type { TranslationKey } from "../_i18n/dictionary";
-import { getStoredLocalBenchmarkForProfile } from "../_lib/benchmarkResultStore";
+import { clearStoredLocalBenchmarkResult, getStoredLocalBenchmarkForProfile } from "../_lib/benchmarkResultStore";
 import { runAndStoreLocalBenchmark } from "../_lib/localBenchmarkClient";
 import { useTranslations } from "../_i18n/LocaleContext";
 
@@ -77,6 +77,11 @@ export function LocalBenchmarkPanel({ profile, autoRun = false, disabled = false
 
   const status = running ? t("benchmark.running") : result ? t(STATUS_KEYS[result.status]) : t("benchmark.notRun");
 
+  function handleClear() {
+    clearStoredLocalBenchmarkResult();
+    setResult(null);
+  }
+
   return (
     <section aria-labelledby="local-benchmark-title">
       <h2 id="local-benchmark-title" style={{ fontSize: 18, margin: "0 0 4px" }}>{t("benchmark.title")}</h2>
@@ -84,18 +89,27 @@ export function LocalBenchmarkPanel({ profile, autoRun = false, disabled = false
       <p role="status" style={{ margin: "0 0 12px", fontSize: 14 }}><strong>{status}</strong></p>
       {result?.status === "completed" && (
         <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", margin: "0 0 12px" }}>
+          <dt className="fo-muted">{t("benchmark.lastChecked")}</dt>
+          <dd className="fo-technical-value">{new Date(result.measuredAt).toLocaleString()}</dd>
           <dt className="fo-muted">{t("benchmark.score")}</dt><dd className="fo-technical-value">{result.computeScore ?? t("common.unknown")}/100</dd>
           <dt className="fo-muted">{t("benchmark.stability")}</dt><dd className="fo-technical-value">{t(STABILITY_KEYS[result.stability])}</dd>
           <dt className="fo-muted">{t("benchmark.confidence")}</dt><dd className="fo-technical-value">{t(CONFIDENCE_KEYS[result.confidence])}</dd>
         </dl>
       )}
-      {running ? (
-        <button type="button" className="fo-button fo-button-secondary" onClick={() => controllerRef.current?.abort()}>{t("benchmark.cancel")}</button>
-      ) : (
-        <button type="button" className="fo-button fo-button-secondary" disabled={disabled} onClick={() => void run(Boolean(result))}>
-          {result ? t("benchmark.rerun") : t("benchmark.run")}
-        </button>
-      )}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {running ? (
+          <button type="button" className="fo-button fo-button-secondary" onClick={() => controllerRef.current?.abort()}>{t("benchmark.cancel")}</button>
+        ) : (
+          <button type="button" className="fo-button fo-button-secondary" disabled={disabled} onClick={() => void run(Boolean(result))}>
+            {result ? t("benchmark.rerun") : t("benchmark.run")}
+          </button>
+        )}
+        {!running && result && (
+          <button type="button" className="fo-button fo-button-secondary" onClick={handleClear}>
+            {t("benchmark.clear")}
+          </button>
+        )}
+      </div>
       <p className="fo-muted" style={{ margin: "12px 0 0", fontSize: 12 }}>{t("benchmark.privacy")}</p>
     </section>
   );

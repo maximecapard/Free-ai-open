@@ -20,6 +20,8 @@ import {
   findLoadedModelId,
 } from "../_lib/debugDiagnostics";
 import { buildDebugDiagnosticReportInput, DEBUG_PREVIEW_TASK } from "../_lib/debugReportInput";
+import { getStoredManualModelPreference } from "../_lib/manualModelPreference";
+import type { ModelSelectionMode } from "../_lib/manualModelPreference";
 import { getStoredModelPerformanceObservations } from "../_lib/modelObservationStore";
 import { summarizeStoredObservations } from "../_lib/observationsSummary";
 import type { ObservationsSummary } from "../_lib/observationsSummary";
@@ -62,6 +64,8 @@ export default function DebugPage() {
   const [deviceProfile, setDeviceProfile] = useState<DeviceProfile | null>(null);
   const [routeResult, setRouteResult] = useState<ModelRouterResult | null>(null);
   const [adaptiveDecision, setAdaptiveDecision] = useState<RouterDecision | null>(null);
+  const [cachedModelIds, setCachedModelIds] = useState<ReadonlySet<string>>(new Set());
+  const [modelSelectionMode, setModelSelectionMode] = useState<ModelSelectionMode>("automatic");
   const [observationsSummary, setObservationsSummary] = useState<ObservationsSummary>(EMPTY_OBSERVATIONS_SUMMARY);
   const [mode, setMode] = useState<PerformanceMode>("balanced");
   const [logs, setLogs] = useState<LocalLogRecord[]>([]);
@@ -86,8 +90,17 @@ export default function DebugPage() {
     });
     const recentLogs = available ? await getRecentLocalLogs(MAX_LOGS) : [];
 
-    const routerInput = await buildRouterInputContext({ task: DEBUG_PREVIEW_TASK, locale, performanceMode: previewMode });
+    const manualPreference = getStoredManualModelPreference();
+    setModelSelectionMode(manualPreference.mode);
+
+    const routerInput = await buildRouterInputContext({
+      task: DEBUG_PREVIEW_TASK,
+      locale,
+      performanceMode: previewMode,
+      manualModelId: manualPreference.mode === "manual" ? (manualPreference.manualModelId ?? undefined) : undefined,
+    });
     setAdaptiveDecision(routerInput ? routeAdaptiveModel(routerInput) : null);
+    setCachedModelIds(new Set(routerInput?.cachedModelIds ?? []));
     setObservationsSummary(summarizeStoredObservations(getStoredModelPerformanceObservations()));
 
     setDeviceProfile(profile);
@@ -168,7 +181,12 @@ export default function DebugPage() {
         loadedModel={loadedModel}
       />
 
-      <DebugAdaptiveRouterSection decision={adaptiveDecision} registry={modelRegistryV2} />
+      <DebugAdaptiveRouterSection
+        decision={adaptiveDecision}
+        registry={modelRegistryV2}
+        modelSelectionMode={modelSelectionMode}
+        cachedModelIds={cachedModelIds}
+      />
 
       <DebugObservationsSection summary={observationsSummary} registry={modelRegistryV2} />
 

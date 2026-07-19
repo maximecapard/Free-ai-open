@@ -19,3 +19,15 @@ export function formatApproximateDownloadSize(bytes: number | undefined): Approx
   }
   return { value: Math.round((bytes / BYTES_PER_GB) * 10) / 10, unit: "GB" };
 }
+
+// v0.7.0-alpha Phase 5: "warn on large mobile download when appropriate."
+// 500MB is a deliberately lower bar than the router's own 1GB
+// download_large warning threshold (adaptiveScoring.ts) — mobile data plans
+// are commonly capped well below what a desktop connection tolerates
+// comfortably, so this is a separate, mobile-specific judgment call rather
+// than reusing the desktop-oriented threshold.
+const LARGE_MOBILE_DOWNLOAD_BYTES = 500_000_000;
+
+export function isLargeMobileDownload(bytes: number | undefined, isMobileFormFactor: boolean): boolean {
+  return isMobileFormFactor && typeof bytes === "number" && bytes >= LARGE_MOBILE_DOWNLOAD_BYTES;
+}

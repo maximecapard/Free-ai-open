@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatApproximateDownloadSize } from "./modelDownloadDisclosure";
+import { formatApproximateDownloadSize, isLargeMobileDownload } from "./modelDownloadDisclosure";
 
 describe("formatApproximateDownloadSize", () => {
   it("formats sub-gigabyte sizes in rounded megabytes", () => {
@@ -17,5 +17,23 @@ describe("formatApproximateDownloadSize", () => {
     expect(formatApproximateDownloadSize(0)).toBeNull();
     expect(formatApproximateDownloadSize(-100)).toBeNull();
     expect(formatApproximateDownloadSize(Number.NaN)).toBeNull();
+  });
+});
+
+describe("isLargeMobileDownload", () => {
+  it("warns for a large download on a mobile device", () => {
+    expect(isLargeMobileDownload(2_280_000_000, true)).toBe(true);
+  });
+
+  it("does not warn for the same size on a non-mobile device", () => {
+    expect(isLargeMobileDownload(2_280_000_000, false)).toBe(false);
+  });
+
+  it("does not warn for a small download on a mobile device", () => {
+    expect(isLargeMobileDownload(207_000_000, true)).toBe(false);
+  });
+
+  it("does not warn when the size is unknown", () => {
+    expect(isLargeMobileDownload(undefined, true)).toBe(false);
   });
 });
