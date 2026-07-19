@@ -5,6 +5,8 @@ import type { RouterInput, RouterWarningCode } from "./adaptiveRouterContracts";
 export interface ObservationSummary {
   count: number;
   effectiveCount: number;
+  loadAttempts: number;
+  generationCount: number;
   completed: number;
   successfulLoads: number;
   stalls: number;

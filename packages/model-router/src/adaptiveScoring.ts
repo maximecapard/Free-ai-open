@@ -17,10 +17,9 @@ function parameterBillions(parameterClass: string | undefined): number | undefin
 }
 
 function observedScore(observations: ObservationSummary): number {
-  if (observations.effectiveCount === 0) return 15;
-  const effective = observations.effectiveCount;
-  const load = (observations.successfulLoads / effective) * 5;
-  const completion = (observations.completed / effective) * 10;
+  if (observations.loadAttempts === 0 && observations.generationCount === 0) return 15;
+  const load = observations.loadAttempts > 0 ? (observations.successfulLoads / observations.loadAttempts) * 5 : 2.5;
+  const completion = observations.generationCount > 0 ? (observations.completed / observations.generationCount) * 10 : 5;
   const speed = observations.averageTokensPerSecond === undefined ? 3.5 : clamp(observations.averageTokensPerSecond / 2, 7);
   const firstToken = observations.averageFirstTokenMs === undefined ? 2 : clamp(4 - observations.averageFirstTokenMs / 1000, 4);
   const loadTime = observations.averageLoadTimeMs === undefined ? 2 : clamp(4 - observations.averageLoadTimeMs / 5000, 4);
@@ -78,7 +77,7 @@ export function scoreCandidate(input: NormalizedRouterInput, candidate: Eligible
 }
 
 export function compareScores(left: RouterScoreBreakdown, right: RouterScoreBreakdown): number {
-  return right.total - left.total || left.modelId.localeCompare(right.modelId);
+  return right.total - left.total || (left.modelId < right.modelId ? -1 : left.modelId > right.modelId ? 1 : 0);
 }
 
 export function reasonsForSelection(input: NormalizedRouterInput, candidate: EligibleCandidate): RouterReasonCode[] {

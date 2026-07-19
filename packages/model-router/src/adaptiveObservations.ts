@@ -29,20 +29,26 @@ function average(values: Array<number | undefined>): number | undefined {
 }
 
 export function summarizeObservations(observations: readonly ModelPerformanceObservation[]): ObservationSummary {
-  const effective = observations.filter((observation) => observation.outcome !== "cancelled");
+  const loadObservations = observations.filter((observation) => observation.loadTimeMs !== undefined);
+  const generationObservations = observations.filter((observation) => observation.loadTimeMs === undefined);
+  const effective = generationObservations.filter((observation) => observation.outcome !== "cancelled");
   const count = (outcome: ModelPerformanceObservation["outcome"]) =>
+    observations.filter((observation) => observation.outcome === outcome).length;
+  const generationCount = (outcome: ModelPerformanceObservation["outcome"]) =>
     effective.filter((observation) => observation.outcome === outcome).length;
   return {
     count: observations.length,
     effectiveCount: effective.length,
-    completed: count("completed"),
-    successfulLoads: effective.filter((observation) => observation.loadSucceeded).length,
-    stalls: count("stalled"),
+    loadAttempts: loadObservations.length,
+    generationCount: effective.length,
+    completed: generationCount("completed"),
+    successfulLoads: loadObservations.filter((observation) => observation.loadSucceeded).length,
+    stalls: generationCount("stalled"),
     outOfMemory: count("out_of_memory"),
     deviceLosses: count("device_lost"),
-    degenerate: count("degenerate"),
-    loadFailures: count("load_failed"),
-    averageLoadTimeMs: average(effective.map((observation) => observation.loadTimeMs)),
+    degenerate: generationCount("degenerate"),
+    loadFailures: loadObservations.filter((observation) => observation.outcome === "load_failed").length,
+    averageLoadTimeMs: average(loadObservations.map((observation) => observation.loadTimeMs)),
     averageTokensPerSecond: average(effective.map((observation) => observation.generationTokensPerSecond)),
     averageFirstTokenMs: average(effective.map((observation) => observation.firstTokenTimeMs)),
     maxTestedContextTokens: Math.max(0, ...effective.map((observation) => observation.testedContextTokens ?? 0)) || undefined,

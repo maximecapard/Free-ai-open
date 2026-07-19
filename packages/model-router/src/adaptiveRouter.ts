@@ -84,7 +84,8 @@ function decisionConfidence(input: NormalizedRouterInput, candidate: EligibleCan
   const benchmarkStrong = input.benchmark?.status === "completed" && input.benchmark.confidence !== "low" &&
     input.benchmark.stability === "stable";
   const observationsStrong = candidate.observations.effectiveCount >= 2 && candidate.observations.completed >= 2;
-  if (input.capability.confidence === "high" && benchmarkStrong && observationsStrong) return "high";
+  const resourcesKnown = candidate.model.runtimeMemory.value !== undefined && input.capability.approximateMemoryGB !== undefined;
+  if (resourcesKnown && input.capability.confidence === "high" && benchmarkStrong && observationsStrong) return "high";
   if (input.capability.confidence !== "low" && (benchmarkStrong || candidate.observations.effectiveCount > 0)) return "medium";
   return "low";
 }

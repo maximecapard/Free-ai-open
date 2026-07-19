@@ -6,6 +6,7 @@ import type { TranslationKey } from "../_i18n/dictionary";
 import { adaptiveReasonKey, adaptiveRejectionKey, adaptiveWarningKey } from "../_lib/adaptiveRouteExplanation";
 import type { ModelSelectionMode } from "../_lib/manualModelPreference";
 import type { ObservationsSummary } from "../_lib/observationsSummary";
+import { localizedModelName } from "../_lib/modelDisplayName";
 import { DebugField, DebugSection } from "./DebugSection";
 import { useTranslations } from "../_i18n/LocaleContext";
 
@@ -15,8 +16,13 @@ const CONFIDENCE_KEYS: Record<RouterDecision["confidence"], TranslationKey> = {
   high: "benchmark.confidenceValue.high",
 };
 
-function displayNameFor(registry: readonly ModelRegistryRecord[], modelId: string): string {
-  return registry.find((record) => record.id === modelId)?.displayName ?? modelId;
+function displayNameFor(
+  registry: readonly ModelRegistryRecord[],
+  modelId: string,
+  t: ReturnType<typeof useTranslations>
+): string {
+  const record = registry.find((item) => item.id === modelId);
+  return record ? localizedModelName(record, t) : modelId;
 }
 
 function withCacheLabel(name: string, modelId: string, cachedModelIds: ReadonlySet<string>, t: (key: TranslationKey) => string): string {
@@ -48,7 +54,7 @@ export function DebugAdaptiveRouterSection({
             label={t("debug.adaptiveSelectedModel")}
             value={
               decision.selectedModelId
-                ? withCacheLabel(displayNameFor(registry, decision.selectedModelId), decision.selectedModelId, cachedModelIds, t)
+                ? withCacheLabel(displayNameFor(registry, decision.selectedModelId, t), decision.selectedModelId, cachedModelIds, t)
                 : t("debug.adaptiveNoSelection")
             }
           />
@@ -74,7 +80,7 @@ export function DebugAdaptiveRouterSection({
               value={
                 decision.fallbackModelIds.length > 0
                   ? decision.fallbackModelIds
-                      .map((modelId) => withCacheLabel(displayNameFor(registry, modelId), modelId, cachedModelIds, t))
+                      .map((modelId) => withCacheLabel(displayNameFor(registry, modelId, t), modelId, cachedModelIds, t))
                       .join(" → ")
                   : t("debug.adaptiveNoFallback")
               }
@@ -151,7 +157,7 @@ export function DebugObservationsSection({
               {t("debug.observationsByModel")}
             </p>
             {modelEntries.map(([modelId, count]) => (
-              <DebugField key={modelId} label={displayNameFor(registry, modelId)} value={`${count}`} technical />
+              <DebugField key={modelId} label={displayNameFor(registry, modelId, t)} value={`${count}`} technical />
             ))}
           </div>
         </>

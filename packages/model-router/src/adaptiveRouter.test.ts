@@ -158,6 +158,12 @@ describe("adaptive router benchmark, cache, and observations", () => {
     expect(failed.confidence).toBe("low");
   });
 
+  it("ignores a benchmark measured for a different capability profile", () => {
+    const decision = route(input({ benchmark: benchmark({ capabilityProfileKey: "mobile:light:webgpu:native" }) }));
+    expect(decision.warnings).toContain("benchmark_missing");
+    expect(decision.confidence).toBe("low");
+  });
+
   it("uses a good benchmark as positive capability evidence without treating it as a recommendation", () => {
     const decision = route(input());
     expect(decision.confidence).toBe("medium");
@@ -192,6 +198,7 @@ describe("adaptive router benchmark, cache, and observations", () => {
   it.each([
     ["out of memory", "out_of_memory" as const, "repeated_oom" as const],
     ["device loss", "device_lost" as const, "repeated_device_loss" as const],
+    ["generation stalls", "stalled" as const, "repeated_stall" as const],
   ])("hard-rejects repeated recent %s outcomes", (_name, outcome, rejection) => {
     const observations = [observation("qwen3-4b-q4f16", outcome), observation("qwen3-4b-q4f16", outcome)];
     const decision = route(input({ performanceMode: "performance", observations }));
@@ -278,6 +285,33 @@ describe("adaptive router manual selection and fallbacks", () => {
     expect(decision.rejectedModels[0]?.reasons).toEqual(expect.arrayContaining([
       "required_feature_missing", "required_limit_missing", "insufficient_memory",
     ]));
+  });
+
+  it("compares numeric minimum limits against conservative bucket lower bounds", () => {
+    const base = modelRegistryV2.find((model) => model.id === "qwen3-0.6b-q4f16")!;
+    const constrained: ModelRegistryRecord = {
+      ...base,
+      fallbackModelIds: [],
+      minimumCapability: {
+        ...base.minimumCapability,
+        minimumLimits: { maxBufferSize: 700 * 1024 ** 2 },
+      },
+    };
+    const decision = route(
+      input({ capability: capability({ gpu: { featureClasses: [], limitClasses: { maxBufferSize: "high" } } }) }),
+      [constrained]
+    );
+    expect(decision.rejectedModels[0]?.reasons).toContain("required_limit_missing");
+  });
+
+  it("does not report high confidence when resource capacity is unknown", () => {
+    const completed = [
+      observation("qwen3-1.7b-q4f16", "completed", { generationDurationMs: 1000 }),
+      observation("qwen3-1.7b-q4f16", "completed", { generationDurationMs: 1000 }),
+    ];
+    const decision = route(input({ capability: capability({ approximateMemoryGB: undefined }), observations: completed }));
+    expect(decision.confidence).not.toBe("high");
+    expect(decision.warnings).toContain("resource_unknown");
   });
 
   it("returns no decision for an invalid registry", () => {

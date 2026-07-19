@@ -1,7 +1,9 @@
 "use client";
 
+import { modelRegistryV2 } from "@free-ai-open/model-registry";
 import type { PendingModelSwitch } from "../_runtime/AppRuntimeProvider";
 import { formatApproximateDownloadSize, isLargeMobileDownload } from "../_lib/modelDownloadDisclosure";
+import { localizedModelName } from "../_lib/modelDisplayName";
 import { useTranslations } from "../_i18n/LocaleContext";
 
 export interface ModelDownloadConsentProps {
@@ -20,18 +22,20 @@ export function ModelDownloadConsent({ pendingModelSwitch, onConfirm, onCancel }
   const size = formatApproximateDownloadSize(pendingModelSwitch.downloadSizeBytes);
   const sizeText = size ? `${size.value} ${size.unit}` : t("modelDownload.sizeUnknown");
   const showMobileWarning = isLargeMobileDownload(pendingModelSwitch.downloadSizeBytes, pendingModelSwitch.isMobileFormFactor);
+  const record = modelRegistryV2.find((model) => model.id === pendingModelSwitch.registryId);
+  const modelName = record ? localizedModelName(record, t) : pendingModelSwitch.displayName;
 
   return (
-    <section role="alertdialog" aria-labelledby="model-download-consent-title" className="fo-inline-notice" style={{ marginBottom: 16 }}>
+    <section role="region" aria-live="polite" aria-labelledby="model-download-consent-title" className="fo-inline-notice" style={{ marginBottom: 16 }}>
       <strong id="model-download-consent-title">{t("modelDownload.title")}</strong>
       <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--fo-text)" }}>
-        {t("modelDownload.body", { model: pendingModelSwitch.displayName, size: sizeText })}
+        {t("modelDownload.body", { model: modelName, size: sizeText })}
       </p>
       <p className="fo-muted" style={{ margin: "8px 0 0", fontSize: 13 }}>
         {t(pendingModelSwitch.descriptionKey)}
       </p>
       {showMobileWarning && (
-        <p role="alert" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--fo-warning)" }}>
+        <p role="alert" style={{ margin: "8px 0 0", fontSize: 13, color: "var(--fo-text)" }}>
           {t("modelDownload.mobileWarning")}
         </p>
       )}

@@ -29,13 +29,18 @@ const RUNTIME_STATUS_FALLBACK: Record<RuntimeStatus, TranslationKey> = {
 // chat is blocked (see ModelDownloadConsent, which is where an upgrade offer
 // is actually surfaced once a model is already usable).
 export function resolveModelStatusKey(context: ModelStatusContext): TranslationKey {
+  if (context.runtimeStatus === "loading_model") {
+    return context.isFallbackRetry ? "modelStatus.tryingLighter" : "modelStatus.preparing";
+  }
+  if (context.runtimeStatus === "recovering") return "runtimeStatusPlain.recovering";
+  if (context.runtimeStatus === "error") return "modelStatus.unavailable";
+
   const isUsable =
     context.runtimeStatus === "ready" || context.runtimeStatus === "generating" || context.runtimeStatus === "cancelling";
 
   if (!isUsable) {
     if (context.isRoutingInProgress) return "modelStatus.choosing";
     if (context.pendingModelSwitch) return "modelStatus.downloadRequired";
-    if (context.runtimeStatus === "loading_model" && context.isFallbackRetry) return "modelStatus.tryingLighter";
   }
 
   return RUNTIME_STATUS_FALLBACK[context.runtimeStatus];

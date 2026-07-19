@@ -50,6 +50,7 @@ const REJECTION_KEYS: Record<RouterRejectionCode, TranslationKey> = {
   task_unsupported: "adaptiveRouter.rejection.task_unsupported",
   metadata_incomplete: "adaptiveRouter.rejection.metadata_incomplete",
   repeated_oom: "adaptiveRouter.rejection.repeated_oom",
+  repeated_stall: "adaptiveRouter.rejection.repeated_stall",
   repeated_device_loss: "adaptiveRouter.rejection.repeated_device_loss",
 };
 

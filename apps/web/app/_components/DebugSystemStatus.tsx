@@ -2,20 +2,20 @@
 
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
 import { getDeviceTierDisplayLabel } from "@free-ai-open/device-profiler";
+import type { RuntimeState } from "@free-ai-open/ai-runtime";
 import type { PerformanceMode } from "@free-ai-open/types";
 import { findModeLabelKey } from "../_lib/catalog";
-import type { LastRuntimeStatus } from "../_lib/debugDiagnostics";
 import { DebugField, DebugSection } from "./DebugSection";
 import { useTranslations } from "../_i18n/LocaleContext";
 
 export function DebugSystemStatus({
   deviceProfile,
   performanceMode,
-  lastRuntimeStatus,
+  runtimeStatus,
 }: {
   deviceProfile: DeviceProfile | null;
-  performanceMode: PerformanceMode;
-  lastRuntimeStatus: LastRuntimeStatus | null;
+  performanceMode: PerformanceMode | null;
+  runtimeStatus: RuntimeState["status"];
 }) {
   const t = useTranslations();
 
@@ -42,19 +42,12 @@ export function DebugSystemStatus({
       )}
       <DebugField
         label={t("debug.performanceModePreview")}
-        value={t(findModeLabelKey(performanceMode) ?? "modes.balanced.label")}
+        value={performanceMode ? t(findModeLabelKey(performanceMode) ?? "modes.balanced.label") : t("common.unknown")}
       />
       <DebugField
         label={t("debug.runtimeStatusLabel")}
-        value={
-          lastRuntimeStatus
-            ? t("debug.runtimeStatusAsOf", {
-                status: lastRuntimeStatus.status,
-                timestamp: new Date(lastRuntimeStatus.timestamp).toLocaleString(),
-              })
-            : t("debug.noSessionRecorded")
-        }
-        technical={Boolean(lastRuntimeStatus)}
+        value={runtimeStatus}
+        technical
       />
     </DebugSection>
   );

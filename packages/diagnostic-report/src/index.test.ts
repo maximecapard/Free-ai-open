@@ -295,6 +295,38 @@ describe("diagnostic report", () => {
     expect(validateDiagnosticReportPrivacy(report)).toEqual({ valid: true, violations: [] });
   });
 
+  it("drops private text placed in allowlisted capability fields", () => {
+    const privateText = "Confidential uploaded document text";
+    const report = buildDiagnosticReport(
+      {
+        browserInfo: { browserFamily: privateText, osFamily: privateText },
+        capabilityProfile: {
+          schemaVersion: 2,
+          architectureClass: privateText,
+          browserFamily: privateText,
+          osFamily: privateText,
+          gpu: {
+            vendorClass: privateText,
+            architectureClass: privateText,
+            descriptionClass: privateText,
+            featureClasses: [privateText, "shader-f16"],
+            limitClasses: { [privateText]: "high", maxBufferSize: "high" },
+            experimentalMemoryClass: privateText,
+          },
+        },
+      } as unknown as DiagnosticReportInput,
+      { now }
+    );
+
+    expect(JSON.stringify(report)).not.toContain(privateText);
+    expect(report.capabilityProfile?.gpu).toEqual({
+      featureClasses: ["shader-f16"],
+      limitClasses: { maxBufferSize: "high" },
+    });
+    expect(report.contentLogged).toBe(false);
+    expect(validateDiagnosticReportPrivacy(report)).toEqual({ valid: true, violations: [] });
+  });
+
   it("does not include prompt, response, document, messages, or user text fields", () => {
     const unsafeInput = {
       event: "diagnostic.export",

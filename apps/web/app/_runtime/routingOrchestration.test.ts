@@ -32,7 +32,13 @@ vi.mock("../_lib/modelObservationStore", () => ({
   recordModelPerformanceObservation: mocks.recordModelPerformanceObservation,
 }));
 
-const { attemptModelLoadWithFallback, buildLoadCandidatesFromDecision, buildRouterInputContext, registryIdForWebllmModelId } =
+const {
+  attemptModelLoadWithFallback,
+  buildLoadCandidatesFromDecision,
+  buildRouterInputContext,
+  filterDisclosedLoadCandidates,
+  registryIdForWebllmModelId,
+} =
   await import("./routingOrchestration");
 
 const CAPABILITY_FIXTURE = {
@@ -157,7 +163,13 @@ describe("attemptModelLoadWithFallback", () => {
 
     const result = await attemptModelLoadWithFallback(runtime, [CANDIDATE_A, CANDIDATE_B]);
 
-    expect(result).toEqual({ registryId: "model-a", webllmModelId: "Model-A-MLC", succeeded: true });
+    expect(result).toEqual({
+      registryId: "model-a",
+      webllmModelId: "Model-A-MLC",
+      succeeded: true,
+      attemptedRegistryIds: ["model-a"],
+      failedRegistryIds: [],
+    });
     expect(mocks.recordModelPerformanceObservation).toHaveBeenCalledOnce();
   });
 
@@ -179,7 +191,13 @@ describe("attemptModelLoadWithFallback", () => {
 
     const result = await attemptModelLoadWithFallback(runtime, [CANDIDATE_A, CANDIDATE_B]);
 
-    expect(result).toEqual({ registryId: "model-b", webllmModelId: "Model-B-MLC", succeeded: true });
+    expect(result).toEqual({
+      registryId: "model-b",
+      webllmModelId: "Model-B-MLC",
+      succeeded: true,
+      attemptedRegistryIds: ["model-a", "model-b"],
+      failedRegistryIds: ["model-a"],
+    });
     expect(mocks.recordModelPerformanceObservation).toHaveBeenCalledTimes(2);
   });
 
@@ -188,7 +206,13 @@ describe("attemptModelLoadWithFallback", () => {
 
     const result = await attemptModelLoadWithFallback(runtime, [CANDIDATE_A, CANDIDATE_B]);
 
-    expect(result).toEqual({ registryId: null, webllmModelId: null, succeeded: false });
+    expect(result).toEqual({
+      registryId: null,
+      webllmModelId: null,
+      succeeded: false,
+      attemptedRegistryIds: ["model-a", "model-b"],
+      failedRegistryIds: ["model-a", "model-b"],
+    });
     expect(mocks.recordModelPerformanceObservation).toHaveBeenCalledTimes(2);
   });
 
@@ -222,6 +246,43 @@ describe("attemptModelLoadWithFallback", () => {
     await attemptModelLoadWithFallback(runtime, [CANDIDATE_A, CANDIDATE_A, CANDIDATE_A]);
 
     expect(loadModel).toHaveBeenCalledOnce();
+  });
+
+  it("passes the router context budget into every load attempt", async () => {
+    let state: RuntimeState = { status: "idle", modelId: null, loadProgress: 0, error: null };
+    const loadModel = vi.fn(async (modelId: string) => {
+      state = { status: "ready", modelId, loadProgress: 1, error: null };
+    });
+    const runtime = {
+      ...createFakeRuntime({}),
+      getState: () => state,
+      loadModel,
+    } as InferenceRuntime;
+
+    await attemptModelLoadWithFallback(runtime, [CANDIDATE_A], { contextWindowTokens: 2048 });
+
+    expect(loadModel).toHaveBeenCalledWith("Model-A-MLC", {
+      initialStatus: undefined,
+      contextWindowTokens: 2048,
+    });
+  });
+});
+
+describe("filterDisclosedLoadCandidates", () => {
+  it("keeps only cached, explicitly approved, or pre-disclosed candidates", async () => {
+    mocks.isModelCached.mockImplementation(async (modelId: string) => modelId === "Model-B-MLC");
+    const candidateC = { registryId: "model-c", webllmModelId: "Model-C-MLC" };
+    const candidateD = { registryId: "model-d", webllmModelId: "Model-D-MLC" };
+
+    const result = await filterDisclosedLoadCandidates(
+      [CANDIDATE_A, CANDIDATE_B, candidateC, candidateD],
+      {
+        approvedRegistryIds: new Set(["model-c"]),
+        preDisclosedRegistryIds: new Set(["model-d"]),
+      }
+    );
+
+    expect(result.map((candidate) => candidate.registryId)).toEqual(["model-b", "model-c", "model-d"]);
   });
 });
 

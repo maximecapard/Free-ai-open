@@ -1,4 +1,4 @@
-import type { PerformanceMode, TaskCategory } from "@free-ai-open/types";
+import type { ModelPerformanceObservation, PerformanceMode, TaskCategory } from "@free-ai-open/types";
 
 // v0.7.0-alpha Phase 4: decides whether the adaptive router needs to run
 // again, rather than rerouting before every message. A RouterDecision is
@@ -17,6 +17,22 @@ export interface RoutingCacheKeyInput {
   cachedModelIds: string[];
   registryVersion: string;
   currentModelRepeatedlyFailing: boolean;
+  observationsRevision: string;
+}
+
+export function buildObservationRevision(observations: readonly ModelPerformanceObservation[]): string {
+  return JSON.stringify(
+    observations.map((observation) => [
+      observation.modelId,
+      observation.observedAt,
+      observation.outcome,
+      observation.loadSucceeded,
+      observation.loadTimeMs ?? null,
+      observation.firstTokenTimeMs ?? null,
+      observation.generationTokensPerSecond ?? null,
+      observation.generationDurationMs ?? null,
+    ])
+  );
 }
 
 export function buildRoutingCacheKey(input: RoutingCacheKeyInput): string {
@@ -32,6 +48,7 @@ export function buildRoutingCacheKey(input: RoutingCacheKeyInput): string {
     cachedModelIds: [...input.cachedModelIds].sort(),
     registryVersion: input.registryVersion,
     currentModelRepeatedlyFailing: input.currentModelRepeatedlyFailing,
+    observationsRevision: input.observationsRevision,
   });
 }
 

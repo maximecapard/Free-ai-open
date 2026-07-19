@@ -85,6 +85,19 @@ describe("createInferenceRuntime", () => {
     expect(mocks.logEvent).toHaveBeenCalled();
   });
 
+  it("applies a router-selected context window while loading the model", async () => {
+    const worker = fakeWorker();
+    const runtime = createInferenceRuntime(worker);
+    await runtime.loadModel("test-model", { contextWindowTokens: 2048 });
+
+    expect(mocks.CreateWebWorkerMLCEngine).toHaveBeenCalledWith(
+      worker,
+      "test-model",
+      expect.objectContaining({ initProgressCallback: expect.any(Function) }),
+      { context_window_size: 2048 }
+    );
+  });
+
   it("fails to load when WebGPU is unavailable, without touching the engine", async () => {
     mocks.detectWebGPUAvailability.mockResolvedValue(false);
     const runtime = createInferenceRuntime(fakeWorker());

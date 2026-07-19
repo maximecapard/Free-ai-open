@@ -64,6 +64,7 @@ export const fr: Dictionary = {
     rerun: "Relancer",
     clear: "Effacer le résultat",
     cancel: "Annuler la vérification",
+    skip: "Passer pour le moment",
     running: "Vérification locale en cours…",
     notRun: "Pas encore exécutée",
     lastChecked: "Dernière vérification",
@@ -125,6 +126,9 @@ export const fr: Dictionary = {
       "Cette vérification s'exécute entièrement dans votre navigateur. Aucune information sur votre appareil n'est envoyée à un serveur.",
     modeTitle: "Quel comportement souhaitez-vous ?",
     modeIntro: "Ce choix définit la vitesse et la qualité par défaut de chaque conversation. Vous pouvez le modifier à tout moment depuis les Paramètres.",
+    initialDownloadTitle: "Premier téléchargement de modèle local",
+    initialDownloadBody:
+      "Lors de la première ouverture du Chat dans un navigateur compatible, FreeAI Open peut télécharger et mettre en cache {model} ici (environ {size}). Il reste sur cet appareil. Tout autre modèle non mis en cache nécessite une confirmation distincte.",
     modeFooter:
       "Vous pouvez modifier ce choix à tout moment depuis les Paramètres. La sélection manuelle du modèle sera aussi disponible pour les utilisateurs avancés.",
   },
@@ -187,6 +191,14 @@ export const fr: Dictionary = {
     tryingLighter: "Essai d'un modèle plus léger",
     ready: "Prêt sur cet appareil",
     unavailable: "Modèle indisponible",
+    activeModel: "{task} · {mode} · {model}",
+  },
+  modelNames: {
+    compact: "Modèle local compact",
+    lightMultilingual: "Modèle multilingue léger",
+    balancedMultilingual: "Modèle multilingue équilibré",
+    codingFocused: "Modèle local orienté code",
+    performance: "Modèle local haute qualité",
   },
   router: {
     noCompatible:
@@ -242,6 +254,7 @@ export const fr: Dictionary = {
       task_unsupported: "Ne prend pas en charge cette tâche",
       metadata_incomplete: "Fiche du registre incomplète",
       repeated_oom: "A manqué de mémoire à plusieurs reprises sur cet appareil",
+      repeated_stall: "A cessé de répondre à plusieurs reprises sur cet appareil",
       repeated_device_loss: "A perdu l'accès au GPU à plusieurs reprises sur cet appareil",
     },
   },
@@ -288,6 +301,7 @@ export const fr: Dictionary = {
     cached: "déjà téléchargé",
     experimental: "Expérimental — ce modèle n'a pas encore été entièrement vérifié.",
     ineligible: "Non utilisable sur cet appareil",
+    checkingEligibility: "Vérification de la compatibilité avec cet appareil…",
     languagesLabel: "Langues",
     languageEn: "Anglais",
     languageFr: "Français",

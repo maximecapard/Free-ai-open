@@ -4,7 +4,25 @@ import type { RouterRejectedModel, RouterRejectionCode } from "./adaptiveRouterC
 import type { NormalizedRouterInput, ObservationSummary } from "./adaptiveInternal";
 
 const RECENT_FATAL_FAILURE_LIMIT = 2;
+const RECENT_STALL_LIMIT = 2;
 const SAFE_MEMORY_FRACTION = 0.55;
+
+const LIMIT_CLASS_LOWER_BOUNDS: Record<string, Partial<Record<string, number>>> = {
+  maxBufferSize: { medium: 128 * 1024 ** 2, high: 512 * 1024 ** 2, very_high: 1024 ** 3 },
+  maxStorageBufferBindingSize: { medium: 128 * 1024 ** 2, high: 512 * 1024 ** 2, very_high: 1024 ** 3 },
+  maxComputeWorkgroupStorageSize: { medium: 16 * 1024, high: 32 * 1024, very_high: 32 * 1024 },
+  maxComputeInvocationsPerWorkgroup: { medium: 128, high: 256, very_high: 256 },
+  maxBindGroups: { medium: 4, high: 5, very_high: 5 },
+  maxBindingsPerBindGroup: { medium: 4, high: 5, very_high: 5 },
+  maxStorageBuffersPerShaderStage: { medium: 4, high: 5, very_high: 5 },
+};
+
+function meetsMinimumLimit(limitKey: string, availableClass: string | undefined, required: number): boolean {
+  if (required <= 0) return true;
+  if (!availableClass || availableClass === "low" || availableClass === "unknown") return false;
+  const lowerBound = LIMIT_CLASS_LOWER_BOUNDS[limitKey]?.[availableClass];
+  return lowerBound !== undefined && lowerBound >= required;
+}
 
 function hasCompleteMetadata(model: ModelRegistryRecord): boolean {
   return Boolean(
@@ -35,9 +53,8 @@ export function getAdaptiveRejectionReasons(
   for (const feature of model.minimumCapability.requiredFeatures ?? []) {
     if (!capability.gpu.featureClasses.includes(feature)) reasons.push("required_feature_missing");
   }
-  for (const limit of Object.keys(model.minimumCapability.minimumLimits ?? {})) {
-    const available = capability.gpu.limitClasses[limit];
-    if (!available || available === "low" || available === "unknown") reasons.push("required_limit_missing");
+  for (const [limit, required] of Object.entries(model.minimumCapability.minimumLimits ?? {})) {
+    if (!meetsMinimumLimit(limit, capability.gpu.limitClasses[limit], required)) reasons.push("required_limit_missing");
   }
 
   if (capability.formFactor !== "unknown" && model.formFactors[capability.formFactor] === 0) {
@@ -56,6 +73,7 @@ export function getAdaptiveRejectionReasons(
 
   if (observations.outOfMemory >= RECENT_FATAL_FAILURE_LIMIT) reasons.push("repeated_oom");
   if (observations.deviceLosses >= RECENT_FATAL_FAILURE_LIMIT) reasons.push("repeated_device_loss");
+  if (observations.stalls >= RECENT_STALL_LIMIT) reasons.push("repeated_stall");
   return [...new Set(reasons)];
 }
 

@@ -5,7 +5,7 @@ import type { LocalBenchmarkResult, StaticCapabilityProfile } from "@free-ai-ope
 import type { TranslationKey } from "../_i18n/dictionary";
 import { clearStoredLocalBenchmarkResult, getStoredLocalBenchmarkForProfile } from "../_lib/benchmarkResultStore";
 import { runAndStoreLocalBenchmark } from "../_lib/localBenchmarkClient";
-import { useTranslations } from "../_i18n/LocaleContext";
+import { useLocale, useTranslations } from "../_i18n/LocaleContext";
 
 export interface LocalBenchmarkPanelProps {
   profile: StaticCapabilityProfile;
@@ -36,6 +36,7 @@ const CONFIDENCE_KEYS: Record<LocalBenchmarkResult["confidence"], TranslationKey
 
 export function LocalBenchmarkPanel({ profile, autoRun = false, disabled = false, onSettled }: LocalBenchmarkPanelProps) {
   const t = useTranslations();
+  const { locale } = useLocale();
   const initialRef = useRef(getStoredLocalBenchmarkForProfile(profile));
   const [result, setResult] = useState<LocalBenchmarkResult | null>(initialRef.current);
   const [running, setRunning] = useState(false);
@@ -80,6 +81,7 @@ export function LocalBenchmarkPanel({ profile, autoRun = false, disabled = false
   function handleClear() {
     clearStoredLocalBenchmarkResult();
     setResult(null);
+    onSettledRef.current?.();
   }
 
   return (
@@ -90,7 +92,9 @@ export function LocalBenchmarkPanel({ profile, autoRun = false, disabled = false
       {result?.status === "completed" && (
         <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", margin: "0 0 12px" }}>
           <dt className="fo-muted">{t("benchmark.lastChecked")}</dt>
-          <dd className="fo-technical-value">{new Date(result.measuredAt).toLocaleString()}</dd>
+          <dd className="fo-technical-value">
+            {new Date(result.measuredAt).toLocaleString(locale === "fr" ? "fr-FR" : "en-US")}
+          </dd>
           <dt className="fo-muted">{t("benchmark.score")}</dt><dd className="fo-technical-value">{result.computeScore ?? t("common.unknown")}/100</dd>
           <dt className="fo-muted">{t("benchmark.stability")}</dt><dd className="fo-technical-value">{t(STABILITY_KEYS[result.stability])}</dd>
           <dt className="fo-muted">{t("benchmark.confidence")}</dt><dd className="fo-technical-value">{t(CONFIDENCE_KEYS[result.confidence])}</dd>

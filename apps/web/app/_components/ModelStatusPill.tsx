@@ -3,15 +3,18 @@ import { useTranslations } from "../_i18n/LocaleContext";
 interface ModelStatusPillProps {
   taskLabel: string | null;
   modeLabel: string | null;
-  modelName?: string | null;
+  activeModelName?: string | null;
+  recommendedModelName?: string | null;
 }
 
-export function ModelStatusPill({ taskLabel, modeLabel, modelName }: ModelStatusPillProps) {
+export function ModelStatusPill({ taskLabel, modeLabel, activeModelName, recommendedModelName }: ModelStatusPillProps) {
   const t = useTranslations();
   const label = !taskLabel || !modeLabel
     ? t("modelStatus.noTaskSelected")
-    : modelName
-      ? t("modelStatus.modelNotLoaded", { task: taskLabel, mode: modeLabel, model: modelName })
+    : activeModelName
+      ? t("modelStatus.activeModel", { task: taskLabel, mode: modeLabel, model: activeModelName })
+      : recommendedModelName
+        ? t("modelStatus.modelNotLoaded", { task: taskLabel, mode: modeLabel, model: recommendedModelName })
       : t("modelStatus.noCompatibleModel", { task: taskLabel, mode: modeLabel });
 
   return (

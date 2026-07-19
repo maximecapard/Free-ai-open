@@ -2,12 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { DEFAULT_MODEL_ID } from "@free-ai-open/ai-runtime";
 import type { DeviceProfile } from "@free-ai-open/device-profiler";
+import { modelRegistryV2 } from "@free-ai-open/model-registry";
 import type { PerformanceMode } from "@free-ai-open/types";
 import { performanceModes } from "../../_lib/catalog";
 import { detectAndStoreDeviceProfile } from "../../_lib/deviceProfileDetection";
 import { getRecommendedPerformanceModeForProfile } from "../../_lib/deviceRecommendation";
 import { completeGettingStarted } from "../../_lib/gettingStartedPreference";
+import { formatApproximateDownloadSize } from "../../_lib/modelDownloadDisclosure";
+import { localizedModelName } from "../../_lib/modelDisplayName";
 import { useTranslations } from "../../_i18n/LocaleContext";
 
 export default function OnboardingModePage() {
@@ -31,6 +35,8 @@ export default function OnboardingModePage() {
   // device it would not run acceptably, so it is left off rather than
   // dangling a choice that can't work here.
   const availableModes = performanceModes.filter((mode) => mode.id !== "performance" || profile?.webgpuAvailable);
+  const initialModel = modelRegistryV2.find((record) => record.webllmModelId === DEFAULT_MODEL_ID);
+  const initialSize = formatApproximateDownloadSize(initialModel?.downloadSize.value);
 
   function handleConfirm(mode: PerformanceMode) {
     if (isConfirming) return;
@@ -53,6 +59,18 @@ export default function OnboardingModePage() {
       <p className="fo-muted" style={{ margin: "0 0 24px", fontSize: 15 }}>
         {t("onboarding.modeIntro")}
       </p>
+
+      {initialModel && initialSize && (
+        <section className="fo-inline-notice" aria-labelledby="initial-model-download-title" style={{ marginBottom: 20 }}>
+          <strong id="initial-model-download-title">{t("onboarding.initialDownloadTitle")}</strong>
+          <p style={{ margin: "8px 0 0", fontSize: 14 }}>
+            {t("onboarding.initialDownloadBody", {
+              model: localizedModelName(initialModel, t),
+              size: `${initialSize.value} ${initialSize.unit}`,
+            })}
+          </p>
+        </section>
+      )}
 
       <div style={{ display: "grid", gap: 12 }}>
         {availableModes.map((mode) => {

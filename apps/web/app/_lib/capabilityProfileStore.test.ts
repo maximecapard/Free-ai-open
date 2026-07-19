@@ -127,11 +127,56 @@ describe("capability profile store", () => {
     ).toBeNull();
   });
 
+  it("allowlists every persisted GPU class, feature, and limit key", () => {
+    const migrated = migrateStaticCapabilityProfile({
+      ...exampleProfile,
+      gpu: {
+        vendorClass: "Confidential uploaded document text",
+        architectureClass: "private-architecture",
+        descriptionClass: "private description",
+        featureClasses: ["shader-f16", "private feature text"],
+        limitClasses: {
+          maxBufferSize: "high",
+          confidentialLimit: "high",
+        },
+        experimentalMemoryClass: "private memory text",
+      },
+    });
+
+    expect(migrated?.gpu).toEqual({
+      featureClasses: ["shader-f16"],
+      limitClasses: { maxBufferSize: "high" },
+    });
+    expect(JSON.stringify(migrated)).not.toContain("private");
+    expect(JSON.stringify(migrated)).not.toContain("Confidential");
+  });
+
+  it("rejects invalid or inverted profile dates", () => {
+    expect(migrateStaticCapabilityProfile({ ...exampleProfile, detectedAt: "not-a-date" })).toBeNull();
+    expect(migrateStaticCapabilityProfile({ ...exampleProfile, expiresAt: "not-a-date" })).toBeNull();
+    expect(
+      migrateStaticCapabilityProfile({
+        ...exampleProfile,
+        detectedAt: "2026-07-24T10:00:00.000Z",
+        expiresAt: "2026-07-17T10:00:00.000Z",
+      })
+    ).toBeNull();
+  });
+
   it("treats expired profiles as absent", () => {
     installWindow(new MemoryLocalStorage());
     setStoredCapabilityProfile(exampleProfile);
     expect(getStoredCapabilityProfile(() => new Date("2026-07-25T00:00:00.000Z"))).toBeNull();
     expect(isCapabilityProfileExpired(exampleProfile, () => new Date("2026-07-25T00:00:00.000Z"))).toBe(true);
+  });
+
+  it("treats profiles detected implausibly in the future as stale", () => {
+    expect(
+      isCapabilityProfileExpired(
+        { ...exampleProfile, detectedAt: "2026-07-20T10:00:00.000Z", expiresAt: "2026-07-27T10:00:00.000Z" },
+        () => new Date("2026-07-19T10:00:00.000Z")
+      )
+    ).toBe(true);
   });
 
   it("redetects after expiry or browser family changes", () => {

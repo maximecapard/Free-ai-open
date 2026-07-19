@@ -109,4 +109,36 @@ describe("model performance observation store", () => {
       expect(serialized).not.toContain(`"${forbidden}`);
     }
   });
+
+  it("rebuilds observations from an allowlist before persisting them", () => {
+    installWindow(new MemoryLocalStorage());
+    recordModelPerformanceObservation({
+      ...makeObservation(),
+      loadTimeMs: 125,
+      prompt: "private prompt",
+      response: "private response",
+      messages: ["private message"],
+      document: "private document",
+    } as unknown as Parameters<typeof recordModelPerformanceObservation>[0]);
+
+    expect(getStoredModelPerformanceObservations()).toEqual([
+      {
+        schemaVersion: 1,
+        modelId: "sample-general-light",
+        observedAt: "2026-07-17T10:00:00.000Z",
+        loadSucceeded: true,
+        outcome: "completed",
+        loadTimeMs: 125,
+      },
+    ]);
+  });
+
+  it("drops observations with invalid technical identifiers or dates", () => {
+    const migrated = migrateModelPerformanceObservations([
+      makeObservation({ modelId: "Confidential uploaded document text" }),
+      makeObservation({ observedAt: "not-a-date" }),
+      makeObservation(),
+    ]);
+    expect(migrated).toEqual([makeObservation()]);
+  });
 });

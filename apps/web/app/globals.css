@@ -307,6 +307,8 @@ samp {
 .fo-technical-value {
   font-family: var(--fo-font-mono);
   font-size: 0.92em;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* Debug dashboard: predominantly Ink regardless of the selected theme, so it

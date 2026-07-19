@@ -19,13 +19,21 @@ function decisionWithRejected(rejectedModels: RouterDecision["rejectedModels"]):
 }
 
 describe("resolveManualModelEligibility", () => {
-  it("fails open (eligible) when no decision has been computed yet", () => {
-    expect(resolveManualModelEligibility(null, "qwen3-4b-q4f16")).toEqual({ eligible: true, rejectionReasons: [] });
+  it("fails closed while no capability-backed decision has been computed", () => {
+    expect(resolveManualModelEligibility(null, "qwen3-4b-q4f16")).toEqual({
+      eligible: false,
+      pending: true,
+      rejectionReasons: [],
+    });
   });
 
   it("is eligible when the model does not appear in rejectedModels", () => {
     const decision = decisionWithRejected([]);
-    expect(resolveManualModelEligibility(decision, "qwen3-4b-q4f16")).toEqual({ eligible: true, rejectionReasons: [] });
+    expect(resolveManualModelEligibility(decision, "qwen3-4b-q4f16")).toEqual({
+      eligible: true,
+      pending: false,
+      rejectionReasons: [],
+    });
   });
 
   it("is ineligible with the router's own rejection reasons when the model was rejected", () => {
@@ -34,6 +42,7 @@ describe("resolveManualModelEligibility", () => {
     ]);
     expect(resolveManualModelEligibility(decision, "qwen3-4b-q4f16")).toEqual({
       eligible: false,
+      pending: false,
       rejectionReasons: ["insufficient_memory", "form_factor_unsupported"],
     });
   });
@@ -42,6 +51,7 @@ describe("resolveManualModelEligibility", () => {
     const decision = decisionWithRejected([{ modelId: "qwen3-4b-q4f16", reasons: ["insufficient_memory"] }]);
     expect(resolveManualModelEligibility(decision, "smollm2-360m-instruct-q4f32")).toEqual({
       eligible: true,
+      pending: false,
       rejectionReasons: [],
     });
   });

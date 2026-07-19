@@ -99,4 +99,40 @@ describe("buildDebugDiagnosticReportInput", () => {
       expect(serialized).not.toContain(forbidden);
     }
   });
+
+  it("prefers the current runtime and adaptive-router values over stale log history", () => {
+    const logs: LocalLogRecord[] = [
+      {
+        id: "stale-runtime",
+        event: "model.load.completed",
+        severity: "info",
+        timestamp: "2026-07-04T10:00:00.000Z",
+        runtimeStatus: "ready",
+        modelId: "old-model",
+      },
+    ];
+
+    const report = buildDiagnosticReport(
+      buildDebugDiagnosticReportInput({
+        deviceProfile: null,
+        routeResult: null,
+        mode: "performance",
+        runtimeStatus: "recovering",
+        task: "coding",
+        recommendedModelId: "qwen3-4b-q4f16",
+        loadedModelId: "qwen3-1.7b-q4f16",
+        logs,
+      }),
+      { now }
+    );
+
+    expect(report).toMatchObject({
+      contentLogged: false,
+      runtimeStatus: "recovering",
+      performanceMode: "performance",
+      task: "coding",
+      recommendedModelId: "qwen3-4b-q4f16",
+      loadedModelId: "qwen3-1.7b-q4f16",
+    });
+  });
 });

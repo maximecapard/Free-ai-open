@@ -62,6 +62,7 @@ export const en = {
     rerun: "Run again",
     clear: "Clear result",
     cancel: "Cancel check",
+    skip: "Skip for now",
     running: "Checking local capability…",
     notRun: "Not run yet",
     lastChecked: "Last checked",
@@ -123,6 +124,9 @@ export const en = {
       "This check runs entirely in your browser. Nothing about your device is sent to a server.",
     modeTitle: "How should it feel?",
     modeIntro: "This sets the default speed and quality for every conversation. You can change it anytime from Settings.",
+    initialDownloadTitle: "First local model download",
+    initialDownloadBody:
+      "When you first open Chat in a compatible browser, FreeAI Open may download and cache {model} here (about {size}). It stays on this device. Any different uncached model requires a separate confirmation.",
     modeFooter: "You can change this anytime from Settings. Manual model selection will also be available for advanced users.",
   },
   tasks: {
@@ -184,6 +188,14 @@ export const en = {
     tryingLighter: "Trying a lighter model",
     ready: "Ready on this device",
     unavailable: "Model unavailable",
+    activeModel: "{task} · {mode} · {model}",
+  },
+  modelNames: {
+    compact: "Compact local model",
+    lightMultilingual: "Light multilingual model",
+    balancedMultilingual: "Balanced multilingual model",
+    codingFocused: "Coding-focused local model",
+    performance: "Performance local model",
   },
   router: {
     noCompatible:
@@ -239,6 +251,7 @@ export const en = {
       task_unsupported: "Doesn't support this task",
       metadata_incomplete: "Registry entry is incomplete",
       repeated_oom: "Ran out of memory repeatedly on this device",
+      repeated_stall: "Stopped responding repeatedly on this device",
       repeated_device_loss: "Lost the GPU device repeatedly on this device",
     },
   },
@@ -285,6 +298,7 @@ export const en = {
     cached: "already downloaded",
     experimental: "Experimental — this model hasn't been fully verified yet.",
     ineligible: "Not usable on this device",
+    checkingEligibility: "Checking compatibility with this device…",
     languagesLabel: "Languages",
     languageEn: "English",
     languageFr: "French",

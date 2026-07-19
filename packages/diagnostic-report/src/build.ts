@@ -2,6 +2,8 @@ import { redactDiagnosticInput, validateDiagnosticReportPrivacy } from "./privac
 import {
   asBackend,
   asBoolean,
+  asArchitectureClass,
+  asBrowserFamily,
   asCapabilityClass,
   asCapabilityConfidence,
   asCoarseClass,
@@ -9,10 +11,17 @@ import {
   asErrorCode,
   asErrorSeverity,
   asEvent,
+  asExperimentalMemoryClass,
   asFormFactor,
+  asGpuArchitectureClass,
+  asGpuDescriptionClass,
+  asGpuFeatureClass,
+  asGpuLimitKey,
+  asGpuVendorClass,
   asIsoTimestamp,
   asModelId,
   asNonNegativeNumber,
+  asOsFamily,
   asPerformanceMode,
   asRuntimeStatus,
   asSeverity,
@@ -90,9 +99,9 @@ function sanitizeBrowserInfo(value: unknown): DiagnosticBrowserInfo | undefined 
   if (!isRecord(value)) return undefined;
 
   const browserInfo: DiagnosticBrowserInfo = {};
-  const browserFamily = asShortTechnicalText(value.browserFamily, 80);
+  const browserFamily = asBrowserFamily(value.browserFamily);
   if (browserFamily) browserInfo.browserFamily = browserFamily;
-  const osFamily = asShortTechnicalText(value.osFamily, 80);
+  const osFamily = asOsFamily(value.osFamily);
   if (osFamily) browserInfo.osFamily = osFamily;
 
   return Object.keys(browserInfo).length > 0 ? browserInfo : undefined;
@@ -123,11 +132,11 @@ function sanitizeCapabilityProfile(value: unknown): DiagnosticCapabilityProfile 
   if (expiresAt) profile.expiresAt = expiresAt;
   const formFactor = asFormFactor(value.formFactor);
   if (formFactor) profile.formFactor = formFactor;
-  const architectureClass = asShortTechnicalText(value.architectureClass, 40);
+  const architectureClass = asArchitectureClass(value.architectureClass);
   if (architectureClass) profile.architectureClass = architectureClass;
-  const browserFamily = asShortTechnicalText(value.browserFamily, 80);
+  const browserFamily = asBrowserFamily(value.browserFamily);
   if (browserFamily) profile.browserFamily = browserFamily;
-  const osFamily = asShortTechnicalText(value.osFamily, 80);
+  const osFamily = asOsFamily(value.osFamily);
   if (osFamily) profile.osFamily = osFamily;
   const memoryClass = asCoarseClass(value.memoryClass);
   if (memoryClass) profile.memoryClass = memoryClass;
@@ -148,29 +157,32 @@ function sanitizeCapabilityProfile(value: unknown): DiagnosticCapabilityProfile 
 
   if (isRecord(value.gpu)) {
     const featureClasses = Array.isArray(value.gpu.featureClasses)
-      ? value.gpu.featureClasses.filter((item): item is string => typeof item === "string" && item.length <= 80).sort()
+      ? value.gpu.featureClasses
+          .map(asGpuFeatureClass)
+          .filter((item): item is string => item !== undefined)
+          .sort()
       : [];
     const limitClasses: Record<string, string> = {};
     if (isRecord(value.gpu.limitClasses)) {
       for (const [key, limitClass] of Object.entries(value.gpu.limitClasses)) {
-        const safeKey = asShortTechnicalText(key, 80);
+        const safeKey = asGpuLimitKey(key);
         const safeValue = asCoarseClass(limitClass);
         if (safeKey && safeValue) limitClasses[safeKey] = safeValue;
       }
     }
 
     profile.gpu = {
-      ...(asShortTechnicalText(value.gpu.vendorClass, 40) ? { vendorClass: asShortTechnicalText(value.gpu.vendorClass, 40) } : {}),
-      ...(asShortTechnicalText(value.gpu.architectureClass, 40)
-        ? { architectureClass: asShortTechnicalText(value.gpu.architectureClass, 40) }
+      ...(asGpuVendorClass(value.gpu.vendorClass) ? { vendorClass: asGpuVendorClass(value.gpu.vendorClass) } : {}),
+      ...(asGpuArchitectureClass(value.gpu.architectureClass)
+        ? { architectureClass: asGpuArchitectureClass(value.gpu.architectureClass) }
         : {}),
-      ...(asShortTechnicalText(value.gpu.descriptionClass, 40)
-        ? { descriptionClass: asShortTechnicalText(value.gpu.descriptionClass, 40) }
+      ...(asGpuDescriptionClass(value.gpu.descriptionClass)
+        ? { descriptionClass: asGpuDescriptionClass(value.gpu.descriptionClass) }
         : {}),
       featureClasses,
       limitClasses,
-      ...(asShortTechnicalText(value.gpu.experimentalMemoryClass, 40)
-        ? { experimentalMemoryClass: asShortTechnicalText(value.gpu.experimentalMemoryClass, 40) }
+      ...(asExperimentalMemoryClass(value.gpu.experimentalMemoryClass)
+        ? { experimentalMemoryClass: asExperimentalMemoryClass(value.gpu.experimentalMemoryClass) }
         : {}),
       ...(value.gpu.experimentalMemoryConfidence === "low" ? { experimentalMemoryConfidence: "low" as const } : {}),
     };
