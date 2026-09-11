@@ -112,6 +112,21 @@ Phase 0 adds types, package boundaries, and local persistence/migration only —
 - [ ] Export a diagnostic report and confirm it still contains no prompt/response content, and that a safety-limit interruption (if reproduced) is a neutral cancelled observation rather than success, failure, or stall.
 - [ ] Confirm French and English show the new "may be incomplete" notice correctly when a partial reply is preserved.
 
+## v0.7.1-alpha (safe Markdown rendering and copyable code blocks)
+
+- [ ] Run `MessageContent.test.tsx`, `codeBlockCopy.test.ts`, and `markdownLinkSafety.test.ts` and confirm they pass, including the raw-HTML/`javascript:`-link/no-`<img>` security assertions.
+- [ ] Ask the local model something likely to produce **bold**, a numbered list, and a fenced code block; confirm it renders as real structured HTML (bold text, an actual `<ol>`/`<li>` list, a distinct code-block surface) — not literal `**`/`1.`/`` ``` `` characters.
+- [ ] Desktop: confirm a response with several fenced code blocks (different languages, one with no language) each get their own labeled, copyable block, with normal paragraph/list text flowing normally around them.
+- [ ] Mobile (real device or emulation, ≤ 400px wide): confirm no page-wide horizontal overflow from a long code line or a wide table — both scroll internally — and the copy button remains a comfortably tappable 44×44px target.
+- [ ] Light/dark/system: confirm the code-block surface reads as a consistent Ink-dark technical block in all three theme settings (matching `/debug`'s existing Ink-surface treatment), never washed out or low-contrast, and never a neon/glowing terminal look.
+- [ ] French/English: switch languages and confirm the code-block language label, "Copier"/"Copy" button text, and "Copié"/"Copied" and "Impossible de copier"/"Could not copy" feedback are all correctly localized.
+- [ ] 200% browser zoom: confirm Markdown text, lists, and code blocks in `/chat` reflow without clipping or an unreachable copy button.
+- [ ] Copy a code block's content and paste it elsewhere; confirm the pasted text exactly matches the source code with no fence markers, no language label, and correct indentation/line breaks.
+- [ ] Deny clipboard permission (or test in a context without Clipboard API access) and confirm clicking Copy shows "Could not copy"/"Impossible de copier" instead of crashing the chat.
+- [ ] Ask a question likely to produce a long streamed reply with a fenced code block; watch it stream in and confirm no crash, no blank message, and no false generation timeout while the fence is still open, and no duplicated content once it closes.
+- [ ] Confirm a link the model includes (e.g. citing a URL) is clickable, opens in a new tab, and that user-entered messages (including one containing `**`/`` ` `` characters or a pasted code block) still display exactly as typed, not reformatted.
+- [ ] Desktop viewport containment: on a wide viewport (>720px), open `/chat` with a long conversation (several replies with code blocks) and/or many saved conversations in the sidebar; confirm the browser document itself does not scroll, there is no blank area below the app shell, the sidebar and message list each scroll independently within their own region, and the composer stays pinned at the bottom of the chat column. Resize the window narrower across the 720px breakpoint and confirm mobile's normal page scrolling and off-canvas drawer still work exactly as before.
+
 ## Manual smoke tests (browser)
 
 - [ ] Chat: onboarding leads to `/chat`, the local model loads, and a prompt gets a streamed reply.

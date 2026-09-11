@@ -77,4 +77,28 @@ describe("desktop chat workspace layout", () => {
     expect(chatPage).toContain('className="chat-main__composer"');
     expect(chatPage).toContain("scrollContainerRef={transcriptScrollRef}");
   });
+
+  it("gives the document itself an outermost overflow: hidden safety net, scoped to the chat route only", () => {
+    const desktopBlock = ruleBody("body:has(.chat-shell)", desktopMediaBlock());
+    expect(desktopBlock).toContain("overflow: hidden");
+
+    // The plain, unscoped `body` rule (used by every other route) must never
+    // pick up `overflow: hidden` — that would break normal page scrolling on
+    // Home/Settings/Debug/onboarding.
+    const baseBodyBlock = ruleBody("body", globalsCss.slice(0, globalsCss.indexOf("@media (min-width: 721px)")));
+    expect(baseBodyBlock).not.toContain("overflow: hidden");
+  });
+
+  it("constrains .chat-history-panel — the actual flex child of .chat-layout, not .chat-sidebar two levels down — so a long conversation list can never grow the document", () => {
+    const block = ruleBody(".chat-history-panel", desktopMediaBlock());
+    expect(block).toContain("height: 100%");
+    expect(block).toContain("min-height: 0");
+    expect(block).toContain("overflow: hidden");
+  });
+
+  it("contains .chat-shell and .chat-layout themselves, not only their scrollable descendants", () => {
+    const block = desktopMediaBlock();
+    expect(ruleBody(".chat-shell", block)).toContain("overflow: hidden");
+    expect(ruleBody(".chat-layout", block)).toContain("overflow: hidden");
+  });
 });

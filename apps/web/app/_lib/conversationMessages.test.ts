@@ -39,6 +39,29 @@ describe("toChatMessageItems", () => {
     ]);
   });
 
+  it("passes Markdown source through unchanged — rendering is a presentation-only concern", () => {
+    const markdownSource = "# Heading\n\n**bold** and `inline code`\n\n```python\nprint('hi')\n```\n\n- item";
+    const conversation: Conversation = {
+      id: "conversation-markdown" as ConversationId,
+      title: "Local chat",
+      schemaVersion: 1,
+      createdAt: "2026-07-19T10:00:00.000Z",
+      updatedAt: "2026-07-19T10:00:00.000Z",
+      messageCount: 1,
+      messages: [
+        {
+          id: "message-assistant",
+          role: "assistant",
+          content: markdownSource,
+          createdAt: "2026-07-19T10:00:00.000Z",
+        },
+      ],
+    };
+
+    const [item] = toChatMessageItems(conversation);
+    expect(item?.content).toBe(markdownSource);
+  });
+
   it("does not expose hidden system messages in the transcript", () => {
     const conversation: Conversation = {
       id: "conversation-2" as ConversationId,

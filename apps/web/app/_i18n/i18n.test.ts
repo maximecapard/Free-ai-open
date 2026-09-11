@@ -36,9 +36,13 @@ const REPRESENTATIVE_KEYS: TranslationKey[] = [
   "runtimeStatusPlain.ready",
   "chat.composerHint",
   "chat.technicalDetails",
+  "chat.codeBlockLabel",
   "modes.recommendedBadge",
   "settings.performanceHeading",
   "settings.resetConfirm",
+  "common.copy",
+  "common.copied",
+  "common.couldNotCopy",
 ];
 
 describe("i18n dictionaries", () => {
@@ -56,6 +60,15 @@ describe("i18n dictionaries", () => {
     expect(translateFromDictionary(fr, en, "settings.title")).toBe("Paramètres");
     expect(translateFromDictionary(fr, en, "runtimeStatus.recovering")).toBe("Récupération");
     expect(translateFromDictionary(fr, en, "backup.privacyNote")).toContain("ne sont pas chiffrés");
+  });
+
+  it("provides distinct copy/copied/could-not-copy feedback text in French and English", () => {
+    expect(translateFromDictionary(en, en, "common.copy")).toBe("Copy");
+    expect(translateFromDictionary(en, en, "common.copied")).toBe("Copied");
+    expect(translateFromDictionary(en, en, "common.couldNotCopy")).toBe("Could not copy");
+    expect(translateFromDictionary(fr, en, "common.copy")).toBe("Copier");
+    expect(translateFromDictionary(fr, en, "common.copied")).toBe("Copié");
+    expect(translateFromDictionary(fr, en, "common.couldNotCopy")).toBe("Impossible de copier");
   });
 
   it("falls back to English in production-like mode when a localized key is missing", () => {

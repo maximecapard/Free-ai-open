@@ -687,6 +687,199 @@ samp {
   word-break: normal;
 }
 
+/* Markdown typography inside a chat bubble — deliberately restrained so a
+   model-generated heading can never outsize the app's own page title
+   (.fo-page-title, clamp(28px, 4vw, 40px)). */
+.chat-markdown > :first-child {
+  margin-top: 0;
+}
+
+.chat-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown p {
+  margin: 0 0 var(--fo-space-3);
+  line-height: 1.55;
+}
+
+.chat-markdown ul,
+.chat-markdown ol {
+  margin: 0 0 var(--fo-space-3);
+  padding-left: 1.4em;
+}
+
+.chat-markdown li {
+  margin: 0 0 4px;
+}
+
+.chat-markdown li > ul,
+.chat-markdown li > ol {
+  margin-top: 4px;
+}
+
+.chat-markdown h1,
+.chat-markdown h2,
+.chat-markdown h3,
+.chat-markdown h4,
+.chat-markdown h5,
+.chat-markdown h6 {
+  margin: var(--fo-space-4) 0 var(--fo-space-2);
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.chat-markdown h1 {
+  font-size: 20px;
+}
+
+.chat-markdown h2 {
+  font-size: 18px;
+}
+
+.chat-markdown h3 {
+  font-size: 16.5px;
+}
+
+.chat-markdown h4,
+.chat-markdown h5,
+.chat-markdown h6 {
+  font-size: 15px;
+}
+
+.chat-markdown blockquote {
+  margin: 0 0 var(--fo-space-3);
+  padding: var(--fo-space-2) var(--fo-space-3);
+  border-left: 3px solid var(--fo-border);
+  color: var(--fo-text-muted);
+}
+
+.chat-markdown blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.chat-markdown hr {
+  margin: var(--fo-space-4) 0;
+  border: none;
+  border-top: 1px solid var(--fo-border);
+}
+
+.chat-markdown-table-scroll {
+  max-width: 100%;
+  margin: 0 0 var(--fo-space-3);
+  overflow-x: auto;
+}
+
+.chat-markdown table {
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.chat-markdown th,
+.chat-markdown td {
+  padding: 6px 10px;
+  border: 1px solid var(--fo-border);
+  text-align: left;
+}
+
+.chat-markdown th {
+  font-weight: 700;
+  background: var(--fo-surface-elevated);
+}
+
+.chat-message-link-disabled {
+  color: inherit;
+}
+
+/* Inline code — restrained pill, distinct from a full CodeBlock. */
+.chat-inline-code {
+  padding: 1px 6px;
+  border: 1px solid var(--fo-border);
+  border-radius: 5px;
+  background: var(--fo-surface-elevated);
+  font-size: 0.9em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* Fenced code blocks — reuses .fo-ink-surface's forced ink-dark semantic
+   tokens (see its own comment above) so the block reads as a consistent
+   technical surface in both light and dark themes, without a parallel
+   color system or any neon/glow treatment. */
+.chat-code-block {
+  --fo-bg: var(--fo-ink-950);
+  --fo-surface: var(--fo-ink-900);
+  --fo-surface-elevated: #111722;
+  --fo-text: var(--fo-paper-50);
+  --fo-text-muted: rgba(253, 251, 249, 0.72);
+  --fo-border: rgba(253, 251, 249, 0.14);
+  margin: 0 0 var(--fo-space-3);
+  overflow: hidden;
+  border: 1px solid var(--fo-border);
+  border-radius: var(--fo-radius-card);
+  background: var(--fo-surface);
+  color: var(--fo-text);
+}
+
+.chat-code-block__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--fo-space-2);
+  padding: 6px 6px 6px 12px;
+  border-bottom: 1px solid var(--fo-border);
+  color: var(--fo-text-muted);
+}
+
+.chat-code-block__language {
+  font-size: 12px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-code-block__copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--fo-radius-control);
+  background: transparent;
+  color: var(--fo-text);
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.chat-code-block__copy:hover:not(:disabled) {
+  border-color: var(--fo-border);
+  background: var(--fo-surface-elevated);
+}
+
+.chat-code-block__copy svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.chat-code-block__pre {
+  margin: 0;
+  padding: 12px;
+  background: transparent;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.chat-code-block__code {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
 .chat-scroll-latest {
   align-self: center;
   position: sticky;
@@ -946,6 +1139,16 @@ samp {
    normal document flow entirely unchanged: every rule below sits behind the
    same 720px desktop breakpoint used everywhere else in the app. */
 @media (min-width: 721px) {
+  /* Outermost safety net: even though every level below already contains
+     its own content, this guarantees the document itself can never gain
+     extra scrollable height on this route specifically, regardless of what
+     a future child ends up rendering. Scoped via :has() so Home, Settings,
+     Debug, and onboarding keep their normal document-flow page scrolling
+     untouched — this must never become a bare `body { overflow: hidden }`. */
+  body:has(.chat-shell) {
+    overflow: hidden;
+  }
+
   .app-shell:has(.chat-shell) {
     height: 100dvh;
     min-height: 0;
@@ -966,6 +1169,7 @@ samp {
     display: flex;
     height: 100%;
     min-height: 0;
+    overflow: hidden;
   }
 
   /* The chat workspace owns the full viewport height on desktop; the
@@ -987,6 +1191,22 @@ samp {
     max-width: none;
     margin: 0;
     align-items: stretch;
+    overflow: hidden;
+  }
+
+  /* ChatHistoryDrawerPanel (mobile: an off-canvas drawer) renders
+     ".chat-history-panel" as a plain pass-through wrapper on desktop — it,
+     not ".chat-sidebar" two levels down, is .chat-layout's actual flex
+     child. align-items: stretch already gives it a definite cross-axis
+     (height) size without this, but stating it explicitly keeps the
+     containment self-evident instead of depending on flex cross-axis
+     stretch semantics that stop applying the moment .chat-layout's
+     direction ever changes. */
+  .chat-history-panel {
+    height: 100%;
+    min-height: 0;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .chat-sidebar {
@@ -994,6 +1214,7 @@ samp {
     min-height: 0;
     padding: var(--fo-space-6) var(--fo-space-4);
     border-right: 1px solid var(--fo-border);
+    overflow: hidden;
   }
 
   .chat-history-list {
@@ -1004,6 +1225,7 @@ samp {
   }
 
   .chat-main {
+    min-width: 0;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -1013,16 +1235,19 @@ samp {
 
   .chat-main__header {
     flex-shrink: 0;
+    min-height: 0;
   }
 
   .chat-main__scroll {
     flex: 1;
+    min-width: 0;
     min-height: 0;
     overflow-y: auto;
   }
 
   .chat-main__composer {
     flex-shrink: 0;
+    min-height: 0;
     padding-top: var(--fo-space-4);
   }
 }

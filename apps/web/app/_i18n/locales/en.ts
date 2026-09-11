@@ -13,6 +13,9 @@ export const en = {
     rename: "Rename",
     delete: "Delete",
     deleteConfirm: "Delete?",
+    copy: "Copy",
+    copied: "Copied",
+    couldNotCopy: "Could not copy",
   },
   header: {
     home: "Home",
@@ -337,6 +340,7 @@ export const en = {
     incompleteMessageLabel: "Incomplete response",
     composerLabel: "Message",
     composerHint: "Enter to send, Shift+Enter for a new line.",
+    codeBlockLabel: "Code",
   },
   newChatDialog: {
     title: "What will this chat be for?",

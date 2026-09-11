@@ -15,6 +15,9 @@ export const fr: Dictionary = {
     rename: "Renommer",
     delete: "Supprimer",
     deleteConfirm: "Supprimer ?",
+    copy: "Copier",
+    copied: "Copié",
+    couldNotCopy: "Impossible de copier",
   },
   header: {
     home: "Accueil",
@@ -340,6 +343,7 @@ export const fr: Dictionary = {
     incompleteMessageLabel: "Réponse incomplète",
     composerLabel: "Message",
     composerHint: "Entrée pour envoyer, Maj+Entrée pour un saut de ligne.",
+    codeBlockLabel: "Code",
   },
   newChatDialog: {
     title: "À quoi servira cette discussion ?",

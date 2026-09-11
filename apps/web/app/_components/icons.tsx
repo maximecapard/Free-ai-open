@@ -63,3 +63,20 @@ export function CloseIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+export function CopyIcon({ className }: IconProps) {
+  return (
+    <svg {...SHARED_PROPS} className={className}>
+      <rect x="7.5" y="7.5" width="9" height="9" rx="1.5" />
+      <path d="M12.5 7.5V5.5A1.5 1.5 0 0 0 11 4H4.5A1.5 1.5 0 0 0 3 5.5V12a1.5 1.5 0 0 0 1.5 1.5h2" />
+    </svg>
+  );
+}
+
+export function CheckIcon({ className }: IconProps) {
+  return (
+    <svg {...SHARED_PROPS} className={className}>
+      <path d="M4 10.5 8 14.5 16 6" />
+    </svg>
+  );
+}

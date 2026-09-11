@@ -853,9 +853,9 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - Real token-rate observations remain unset until `ai-runtime` exposes tokenizer-backed counts. WebGPU device loss is still mapped through the current out-of-memory error classification.
 - Registry v2 remains a small five-model alpha catalog. Full desktop/mobile acceptance testing, including real model downloads and repeated fallback/recovery cycles, remains required before tagging.
 
-## Sprint 6.21 - v0.7.1-alpha: generation timeout/stall watchdog hotfix
+## Sprint 6.21 - v0.7.1-alpha: generation timeout/stall watchdog hotfix, safe Markdown rendering
 
-### Root cause
+### Root cause (watchdog)
 
 - `packages/ai-runtime/src/runtime.ts` armed a single absolute timer (`GENERATION_SAFETY_LIMITS.maxDurationMs`, 90s) at the start of every generation and never reset it on progress. Any generation running longer than that — including one actively streaming healthy output — was force-cancelled with a `generation_timeout` error, even though nothing was actually wrong. A user could watch a reply streaming in and still have it cut off purely because of elapsed wall-clock time.
 - A second, related gap: the previous stall timer was cleared for good the moment the first token arrived and was never re-armed afterward, so a genuine stall beginning mid-stream (after some output had already streamed) was never caught as a stall — only the unrelated absolute-duration timer would eventually, and misleadingly, catch it instead.
@@ -876,10 +876,40 @@ The product is not yet a complete MVP. Broad model support, encrypted sync, prod
 - Extended `runtime.test.ts` with a regression test proving continuous streaming past the old 90s threshold now completes successfully (fails against the pre-fix code), and coverage for genuine mid-stream stalls, a slow downstream UI buffer never affecting the watchdog, stale-timer generation isolation, Stop/completion/recovery clearing every timer, the new safety limit, watchdog suspension, and log privacy.
 - Extended `generationPersistence.test.ts` and `performanceObservationBuilder.test.ts` for partial-output preservation and the safety-limit-is-not-a-failure classification.
 
-### Remaining limits
+### Remaining limits (watchdog)
 
 - The absolute safety-limit duration (10 minutes) and the first-token/stall thresholds (45s each) remain judgment calls, not measured from real hardware; they may need tuning once broader device testing exists.
 - Background-tab suspension pauses inactivity *detection*; it does not and cannot guarantee the browser keeps running worker/generation code while backgrounded — that remains platform-dependent.
+
+### Root cause (Markdown rendering)
+
+- `apps/web/app/_components/ChatTranscript.tsx` rendered `message.content` as a raw text node inside a `white-space: pre-wrap` container — no parsing at all. Markdown markers a local model wrote (`**bold**`, `1. `/`- ` lists, ` ```python ` fences) showed up as literal punctuation instead of structured content, and there was nowhere to put a "Copy" action on a code block.
+
+### Fixed (Markdown rendering)
+
+- Added `apps/web/app/_components/MessageContent.tsx`: assistant messages now render through `react-markdown` (plus `remark-gfm` for tables and `remark-breaks` so a single newline still shows as a visible line break, matching the old `pre-wrap` fidelity). User messages remain plain text with preserved line breaks — an explicit, documented decision (least surprising: a pasted snippet or a line starting with `*`/`#` should never silently reformat).
+- Added `apps/web/app/_components/CodeBlock.tsx` for fenced code: a language label parsed from the fence (a neutral "Code" label when absent, never invented), a monospace body preserving indentation with internal horizontal scrolling for long lines, and a "Copy"/"Copier" button with temporary "Copied"/"Copié" or "Could not copy"/"Impossible de copier" feedback (`apps/web/app/_lib/codeBlockCopy.ts`, a pure Clipboard API wrapper).
+- Security: no `rehype-raw`/`rehype-sanitize` plugin and no `dangerouslySetInnerHTML` anywhere — raw HTML in model output (`<script>`, `onerror=`, `<style>`) is dropped during parsing rather than rendered. Every link/image URL passes through `apps/web/app/_lib/markdownLinkSafety.ts`, a strict `http:`/`https:`/`mailto:` allowlist; `javascript:`/`data:`/relative URLs resolve to plain non-clickable text. Images are never rendered as `<img>` at all, since that would make the browser fetch a model-chosen URL with no confirmation — the alt text/URL shows as safe text or a sanitized link instead.
+- Streaming: react-markdown re-parses the full current message string on every buffered flush rather than incrementally, so an unclosed fence, an incomplete bold marker, or an in-progress list item never crashes, never loses streamed text, and never duplicates content once the closing fence arrives later. Parsing stays entirely at the rendering layer and never touches the generation watchdog's raw-chunk heartbeat (`packages/ai-runtime/src/generationWatchdog.ts`, unmodified by this branch).
+- Persistence: nothing in `conversation-store`/`conversation-export`/`AppRuntimeProvider.tsx`'s generation logic changed — the persisted/exported message content is always the original plain Markdown source string.
+
+### Tests (Markdown rendering)
+
+- Added `MessageContent.test.tsx`, rendering to a static HTML string via `react-dom/server` (this repo's default test environment has no DOM, so no new jsdom/testing-library dependency was added): every required Markdown element, the inline-vs-fenced-code distinction, multiple independent code blocks, raw-HTML/script/style rejection, `javascript:` link neutralization, safe external-link attributes, image suppression, unclosed-fence streaming safety, no post-close duplication, per-message isolation, and a source-scan guard that the renderer/copy path never calls a logger.
+- Added `codeBlockCopy.test.ts` and `markdownLinkSafety.test.ts` as pure-logic unit tests, plus extended `conversationMessages.test.ts` (Markdown source passthrough) and `i18n.test.ts` (French/English copy-feedback text).
+
+### Remaining limits (Markdown rendering)
+
+- No syntax highlighting: fenced code blocks render as clean, unhighlighted monospace text on purpose (no large client-side highlighter for this hotfix — a documented later-release item).
+- GFM tables are supported but not virtualized/paginated; an extremely large model-generated table would still render in full inside its scrollable wrapper.
+
+### Desktop chat viewport containment hardening
+
+A manual review of this release reported the `/chat` document growing several viewport heights tall on desktop, with a large blank area below the visible interface. Investigating in both a dev and a production build — with an empty conversation, with long multi-code-block assistant replies, and with up to 341 seeded conversations in the sidebar — never reproduced document-level scroll; `.app-shell`/`.chat-shell`/`.chat-main__scroll` all measured exactly to the viewport height in every case tried.
+
+Auditing the desktop workspace CSS (`@media (min-width: 721px)` in `globals.css`) against the reported failure mode did surface a real gap worth closing regardless: `.chat-history-panel` — `ChatHistoryDrawerPanel`'s wrapper, and the actual flex child of `.chat-layout` on desktop, since `ChatHistorySidebar`'s own `.chat-sidebar` element sits one level further down inside it — had no explicit height or overflow containment of its own; it was implicitly bounded only by flex cross-axis stretch behavior. `.chat-shell` and `.chat-layout` themselves were similarly bounded only by their scrollable descendants, not by their own `overflow`. None of this was observed to fail in testing, but leaving it implicit means a future refactor (a flex-direction change, new content added directly inside `.chat-shell`/`.chat-layout`) could silently reintroduce exactly the reported symptom with no test catching it.
+
+Made every level explicit instead: `.chat-history-panel`, `.chat-shell`, and `.chat-layout` all now carry their own `min-height: 0`/`overflow: hidden` (matching the containment already present on `.chat-sidebar`/`.chat-main`), and a new `body:has(.chat-shell) { overflow: hidden }` adds an outermost, route-scoped safety net — never a bare `body { overflow: hidden }`, which would break Home/Settings/Debug/onboarding's normal page scrolling. Extended `chatShellLayout.test.ts` (a structural test reading `globals.css` directly) so a regression at any of these levels fails a test. Verified no change to mobile, which uses none of these desktop-only rules.
 
 ## Cross-cutting remaining work
 

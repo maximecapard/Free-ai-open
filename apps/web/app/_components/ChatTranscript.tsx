@@ -9,6 +9,7 @@ import {
   isNearScrollEnd,
   isScrollableOverflow,
 } from "../_lib/chatAutoscroll";
+import { MessageContent } from "./MessageContent";
 
 export interface ChatMessageItem {
   id: string;
@@ -121,25 +122,40 @@ export const ChatTranscript = memo(function ChatTranscript({ messages, scrollCon
 
 const ChatMessageBubble = memo(function ChatMessageBubble({ message }: { message: ChatMessageItem }) {
   const t = useTranslations();
+  const isUser = message.role === "user";
 
   return (
     <div
       className="chat-message"
       style={{
-        alignSelf: message.role === "user" ? "flex-end" : "flex-start",
+        alignSelf: isUser ? "flex-end" : "flex-start",
         maxWidth: "80%",
         padding: "10px 14px",
         borderRadius: "var(--fo-radius-card)",
-        background: message.role === "user" ? "var(--fo-surface-elevated)" : "var(--fo-surface)",
+        background: isUser ? "var(--fo-surface-elevated)" : "var(--fo-surface)",
         border: "1px solid var(--fo-border)",
-        whiteSpace: "pre-wrap",
+        // Only meaningful for the plain-text user branch below — Markdown
+        // rendering supplies its own paragraph/line-break structure and
+        // never leaves significant raw whitespace runs for this to affect.
+        whiteSpace: isUser ? "pre-wrap" : undefined,
         userSelect: "text",
       }}
     >
       {/* Alignment carries the visible distinction; this label makes role
           explicit for screen readers, since layout alone isn't announced. */}
-      <span className="fo-visually-hidden">{message.role === "user" ? t("chat.youLabel") : t("chat.assistantLabel")}</span>
-      {message.content || (message.role === "assistant" ? "…" : "")}
+      <span className="fo-visually-hidden">{isUser ? t("chat.youLabel") : t("chat.assistantLabel")}</span>
+      {isUser ? (
+        // User-entered text is shown exactly as typed, never parsed as
+        // Markdown — see docs/architecture.md's "Message rendering" section
+        // for why: a pasted code snippet or a "*" bullet a user typed
+        // should never silently reformat or (worse) be treated as
+        // executable-looking structure the user didn't intend.
+        message.content
+      ) : message.content ? (
+        <MessageContent content={message.content} />
+      ) : (
+        "…"
+      )}
       {message.role === "assistant" && message.status === "incomplete" && (
         <span className="fo-muted" style={{ display: "block", marginTop: 8, fontSize: "0.8125rem" }}>
           {t("chat.incompleteMessageLabel")}

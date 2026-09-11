@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   clearStoredCapabilityProfile,
   getStoredCapabilityProfile,
@@ -28,6 +28,16 @@ function installWindow(localStorage: MemoryLocalStorage): void {
   Object.defineProperty(globalThis, "window", { configurable: true, value: { localStorage } });
 }
 
+// The whole suite freezes "now" to this instant (see beforeEach below), so
+// every call site that reads the real system clock by default —
+// getStoredCapabilityProfile()/isCapabilityProfileExpired() both default to
+// `now: () => new Date()` — becomes fully deterministic instead of quietly
+// depending on whatever day the suite happens to run on. Fixture dates below
+// are chosen relative to this constant, not to real wall-clock time, so
+// nothing here can expire again just because time passes.
+const FIXED_NOW = new Date("2026-07-20T00:00:00.000Z");
+
+// Valid as of FIXED_NOW: detected 3 days before it, expires 4 days after it.
 const exampleProfile = {
   schemaVersion: 2,
   detectedAt: "2026-07-17T10:00:00.000Z",
@@ -46,8 +56,22 @@ const exampleProfile = {
   confidence: "medium" as const,
 };
 
+// Expired as of FIXED_NOW: both detectedAt and expiresAt are already in the
+// past relative to it.
+const expiredProfile = {
+  ...exampleProfile,
+  detectedAt: "2026-06-01T10:00:00.000Z",
+  expiresAt: "2026-06-08T10:00:00.000Z",
+};
+
 describe("capability profile store", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(FIXED_NOW);
+  });
+
   afterEach(() => {
+    vi.useRealTimers();
     Reflect.deleteProperty(globalThis, "window");
   });
 
@@ -60,6 +84,12 @@ describe("capability profile store", () => {
     installWindow(new MemoryLocalStorage());
     setStoredCapabilityProfile(exampleProfile);
     expect(getStoredCapabilityProfile()).toEqual(exampleProfile);
+  });
+
+  it("treats a stored profile that has already expired as absent, using the real default clock (not an explicit override)", () => {
+    installWindow(new MemoryLocalStorage());
+    setStoredCapabilityProfile(expiredProfile);
+    expect(getStoredCapabilityProfile()).toBeNull();
   });
 
   it("migrates away a payload with the wrong schema version", () => {
