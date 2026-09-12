@@ -344,6 +344,10 @@ export const fr: Dictionary = {
     composerLabel: "Message",
     composerHint: "Entrée pour envoyer, Maj+Entrée pour un saut de ligne.",
     codeBlockLabel: "Code",
+    reasoningInProgress: "Réflexion en cours…",
+    reasoningLabel: "Réflexion",
+    reasoningInterruptedNotice: "La génération s'est arrêtée avant la réponse finale.",
+    reasoningLengthLimitedNotice: "La limite de génération a été atteinte.",
   },
   newChatDialog: {
     title: "À quoi servira cette discussion ?",
@@ -380,6 +384,7 @@ export const fr: Dictionary = {
     importSummaryWithSkipped: "{imported} importée(s), {skipped} ignorée(s).",
     couldNotImportConversation: 'Impossible d\'importer « {title} ».',
     messageNotSaved: '« {title} » : un message n\'a pas pu être enregistré.',
+    messageTruncated: '« {title} » : un message a dépassé la taille maximale conservée localement et a été tronqué.',
   },
   runtimeStatus: {
     idle: "Non démarré",
@@ -444,7 +449,21 @@ export const fr: Dictionary = {
       "Génération arrêtée après avoir atteint la durée maximale autorisée. Aucune réponse n'a été enregistrée.",
     generationSafetyLimitIncomplete:
       "La génération a atteint la durée maximale autorisée. La réponse partielle a été enregistrée localement et marquée comme incomplète.",
+    generationLengthLimited:
+      "Génération arrêtée après avoir atteint la limite de longueur de réponse. La réponse partielle a été enregistrée localement et marquée comme incomplète.",
+    generationUnknownIncomplete:
+      "La génération s'est arrêtée de manière inattendue avant une réponse finale. La réponse partielle a été enregistrée localement et marquée comme incomplète.",
+    generationUnsupportedFeature:
+      "Cette réponse nécessite une fonctionnalité que FreeAI Open ne prend pas encore en charge.",
     generationFailed: "La génération a échoué. La réponse partielle n'a pas été enregistrée.",
+    generationContextTooLong:
+      "Cette conversation est devenue trop longue pour que le modèle local puisse la poursuivre. Essayez de démarrer une nouvelle conversation.",
+    generationTruncatedForStorage:
+      "Cette réponse a dépassé la taille maximale conservée localement et a été tronquée.",
+    messageTruncatedForStorage:
+      "Votre message a dépassé la taille maximale conservée localement et a été tronqué.",
+    runtimeRecoveryFailed:
+      "Le modèle local n'a pas pu être récupéré automatiquement. Utilisez « Recharger le modèle » pour réessayer.",
   },
   debug: {
     title: "Tableau de diagnostic",
@@ -534,6 +553,9 @@ export const fr: Dictionary = {
       out_of_memory: "Mémoire insuffisante",
       device_lost: "Périphérique perdu",
       load_failed: "Échec du chargement",
+      length_limited: "Limite de longueur (neutre)",
+      unsupported_tool_call: "Appel d'outil non pris en charge",
+      terminal_unknown: "Raison de fin inconnue",
     },
   },
 };

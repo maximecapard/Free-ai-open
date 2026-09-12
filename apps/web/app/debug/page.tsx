@@ -33,7 +33,18 @@ import { useAppRuntime } from "../_runtime/AppRuntimeProvider";
 
 const EMPTY_OBSERVATIONS_SUMMARY: ObservationsSummary = {
   total: 0,
-  byOutcome: { completed: 0, cancelled: 0, stalled: 0, degenerate: 0, out_of_memory: 0, device_lost: 0, load_failed: 0 },
+  byOutcome: {
+    completed: 0,
+    cancelled: 0,
+    stalled: 0,
+    degenerate: 0,
+    out_of_memory: 0,
+    device_lost: 0,
+    load_failed: 0,
+    length_limited: 0,
+    unsupported_tool_call: 0,
+    terminal_unknown: 0,
+  },
   byModel: {},
 };
 

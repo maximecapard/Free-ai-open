@@ -164,7 +164,8 @@ describe("conversation store", () => {
         role: "user",
         content: "private prompt stored locally",
       });
-      expect(withMessage?.messageCount).toBe(1);
+      expect(withMessage?.truncated).toBe(false);
+      expect(withMessage?.conversation.messageCount).toBe(1);
       await expect(client.getConversation(conversation!.id)).resolves.toMatchObject({
         messages: [expect.objectContaining({ role: "user", content: "private prompt stored locally" })],
       });
@@ -228,8 +229,11 @@ describe("conversation store", () => {
     await client.addMessage(conversation!.id, { role: "assistant", content: "private answer" });
     const updated = await client.addMessage(conversation!.id, { role: "user", content: "latest private prompt" });
 
-    expect(updated?.messageCount).toBe(2);
-    expect(updated?.messages.map((message) => message.content)).toEqual(["private answer", "latest private prompt"]);
+    expect(updated?.conversation.messageCount).toBe(2);
+    expect(updated?.conversation.messages.map((message) => message.content)).toEqual([
+      "private answer",
+      "latest private prompt",
+    ]);
   });
 
   it("preserves an incomplete assistant status and keeps legacy messages compatible", async () => {
@@ -258,6 +262,164 @@ describe("conversation store", () => {
 
     const reloaded = await client.getConversation(conversation!.id);
     expect(reloaded?.messages.at(-1)?.status).toBeUndefined();
+  });
+
+  it("stores and round-trips incompleteReason and continuationCount, and leaves them absent for legacy messages with neither field", async () => {
+    const store = new MemoryTestStore();
+    const client = createTestClient(store);
+    const conversation = await client.createConversation();
+
+    await client.addMessage(conversation!.id, {
+      id: "assistant-1",
+      role: "assistant",
+      content: "<think>ran out of budget",
+      status: "incomplete",
+      incompleteReason: "length",
+      continuationCount: 1,
+    });
+
+    await expect(client.getConversation(conversation!.id)).resolves.toMatchObject({
+      messages: [
+        expect.objectContaining({
+          id: "assistant-1",
+          status: "incomplete",
+          incompleteReason: "length",
+          continuationCount: 1,
+        }),
+      ],
+    });
+
+    const stored = store.records.get(conversation!.id)!;
+    stored.messages.push({
+      id: "legacy-message",
+      role: "assistant",
+      content: "legacy completed reply",
+      createdAt: baseNow.toISOString(),
+    });
+    stored.messageCount = stored.messages.length;
+
+    const reloaded = await client.getConversation(conversation!.id);
+    const legacy = reloaded?.messages.at(-1);
+    expect(legacy?.incompleteReason).toBeUndefined();
+    expect(legacy?.continuationCount).toBeUndefined();
+  });
+
+  it("updates an existing message's content and status in place, without creating a duplicate", async () => {
+    const store = new MemoryTestStore();
+    const client = createTestClient(store);
+    const conversation = await client.createConversation();
+    const withMessage = await client.addMessage(conversation!.id, {
+      id: "assistant-1",
+      role: "assistant",
+      content: "<think>partial reasoning",
+      status: "incomplete",
+    });
+    expect(withMessage?.conversation.messageCount).toBe(1);
+
+    const updated = await client.updateMessageContent(conversation!.id, "assistant-1", {
+      content: "<think>partial reasoning continued</think>\n\nFinal answer.",
+      status: "complete",
+    });
+
+    expect(updated?.truncated).toBe(false);
+    expect(updated?.conversation.messageCount).toBe(1);
+    expect(updated?.conversation.messages).toEqual([
+      expect.objectContaining({
+        id: "assistant-1",
+        content: "<think>partial reasoning continued</think>\n\nFinal answer.",
+        status: "complete",
+      }),
+    ]);
+  });
+
+  it("preserves status/incompleteReason/continuationCount when updateMessageContent does not override them", async () => {
+    const store = new MemoryTestStore();
+    const client = createTestClient(store);
+    const conversation = await client.createConversation();
+    await client.addMessage(conversation!.id, {
+      id: "assistant-1",
+      role: "assistant",
+      content: "<think>reasoning so far",
+      status: "incomplete",
+      incompleteReason: "length",
+      continuationCount: 1,
+    });
+
+    // Only content changes here -- status/incompleteReason/continuationCount
+    // are intentionally omitted, and must be left exactly as they were.
+    const updated = await client.updateMessageContent(conversation!.id, "assistant-1", {
+      content: "<think>reasoning so far and more",
+    });
+
+    expect(updated?.conversation.messages).toEqual([
+      expect.objectContaining({
+        id: "assistant-1",
+        content: "<think>reasoning so far and more",
+        status: "incomplete",
+        incompleteReason: "length",
+        continuationCount: 1,
+      }),
+    ]);
+  });
+
+  it("explicitly clears incompleteReason when passed null, e.g. a successful Continue completing a length-limited message", async () => {
+    const store = new MemoryTestStore();
+    const client = createTestClient(store);
+    const conversation = await client.createConversation();
+    await client.addMessage(conversation!.id, {
+      id: "assistant-1",
+      role: "assistant",
+      content: "partial reply",
+      status: "incomplete",
+      incompleteReason: "length",
+      continuationCount: 1,
+    });
+
+    const updated = await client.updateMessageContent(conversation!.id, "assistant-1", {
+      content: "partial reply and now the rest of the answer",
+      status: "complete",
+      incompleteReason: null,
+    });
+
+    const message = updated?.conversation.messages[0];
+    expect(message?.status).toBe("complete");
+    expect(message?.incompleteReason).toBeUndefined();
+    // The field must be entirely ABSENT, not merely `undefined` as an own
+    // property -- a stale key surviving on the object would still round-trip
+    // through JSON-based storage/export in some environments.
+    expect(Object.prototype.hasOwnProperty.call(message ?? {}, "incompleteReason")).toBe(false);
+    // continuationCount is untouched by this call (omitted), so it must
+    // still carry whatever it already was.
+    expect(message?.continuationCount).toBe(1);
+
+    const reloaded = await client.getConversation(conversation!.id);
+    expect(reloaded?.messages[0]?.incompleteReason).toBeUndefined();
+    expect(reloaded?.messages[0]?.status).toBe("complete");
+  });
+
+  it("clearing incompleteReason with null on a message that never had one is a harmless no-op", async () => {
+    const store = new MemoryTestStore();
+    const client = createTestClient(store);
+    const conversation = await client.createConversation();
+    await client.addMessage(conversation!.id, { id: "assistant-1", role: "assistant", content: "short" });
+
+    const updated = await client.updateMessageContent(conversation!.id, "assistant-1", {
+      content: "short reply",
+      incompleteReason: null,
+    });
+
+    expect(updated?.conversation.messages[0]?.incompleteReason).toBeUndefined();
+  });
+
+  it("leaves the conversation unchanged when updating a message id that does not exist", async () => {
+    const store = new MemoryTestStore();
+    const client = createTestClient(store);
+    const conversation = await client.createConversation();
+    await client.addMessage(conversation!.id, { id: "real-message", role: "user", content: "hi" });
+
+    const result = await client.updateMessageContent(conversation!.id, "no-such-message", { content: "ignored" });
+
+    expect(result?.conversation.messages).toEqual([expect.objectContaining({ id: "real-message", content: "hi" })]);
   });
 
   it("does not recreate an IndexedDB conversation when delete races an atomic append", async () => {
@@ -411,5 +573,102 @@ describe("conversation store", () => {
       Object.defineProperty(globalThis, "fetch", { configurable: true, value: previousFetch });
       Object.defineProperty(globalThis, "navigator", { configurable: true, value: previousNavigator });
     }
+  });
+
+  describe("storage ceiling (never silently loses data without a signal)", () => {
+    it("never truncates a long initial reply plus up to the supported number of continuations (48,000 characters)", async () => {
+      const client = createTestClient();
+      const conversation = await client.createConversation();
+
+      // 1 initial reply (12,000 chars, ai-runtime's own per-generation
+      // safety ceiling) + 3 manual continuations of 12,000 chars each =
+      // 48,000 chars total -- the documented worst case this store's
+      // maxMessageLength must comfortably exceed.
+      const initial = "a".repeat(12_000);
+      const added = await client.addMessage(conversation!.id, {
+        id: "assistant-1",
+        role: "assistant",
+        content: initial,
+        status: "incomplete",
+        incompleteReason: "length",
+      });
+      expect(added?.truncated).toBe(false);
+
+      let merged = initial;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        merged += "b".repeat(12_000);
+        const updated = await client.updateMessageContent(conversation!.id, "assistant-1", {
+          content: merged,
+          status: attempt === 2 ? "complete" : "incomplete",
+        });
+        expect(updated?.truncated).toBe(false);
+      }
+
+      expect(merged.length).toBe(48_000);
+      const reloaded = await client.getConversation(conversation!.id);
+      expect(reloaded?.messages[0]?.content).toBe(merged);
+      expect(reloaded?.messages[0]?.content.length).toBe(48_000);
+      expect(reloaded?.messages[0]?.status).toBe("complete");
+    });
+
+    it("truncates content that genuinely exceeds the storage ceiling, but never silently: it forces status incomplete with incompleteReason truncated and reports truncated: true", async () => {
+      const client = createConversationStoreClient({
+        store: new MemoryTestStore(),
+        now: () => baseNow,
+        idFactory: () => "conversation-1",
+        limits: { maxMessageLength: 100 },
+      });
+      const conversation = await client.createConversation();
+
+      const oversized = "x".repeat(500);
+      const added = await client.addMessage(conversation!.id, {
+        role: "assistant",
+        content: oversized,
+        status: "complete",
+      });
+
+      expect(added?.truncated).toBe(true);
+      expect(added?.conversation.messages[0]?.content.length).toBe(100);
+      // Forced incomplete/"truncated" even though the caller claimed
+      // "complete" -- the persisted record must never claim completeness it
+      // cannot back up.
+      expect(added?.conversation.messages[0]?.status).toBe("incomplete");
+      expect(added?.conversation.messages[0]?.incompleteReason).toBe("truncated");
+
+      // Item 10: the truncation must survive a fresh read, not just be
+      // reflected in this call's own return value.
+      const reloaded = await client.getConversation(conversation!.id);
+      expect(reloaded?.messages[0]?.content.length).toBe(100);
+      expect(reloaded?.messages[0]?.status).toBe("incomplete");
+      expect(reloaded?.messages[0]?.incompleteReason).toBe("truncated");
+    });
+
+    it("also forces incomplete/truncated on updateMessageContent when the new content exceeds the ceiling", async () => {
+      const client = createConversationStoreClient({
+        store: new MemoryTestStore(),
+        now: () => baseNow,
+        idFactory: () => "conversation-1",
+        limits: { maxMessageLength: 100 },
+      });
+      const conversation = await client.createConversation();
+      await client.addMessage(conversation!.id, { id: "assistant-1", role: "assistant", content: "short" });
+
+      const updated = await client.updateMessageContent(conversation!.id, "assistant-1", {
+        content: "y".repeat(500),
+        status: "complete",
+      });
+
+      expect(updated?.truncated).toBe(true);
+      expect(updated?.conversation.messages[0]?.status).toBe("incomplete");
+      expect(updated?.conversation.messages[0]?.incompleteReason).toBe("truncated");
+      expect(updated?.conversation.messages[0]?.content.length).toBe(100);
+
+      // Item 10: the truncation must survive a fresh read, not just be
+      // reflected in this call's own return value.
+      const reloaded = await client.getConversation(conversation!.id);
+      expect(reloaded?.messages[0]?.content.length).toBe(100);
+      expect(reloaded?.messages[0]?.status).toBe("incomplete");
+      expect(reloaded?.messages[0]?.incompleteReason).toBe("truncated");
+    });
   });
 });

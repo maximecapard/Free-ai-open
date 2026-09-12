@@ -1,4 +1,10 @@
-import type { Conversation, ConversationId, MessageRole, MessageStatus } from "@free-ai-open/conversation-store";
+import type {
+  Conversation,
+  ConversationId,
+  MessageIncompleteReason,
+  MessageRole,
+  MessageStatus,
+} from "@free-ai-open/conversation-store";
 import type {
   CONVERSATION_EXPORT_FORMAT,
   CONVERSATION_EXPORT_SOURCE,
@@ -20,6 +26,13 @@ export interface ConversationExportMessage {
   content: string;
   createdAt: string;
   status?: MessageStatus;
+  // Both optional and purely additive, mirroring conversation-store's
+  // ConversationMessage -- an export created before these fields existed
+  // (or one from a build that never sets them) omits them entirely and
+  // still imports successfully. See conversation-store's types.ts for the
+  // full meaning of each incompleteReason value.
+  incompleteReason?: MessageIncompleteReason;
+  continuationCount?: number;
 }
 
 export interface ConversationExportConversation {

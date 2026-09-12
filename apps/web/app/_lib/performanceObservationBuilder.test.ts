@@ -58,8 +58,39 @@ describe("classifyGenerationOutcome", () => {
     expect(classifyGenerationOutcome(null, "generation_exceeded_safety_limit")).toBe("cancelled");
   });
 
+  it("classifies a length-limited generation with its own neutral outcome -- never a stall, and never inflating the completed success rate", () => {
+    expect(classifyGenerationOutcome("length")).toBe("length_limited");
+    expect(classifyGenerationOutcome("length")).not.toBe("stalled");
+    expect(classifyGenerationOutcome("length")).not.toBe("completed");
+  });
+
+  it("classifies an unsupported tool-call termination distinctly, never as model instability nor a completed success", () => {
+    expect(classifyGenerationOutcome("unsupported_tool_call")).toBe("unsupported_tool_call");
+    expect(classifyGenerationOutcome("unsupported_tool_call")).not.toBe("stalled");
+    expect(classifyGenerationOutcome("unsupported_tool_call")).not.toBe("completed");
+  });
+
+  it("classifies a stream that ended with no finish_reason as its own neutral outcome, never a runtime crash nor a completed success", () => {
+    expect(classifyGenerationOutcome("unknown_terminal")).toBe("terminal_unknown");
+    expect(classifyGenerationOutcome("unknown_terminal")).not.toBe("stalled");
+    expect(classifyGenerationOutcome("unknown_terminal")).not.toBe("completed");
+  });
+
   it("falls back to stalled for an unclassified runtime error rather than inventing a new outcome", () => {
     expect(classifyGenerationOutcome(null, "unknown")).toBe("stalled");
+  });
+
+  it("fails closed as terminal_unknown for a missing/absent stop reason with no runtime error at all, never defaulting to completed", () => {
+    expect(classifyGenerationOutcome(null, undefined)).toBe("terminal_unknown");
+    expect(classifyGenerationOutcome(null)).toBe("terminal_unknown");
+    expect(classifyGenerationOutcome(undefined as unknown as null)).toBe("terminal_unknown");
+    expect(classifyGenerationOutcome(null, undefined)).not.toBe("completed");
+  });
+
+  it("only an explicit stopReason of 'completed' may ever produce a completed outcome", () => {
+    expect(classifyGenerationOutcome("completed", undefined)).toBe("completed");
+    expect(classifyGenerationOutcome(null, undefined)).not.toBe("completed");
+    expect(classifyGenerationOutcome("length", undefined)).not.toBe("completed");
   });
 });
 

@@ -18,6 +18,9 @@ describe("summarizeStoredObservations", () => {
         out_of_memory: 0,
         device_lost: 0,
         load_failed: 0,
+        length_limited: 0,
+        unsupported_tool_call: 0,
+        terminal_unknown: 0,
       },
       byModel: {},
     });

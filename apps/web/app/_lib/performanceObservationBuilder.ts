@@ -48,6 +48,31 @@ export function classifyGenerationOutcome(
   if (stopReason === "degenerate_output" || errorCode === "degenerate_output") {
     return "degenerate";
   }
+  // A length-limited generation (WebLLM finish_reason: "length") is neither
+  // a stall nor a runtime failure -- the model was actively producing valid
+  // output the entire time; it simply reached its configured output-token
+  // budget, most often mid-<think> block for a reasoning-capable model. Its
+  // own distinct, neutral outcome keeps it out of both the "completed"
+  // success rate AND instability/failure scoring (see model-router's
+  // adaptiveObservations.ts NEUTRAL_OUTCOMES) -- it must never inflate
+  // confidence in a model just because it kept hitting its output budget.
+  if (stopReason === "length") {
+    return "length_limited";
+  }
+  // FreeAI Open never requests tool use, so this should not occur in normal
+  // operation, but if it ever does it is a response-shape limitation, never
+  // model instability -- kept fully separate from "completed" too, so it
+  // cannot silently look like a successful reply either.
+  if (stopReason === "unsupported_tool_call") {
+    return "unsupported_tool_call";
+  }
+  // The stream ended without WebLLM ever reporting an explicit finish
+  // reason. Failing closed: this is not treated as a runtime crash (no
+  // RuntimeError was raised) and not scored as a successful completion --
+  // it is its own neutral outcome until there is real evidence either way.
+  if (stopReason === "unknown_terminal") {
+    return "terminal_unknown";
+  }
   if (errorCode === "generation_stalled") {
     return "stalled";
   }
@@ -64,12 +89,20 @@ export function classifyGenerationOutcome(
   if (stopReason === "completed" && !errorCode) {
     return "completed";
   }
-  // Any other unclassified runtime error mid-generation (e.g. a GPU feature
-  // or model error surfacing after load somehow) — treated conservatively as
-  // a stall rather than invented as a new outcome bucket, since the
-  // generation did not run to completion for a runtime reason.
-  if (errorCode) return "stalled";
-  return "completed";
+  if (errorCode) {
+    // Any other unclassified runtime error mid-generation (e.g. a GPU
+    // feature or model error surfacing after load somehow) -- treated
+    // conservatively as a stall rather than invented as a new outcome
+    // bucket, since the generation did not run to completion for a
+    // runtime reason.
+    return "stalled";
+  }
+  // No explicit stop reason AND no runtime error at all. This must fail
+  // closed the same way runtime.ts's own mapFinishReason() does for an
+  // unexplained stream end -- an absent/missing outcome is never assumed
+  // to be a successful completion. Only an explicit stopReason ===
+  // "completed" (handled above) may ever produce "completed" here.
+  return "terminal_unknown";
 }
 
 export interface BuildLoadObservationInput {

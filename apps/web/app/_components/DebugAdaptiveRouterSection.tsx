@@ -121,6 +121,9 @@ const OUTCOME_KEYS: Array<{ key: keyof ObservationsSummary["byOutcome"]; label: 
   { key: "out_of_memory", label: "debug.observationOutcome.out_of_memory" },
   { key: "device_lost", label: "debug.observationOutcome.device_lost" },
   { key: "load_failed", label: "debug.observationOutcome.load_failed" },
+  { key: "length_limited", label: "debug.observationOutcome.length_limited" },
+  { key: "unsupported_tool_call", label: "debug.observationOutcome.unsupported_tool_call" },
+  { key: "terminal_unknown", label: "debug.observationOutcome.terminal_unknown" },
 ];
 
 export function DebugObservationsSection({

@@ -149,6 +149,147 @@ describe("createInferenceRuntime", () => {
     expect(runtime.getState().status).toBe("ready");
   });
 
+  it("preserves the natural stop reason distinctly from a length-limited one", async () => {
+    mocks.mockEngine.chat.completions.create.mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: "Hi" }, finish_reason: null }] };
+        yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+      })()
+    );
+
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+    expect(chunks.at(-1)).toEqual({ type: "done", reason: "completed" });
+    expect(mocks.addLocalLog).toHaveBeenCalledWith(expect.objectContaining({ event: "inference.completed" }));
+    expect(mocks.addLocalLog).not.toHaveBeenCalledWith(expect.objectContaining({ event: "inference.length-limited" }));
+  });
+
+  it("classifies a WebLLM finish_reason of length as its own distinct stop reason, not a completed success", async () => {
+    mocks.mockEngine.chat.completions.create.mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: "Partial reasoning" }, finish_reason: null }] };
+        yield { choices: [{ delta: {}, finish_reason: "length" }] };
+      })()
+    );
+
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+    expect(chunks).toEqual([
+      { type: "token", text: "Partial reasoning" },
+      { type: "done", reason: "length" },
+    ]);
+    // The runtime is not in an error state: WebLLM did not fail, it simply
+    // reached its configured budget. Status returns to "ready" exactly like
+    // a natural completion.
+    expect(runtime.getState().status).toBe("ready");
+    expect(runtime.getState().error).toBeNull();
+    expect(mocks.addLocalLog).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "inference.length-limited", runtimeStatus: "ready" })
+    );
+    expect(mocks.addLocalLog).not.toHaveBeenCalledWith(expect.objectContaining({ event: "inference.completed" }));
+  });
+
+  it("regression: a long reasoning block that reaches the configured output limit before </think> is reported as length, not completed", async () => {
+    // Mirrors a real generation report: qwen3-4b-q4f16, ~162s at ~3.1
+    // tokens/s, persisted assistant output ending abruptly inside an
+    // unclosed <think> block with no final answer, and finish_reason:
+    // "length" from WebLLM once max_tokens was reached.
+    const reasoningWords = Array.from({ length: 40 }, (_, i) => `reasoning-token-${i}`);
+    mocks.mockEngine.chat.completions.create.mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: "<think>\n" }, finish_reason: null }] };
+        for (const word of reasoningWords) {
+          yield { choices: [{ delta: { content: `${word} ` }, finish_reason: null }] };
+        }
+        yield { choices: [{ delta: {}, finish_reason: "length" }] };
+      })()
+    );
+
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "tu peux me faire un exemple..." }));
+
+    const doneChunk = chunks.at(-1);
+    expect(doneChunk).toEqual({ type: "done", reason: "length" });
+    const streamedText = chunks
+      .filter((chunk): chunk is { type: "token"; text: string } => chunk.type === "token")
+      .map((chunk) => chunk.text)
+      .join("");
+    expect(streamedText.startsWith("<think>\n")).toBe(true);
+    expect(streamedText).not.toContain("</think>");
+    expect(runtime.getState().status).toBe("ready");
+  });
+
+  it("classifies a WebLLM finish_reason of tool_calls as unsupported, never as a completed success or a runtime failure", async () => {
+    mocks.mockEngine.chat.completions.create.mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: "Let me use a tool" }, finish_reason: null }] };
+        yield { choices: [{ delta: {}, finish_reason: "tool_calls" }] };
+      })()
+    );
+
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+    expect(chunks.at(-1)).toEqual({ type: "done", reason: "unsupported_tool_call" });
+    // Not an error state: FreeAI Open simply does not support this response
+    // shape yet. It is a distinct, explicit incomplete outcome, never
+    // scored as model instability (see performanceObservationBuilder.ts).
+    expect(runtime.getState().status).toBe("ready");
+    expect(runtime.getState().error).toBeNull();
+    expect(mocks.addLocalLog).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "inference.unsupported-tool-call", runtimeStatus: "ready" })
+    );
+  });
+
+  it("fails closed as unknown_terminal when the stream ends without any chunk ever carrying a finish_reason", async () => {
+    mocks.mockEngine.chat.completions.create.mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: "Hel" }, finish_reason: null }] };
+        yield { choices: [{ delta: { content: "lo" }, finish_reason: null }] };
+        // Stream simply ends - no "stop"/"length"/"tool_calls"/"abort" chunk
+        // ever arrives. This must never be assumed to be a natural stop.
+      })()
+    );
+
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+    expect(chunks.at(-1)).toEqual({ type: "done", reason: "unknown_terminal" });
+    expect(runtime.getState().status).toBe("ready");
+    expect(mocks.addLocalLog).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "inference.unknown-terminal" })
+    );
+    expect(mocks.addLocalLog).not.toHaveBeenCalledWith(expect.objectContaining({ event: "inference.completed" }));
+  });
+
+  it("fails closed as unknown_terminal for a finish_reason WebLLM's own type does not document, instead of assuming success", async () => {
+    // Simulates WebLLM's actual runtime value not matching its declared
+    // type - the one case an exhaustive compile-time switch cannot cover by
+    // itself. A deliberate unsafe cast is the only way to construct this at
+    // the type level; mapFinishReason() must still fail closed at runtime.
+    mocks.mockEngine.chat.completions.create.mockResolvedValue(
+      (async function* () {
+        yield { choices: [{ delta: { content: "Hi" }, finish_reason: null }] };
+        yield { choices: [{ delta: {}, finish_reason: "some_future_reason" as never }] };
+      })()
+    );
+
+    const runtime = createInferenceRuntime(fakeWorker());
+    await runtime.loadModel("test-model");
+    const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+    expect(chunks.at(-1)).toEqual({ type: "done", reason: "unknown_terminal" });
+    expect(chunks.at(-1)).not.toEqual({ type: "done", reason: "completed" });
+    expect(runtime.getState().status).toBe("ready");
+  });
+
   it("passes a bounded max token limit to WebLLM generation", async () => {
     mocks.mockEngine.chat.completions.create.mockResolvedValue(
       (async function* () {

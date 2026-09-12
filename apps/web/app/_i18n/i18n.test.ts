@@ -23,6 +23,9 @@ const REPRESENTATIVE_KEYS: TranslationKey[] = [
   "runtimeStatus.recovering",
   "runtimeError.cancel_timeout",
   "storageNotice.generationStoppedRecovering",
+  "storageNotice.generationTruncatedForStorage",
+  "storageNotice.messageTruncatedForStorage",
+  "backup.messageTruncated",
   "debug.clearLogsConfirm",
   "debug.formFactor",
   "header.themeLight",
@@ -60,6 +63,24 @@ describe("i18n dictionaries", () => {
     expect(translateFromDictionary(fr, en, "settings.title")).toBe("Paramètres");
     expect(translateFromDictionary(fr, en, "runtimeStatus.recovering")).toBe("Récupération");
     expect(translateFromDictionary(fr, en, "backup.privacyNote")).toContain("ne sont pas chiffrés");
+  });
+
+  it("item 10 (mandatory): the 64k local-storage truncation notice has the exact required French wording and a clear English equivalent, distinct from the generation-output-length notice", () => {
+    expect(translateFromDictionary(fr, en, "storageNotice.generationTruncatedForStorage")).toBe(
+      "Cette réponse a dépassé la taille maximale conservée localement et a été tronquée."
+    );
+    expect(translateFromDictionary(en, en, "storageNotice.generationTruncatedForStorage")).toMatch(/truncated/i);
+    expect(translateFromDictionary(en, en, "storageNotice.generationTruncatedForStorage")).not.toBe(
+      translateFromDictionary(en, en, "storageNotice.generationLengthLimited")
+    );
+
+    expect(translateFromDictionary(fr, en, "storageNotice.messageTruncatedForStorage")).toMatch(
+      /a dépassé la taille maximale conservée localement et a été tronqué/
+    );
+    expect(translateFromDictionary(en, en, "storageNotice.messageTruncatedForStorage")).toMatch(/truncated/i);
+
+    expect(translateFromDictionary(fr, en, "backup.messageTruncated", { title: "Test" })).toContain("tronqué");
+    expect(translateFromDictionary(en, en, "backup.messageTruncated", { title: "Test" })).toMatch(/truncated/i);
   });
 
   it("provides distinct copy/copied/could-not-copy feedback text in French and English", () => {

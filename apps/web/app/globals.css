@@ -880,6 +880,60 @@ samp {
   word-break: normal;
 }
 
+/* Reasoning disclosure (a Qwen3-style <think> block) -- a plain native
+   <details>/<summary>, styled as a quiet, collapsible aside distinct from
+   both a normal message bubble and a code block. No open/close animation is
+   added (native <details> toggling is already instant in every browser), so
+   there is nothing here that needs a prefers-reduced-motion override. A
+   visible focus ring on the summary comes from the existing global
+   :focus-visible rule above; no separate rule is needed for that either. */
+.chat-reasoning {
+  margin: 0 0 var(--fo-space-2);
+}
+
+.chat-reasoning__details {
+  border: 1px solid var(--fo-border);
+  border-radius: var(--fo-radius-card);
+  background: var(--fo-surface);
+}
+
+.chat-reasoning__summary {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  color: var(--fo-text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+}
+
+.chat-reasoning__summary::-webkit-details-marker {
+  display: none;
+}
+
+.chat-reasoning__body {
+  padding: 4px 12px 12px;
+  border-top: 1px solid var(--fo-border);
+  color: var(--fo-text-muted);
+  font-size: 14px;
+}
+
+.chat-reasoning__interrupted-notice {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+/* A mouse pointer can comfortably target a smaller summary next to its
+   label text, but a touch/coarse-pointer input needs the same 44x44px
+   minimum target already used for the code-block copy button and the chat
+   history controls (see the shared coarse-pointer media query below). */
+@media (hover: none), (pointer: coarse), (max-width: 720px) {
+  .chat-reasoning__summary {
+    min-height: 44px;
+  }
+}
+
 .chat-scroll-latest {
   align-self: center;
   position: sticky;

@@ -2,6 +2,7 @@
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
+import type { MessageIncompleteReason, MessageStatus } from "@free-ai-open/conversation-store";
 import { useTranslations } from "../_i18n/LocaleContext";
 import {
   getElementScrollMetrics,
@@ -9,21 +10,44 @@ import {
   isNearScrollEnd,
   isScrollableOverflow,
 } from "../_lib/chatAutoscroll";
+import { isReasoningInterrupted, segmentReasoning } from "../_lib/reasoningSegmentation";
 import { MessageContent } from "./MessageContent";
+import { ReasoningDisclosure } from "./ReasoningDisclosure";
 
 export interface ChatMessageItem {
   id: string;
   role: "user" | "assistant";
   content: string;
-  status?: "complete" | "incomplete";
+  status?: MessageStatus;
+  // Durable -- persisted through @free-ai-open/conversation-store (see
+  // conversationMessages.ts's toChatMessageItems), unlike a session-only
+  // flag, so a length-limited reply still shows its specific "generation
+  // limit reached" notice after a reload/export/import, not just within the
+  // same session. Absent for a message persisted before this field existed
+  // (or one that isn't incomplete at all), which always falls back to the
+  // generic interrupted notice.
+  incompleteReason?: MessageIncompleteReason;
+  // How many times this message has already been extended via the manual
+  // Continue action -- persisted, so a page refresh cannot reset
+  // AppRuntimeProvider.tsx's MAX_CONTINUATIONS_PER_MESSAGE bound.
+  continuationCount?: number;
 }
 
 interface ChatTranscriptProps {
   messages: ChatMessageItem[];
   scrollContainerRef?: RefObject<HTMLElement | null>;
+  // The assistant message id currently being streamed by the active
+  // generation, if any -- see AppRuntimeProvider.tsx's "generation" state.
+  // Distinguishes "still actively thinking" from "reasoning left open but
+  // generation already stopped" for the reasoning disclosure below.
+  activeAssistantMessageId?: string | null;
 }
 
-export const ChatTranscript = memo(function ChatTranscript({ messages, scrollContainerRef }: ChatTranscriptProps) {
+export const ChatTranscript = memo(function ChatTranscript({
+  messages,
+  scrollContainerRef,
+  activeAssistantMessageId,
+}: ChatTranscriptProps) {
   const t = useTranslations();
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollFrameRef = useRef<number | null>(null);
@@ -108,7 +132,11 @@ export const ChatTranscript = memo(function ChatTranscript({ messages, scrollCon
   return (
     <div className="chat-transcript" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       {messages.map((message) => (
-        <ChatMessageBubble key={message.id} message={message} />
+        <ChatMessageBubble
+          key={message.id}
+          message={message}
+          isActiveGeneration={message.id === activeAssistantMessageId}
+        />
       ))}
       {showScrollToLatest && (
         <button type="button" className="chat-scroll-latest" onClick={handleScrollToLatest}>
@@ -120,9 +148,21 @@ export const ChatTranscript = memo(function ChatTranscript({ messages, scrollCon
   );
 });
 
-const ChatMessageBubble = memo(function ChatMessageBubble({ message }: { message: ChatMessageItem }) {
+const ChatMessageBubble = memo(function ChatMessageBubble({
+  message,
+  isActiveGeneration,
+}: {
+  message: ChatMessageItem;
+  isActiveGeneration: boolean;
+}) {
   const t = useTranslations();
   const isUser = message.role === "user";
+  // Reasoning/final-answer segmentation happens only for assistant content,
+  // and only at the rendering layer -- see reasoningSegmentation.ts. Raw
+  // <think> markup is never shown; parsing works the same whether this
+  // message is streaming right now or was loaded from an old conversation.
+  const segments = isUser || !message.content ? null : segmentReasoning(message.content);
+  const reasoningInterrupted = segments ? isReasoningInterrupted(segments, isActiveGeneration) : false;
 
   return (
     <div
@@ -151,12 +191,23 @@ const ChatMessageBubble = memo(function ChatMessageBubble({ message }: { message
         // should never silently reformat or (worse) be treated as
         // executable-looking structure the user didn't intend.
         message.content
-      ) : message.content ? (
-        <MessageContent content={message.content} />
+      ) : segments ? (
+        <>
+          {segments.beforeReasoning && <MessageContent content={segments.beforeReasoning} />}
+          {segments.reasoning !== null && (
+            <ReasoningDisclosure
+              reasoning={segments.reasoning}
+              reasoningOpen={segments.reasoningOpen}
+              isActiveGeneration={isActiveGeneration}
+              lengthLimited={message.incompleteReason === "length"}
+            />
+          )}
+          {segments.afterReasoning && <MessageContent content={segments.afterReasoning} />}
+        </>
       ) : (
         "…"
       )}
-      {message.role === "assistant" && message.status === "incomplete" && (
+      {message.role === "assistant" && message.status === "incomplete" && !reasoningInterrupted && (
         <span className="fo-muted" style={{ display: "block", marginTop: 8, fontSize: "0.8125rem" }}>
           {t("chat.incompleteMessageLabel")}
         </span>

@@ -341,6 +341,10 @@ export const en = {
     composerLabel: "Message",
     composerHint: "Enter to send, Shift+Enter for a new line.",
     codeBlockLabel: "Code",
+    reasoningInProgress: "Thinking…",
+    reasoningLabel: "Thinking",
+    reasoningInterruptedNotice: "The generation stopped before the final answer.",
+    reasoningLengthLimitedNotice: "The generation limit was reached.",
   },
   newChatDialog: {
     title: "What will this chat be for?",
@@ -377,6 +381,7 @@ export const en = {
     importSummaryWithSkipped: "Imported {imported}, skipped {skipped}.",
     couldNotImportConversation: 'Couldn\'t import "{title}".',
     messageNotSaved: '"{title}": a message couldn\'t be saved.',
+    messageTruncated: '"{title}": a message exceeded the maximum size kept locally and was truncated.',
   },
   runtimeStatus: {
     idle: "Not started",
@@ -436,7 +441,21 @@ export const en = {
     generationSafetyLimit: "Generation stopped after reaching the maximum allowed duration. No response was saved.",
     generationSafetyLimitIncomplete:
       "Generation reached the maximum allowed duration. The partial response was saved locally and marked incomplete.",
+    generationLengthLimited:
+      "Generation stopped after reaching the output length limit. The partial response was saved locally and marked incomplete.",
+    generationUnknownIncomplete:
+      "Generation stopped unexpectedly before a final answer. The partial response was saved locally and marked incomplete.",
+    generationUnsupportedFeature:
+      "This response requires a feature FreeAI Open does not currently support yet.",
     generationFailed: "Generation failed. The partial response was not saved.",
+    generationContextTooLong:
+      "This conversation has grown too long for the local model to continue it. Try starting a new conversation.",
+    generationTruncatedForStorage:
+      "This response exceeded the maximum size kept locally and was truncated.",
+    messageTruncatedForStorage:
+      "Your message exceeded the maximum size kept locally and was truncated.",
+    runtimeRecoveryFailed:
+      'The local model could not recover automatically. Use "Reload model" to try again.',
   },
   debug: {
     title: "Debug dashboard",
@@ -525,6 +544,9 @@ export const en = {
       out_of_memory: "Out of memory",
       device_lost: "Device lost",
       load_failed: "Load failed",
+      length_limited: "Length-limited (neutral)",
+      unsupported_tool_call: "Unsupported tool call",
+      terminal_unknown: "Unknown terminal reason",
     },
   },
 } as const;

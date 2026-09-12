@@ -12,8 +12,20 @@ import type {
 
 const ROOT_KEYS = new Set(["format", "version", "exportedAt", "source", "conversations"]);
 const CONVERSATION_KEYS = new Set(["id", "title", "schemaVersion", "createdAt", "updatedAt", "messages", "task"]);
-const MESSAGE_KEYS = new Set(["id", "role", "content", "createdAt", "status"]);
+const MESSAGE_KEYS = new Set(["id", "role", "content", "createdAt", "status", "incompleteReason", "continuationCount"]);
 const VALID_ROLES = new Set(["user", "assistant", "system"]);
+// Mirrors @free-ai-open/conversation-store's MessageIncompleteReason exactly
+// (kept as a plain literal set here rather than importing the type's
+// runtime values, since this package only needs to validate the shape, not
+// re-export the type).
+const VALID_INCOMPLETE_REASONS = new Set([
+  "length",
+  "unsupported_tool_call",
+  "unknown_terminal",
+  "stalled",
+  "safety_limit",
+  "truncated",
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -76,6 +88,19 @@ function validateExportMessage(
 
   if (value.status !== undefined && value.status !== "complete" && value.status !== "incomplete") {
     errors.push(`${path}.status: must be complete or incomplete`);
+  }
+
+  if (value.incompleteReason !== undefined && !VALID_INCOMPLETE_REASONS.has(value.incompleteReason as string)) {
+    errors.push(`${path}.incompleteReason: must be a known incomplete reason`);
+  }
+
+  if (
+    value.continuationCount !== undefined &&
+    (typeof value.continuationCount !== "number" ||
+      !Number.isInteger(value.continuationCount) ||
+      value.continuationCount < 0)
+  ) {
+    errors.push(`${path}.continuationCount: must be a non-negative integer`);
   }
 
   if (!isCanonicalIsoDateTime(value.createdAt)) {

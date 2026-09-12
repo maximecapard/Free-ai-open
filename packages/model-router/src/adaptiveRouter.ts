@@ -13,6 +13,7 @@ import type {
 } from "./adaptiveRouterContracts";
 import { getAdaptiveRejectionReasons, rejectCandidate } from "./adaptiveEligibility";
 import { buildAdaptiveFallbackChain } from "./adaptiveFallback";
+import { outputTokenBudgetForCandidate } from "./adaptiveOutputBudget";
 import type { EligibleCandidate, NormalizedRouterInput } from "./adaptiveInternal";
 import { normalizeRouterInput } from "./adaptiveNormalization";
 import { summarizeObservations } from "./adaptiveObservations";
@@ -151,7 +152,7 @@ export function routeAdaptiveModel(input: RouterInput, options: AdaptiveRouterOp
     rejectedModels,
     candidateScores,
     recommendedContextTokens: preset.contextTokens,
-    recommendedMaxOutputTokens: preset.maxOutputTokens,
+    recommendedMaxOutputTokens: outputTokenBudgetForCandidate(preset.maxOutputTokens, selected.model),
     registryVersion,
     decisionVersion: `${ADAPTIVE_ROUTER_DECISION_VERSION}:${registryVersion}`,
   };

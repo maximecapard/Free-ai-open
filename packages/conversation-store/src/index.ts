@@ -9,6 +9,7 @@ export {
   getRecentConversations,
   listConversations,
   updateConversationTitle,
+  updateMessageContent,
 } from "./client";
 export { createIndexedDbConversationStore } from "./indexed-db-store";
 export { createMemoryConversationStore } from "./memory-store";
@@ -21,7 +22,10 @@ export type {
   ConversationStore,
   ConversationStoreClientOptions,
   ConversationStoreLimits,
+  ConversationWriteResult,
   CreateConversationInput,
+  MessageIncompleteReason,
   MessageRole,
   MessageStatus,
+  UpdateMessageContentInput,
 } from "./types";

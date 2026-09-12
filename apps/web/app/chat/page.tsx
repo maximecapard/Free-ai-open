@@ -57,6 +57,7 @@ function ChatContent() {
     conversations,
     activeConversationId,
     messages,
+    generation,
     storageNotice,
     isConversationSwitchBlocked,
     configureChatRoute,
@@ -72,6 +73,8 @@ function ChatContent() {
     reloadRuntime,
     confirmModelSwitch,
     cancelModelSwitch,
+    canContinueGeneration,
+    continueGeneration,
   } = useAppRuntime();
 
   const rawTask = searchParams.get("task");
@@ -201,14 +204,28 @@ function ChatContent() {
 
         importedCount += 1;
         for (const importedMessage of conversation.messages) {
+          // Preserve every supported piece of assistant provenance the
+          // export carried -- status, the reason it is incomplete, and how
+          // many manual continuations it already received. Older exports
+          // simply omit these fields, and addMessage() already treats a
+          // missing field as "unset" rather than requiring it.
           const saved = await addMessage(created.id, {
             id: importedMessage.id,
             role: importedMessage.role,
             content: importedMessage.content,
             createdAt: importedMessage.createdAt,
+            status: importedMessage.status,
+            incompleteReason: importedMessage.incompleteReason,
+            continuationCount: importedMessage.continuationCount,
           });
           if (!saved) {
             errors.push(t("backup.messageNotSaved", { title: conversation.title }));
+          } else if (saved.truncated) {
+            // Item 10: an imported message long enough to exceed the local
+            // 64k storage ceiling is truncated by the store rather than
+            // rejected outright -- surface that in the summary instead of
+            // silently importing only part of what the backup file held.
+            errors.push(t("backup.messageTruncated", { title: conversation.title }));
           }
         }
       }
@@ -423,7 +440,18 @@ function ChatContent() {
 
         <div ref={transcriptScrollRef} className="chat-main__scroll">
           <section className="fo-card" style={{ padding: 16, minHeight: 320 }}>
-            <ChatTranscript messages={messages} scrollContainerRef={transcriptScrollRef} />
+            <ChatTranscript
+              messages={messages}
+              scrollContainerRef={transcriptScrollRef}
+              activeAssistantMessageId={generation.assistantMessageId}
+            />
+            {canContinueGeneration && (
+              <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-start" }}>
+                <button type="button" className="fo-button fo-button-secondary" onClick={() => void continueGeneration()}>
+                  {t("common.continue")}
+                </button>
+              </div>
+            )}
           </section>
         </div>
 

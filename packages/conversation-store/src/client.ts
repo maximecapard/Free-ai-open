@@ -9,17 +9,43 @@ import type {
   ConversationStore,
   ConversationStoreClientOptions,
   ConversationStoreLimits,
+  ConversationWriteResult,
   CreateConversationInput,
+  MessageIncompleteReason,
+  MessageStatus,
+  UpdateMessageContentInput,
 } from "./types";
 
 const SCHEMA_VERSION = 1;
 
+// ai-runtime's GENERATION_SAFETY_LIMITS.maxOutputCharacters (12,000) bounds
+// any SINGLE generation attempt's raw output, and AppRuntimeProvider.tsx's
+// MAX_CONTINUATIONS_PER_MESSAGE (3) bounds how many manual continuations one
+// message can receive -- so a fully-continued message's worst-case content
+// is at most 4 x 12,000 = 48,000 characters (1 initial reply + 3
+// continuations). 64,000 leaves real margin above that documented worst
+// case, rather than being an arbitrary round number picked without
+// reference to what the product actually needs to store. A message that
+// somehow still exceeds this is truncated (see normalizeMessage()/
+// sanitizeMessageFields()) and FORCED to status: "incomplete" with
+// incompleteReason: "truncated" -- never silently accepted as complete.
+const MAX_MESSAGE_LENGTH = 64_000;
+
 const DEFAULT_LIMITS: ConversationStoreLimits = {
   maxConversations: 100,
   maxMessagesPerConversation: 500,
-  maxMessageLength: 16_000,
+  maxMessageLength: MAX_MESSAGE_LENGTH,
   maxTitleLength: 120,
 };
+
+const VALID_INCOMPLETE_REASONS = new Set<MessageIncompleteReason>([
+  "length",
+  "unsupported_tool_call",
+  "unknown_terminal",
+  "stalled",
+  "safety_limit",
+  "truncated",
+]);
 
 function createId(prefix: string): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -39,18 +65,88 @@ function normalizeTitle(title: string | undefined, maxLength: number): string {
   return safeTitle.slice(0, maxLength);
 }
 
-function normalizeMessage(input: AddConversationMessageInput, idFactory: () => string, nowIso: string, maxLength: number): ConversationMessage | null {
+function sanitizeStatus(value: unknown): MessageStatus | undefined {
+  return value === "complete" || value === "incomplete" ? value : undefined;
+}
+
+function sanitizeIncompleteReason(value: unknown): MessageIncompleteReason | undefined {
+  return typeof value === "string" && VALID_INCOMPLETE_REASONS.has(value as MessageIncompleteReason)
+    ? (value as MessageIncompleteReason)
+    : undefined;
+}
+
+function sanitizeContinuationCount(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+}
+
+function clampMessageContent(content: string, maxLength: number): { content: string; truncated: boolean } {
+  if (content.length <= maxLength) return { content, truncated: false };
+  return { content: content.slice(0, maxLength), truncated: true };
+}
+
+interface SanitizedMessageFields {
+  content: string;
+  status?: MessageStatus;
+  incompleteReason?: MessageIncompleteReason;
+  continuationCount?: number;
+  truncated: boolean;
+}
+
+// The single place both the write path (normalizeMessage) and the
+// defensive read/update-time re-validation path (normalizeConversation)
+// apply the storage ceiling and re-validate status/incompleteReason/
+// continuationCount for one message. A message forced to truncate here is
+// ALWAYS marked incomplete/"truncated", regardless of what it claimed
+// before or what a caller asked for -- persistence can never silently claim
+// completeness it cannot back up. See MAX_MESSAGE_LENGTH's derivation above.
+function sanitizeMessageFields(
+  fields: { content: string; status?: unknown; incompleteReason?: unknown; continuationCount?: unknown },
+  maxLength: number
+): SanitizedMessageFields {
+  const { content, truncated } = clampMessageContent(fields.content, maxLength);
+  const status = truncated ? "incomplete" : sanitizeStatus(fields.status);
+  const incompleteReason = truncated ? "truncated" : sanitizeIncompleteReason(fields.incompleteReason);
+  const continuationCount = sanitizeContinuationCount(fields.continuationCount);
+  return { content, status, incompleteReason, continuationCount, truncated };
+}
+
+function withOptionalFields(sanitized: SanitizedMessageFields): Partial<ConversationMessage> {
+  return {
+    ...(sanitized.status !== undefined ? { status: sanitized.status } : {}),
+    ...(sanitized.incompleteReason !== undefined ? { incompleteReason: sanitized.incompleteReason } : {}),
+    ...(sanitized.continuationCount !== undefined ? { continuationCount: sanitized.continuationCount } : {}),
+  };
+}
+
+function normalizeMessage(
+  input: AddConversationMessageInput,
+  idFactory: () => string,
+  nowIso: string,
+  maxLength: number
+): { message: ConversationMessage; truncated: boolean } | null {
   if (input.role !== "user" && input.role !== "assistant" && input.role !== "system") return null;
   if (input.status !== undefined && input.status !== "complete" && input.status !== "incomplete") return null;
-  const content = input.content.slice(0, maxLength);
-  if (content.length === 0) return null;
+
+  const sanitized = sanitizeMessageFields(
+    {
+      content: input.content,
+      status: input.status,
+      incompleteReason: input.incompleteReason,
+      continuationCount: input.continuationCount,
+    },
+    maxLength
+  );
+  if (sanitized.content.length === 0) return null;
 
   return {
-    id: input.id ?? idFactory(),
-    role: input.role,
-    content,
-    createdAt: input.createdAt ?? nowIso,
-    ...(input.status !== undefined ? { status: input.status } : {}),
+    message: {
+      id: input.id ?? idFactory(),
+      role: input.role,
+      content: sanitized.content,
+      createdAt: input.createdAt ?? nowIso,
+      ...withOptionalFields(sanitized),
+    },
+    truncated: sanitized.truncated,
   };
 }
 
@@ -71,13 +167,16 @@ function toMetadata(conversation: Conversation): ConversationMetadata {
 }
 
 function normalizeConversation(conversation: Conversation, limits: ConversationStoreLimits): Conversation {
-  const messages = conversation.messages.slice(-limits.maxMessagesPerConversation).map((message) => ({
-    ...message,
-    content: message.content.slice(0, limits.maxMessageLength),
-    ...(message.status === "complete" || message.status === "incomplete"
-      ? { status: message.status }
-      : { status: undefined }),
-  }));
+  const messages = conversation.messages.slice(-limits.maxMessagesPerConversation).map((message) => {
+    const sanitized = sanitizeMessageFields(message, limits.maxMessageLength);
+    return {
+      id: message.id,
+      role: message.role,
+      content: sanitized.content,
+      createdAt: message.createdAt,
+      ...withOptionalFields(sanitized),
+    };
+  });
 
   return {
     id: conversation.id,
@@ -148,10 +247,11 @@ export class ConversationStoreClient {
     return (await this.listConversations()).slice(0, limit);
   }
 
-  async addMessage(conversationId: ConversationId, input: AddConversationMessageInput): Promise<Conversation | null> {
+  async addMessage(conversationId: ConversationId, input: AddConversationMessageInput): Promise<ConversationWriteResult | null> {
     const nowIso = this.now().toISOString();
-    const message = normalizeMessage(input, () => createId("message"), nowIso, this.limits.maxMessageLength);
-    if (!message) return null;
+    const prepared = normalizeMessage(input, () => createId("message"), nowIso, this.limits.maxMessageLength);
+    if (!prepared) return null;
+    const { message, truncated } = prepared;
 
     try {
       const updated = await this.store.update(conversationId, (storedConversation) => {
@@ -164,7 +264,70 @@ export class ConversationStoreClient {
           messages,
         };
       });
-      return updated ? normalizeConversation(updated, this.limits) : null;
+      return updated ? { conversation: normalizeConversation(updated, this.limits), truncated } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Replaces one existing message's content/status in place (used by the
+  // Continue action to extend a truncated assistant reply -- see
+  // AppRuntimeProvider.tsx -- rather than appending a new duplicate message,
+  // which addMessage() always does). A no-op (returns null) if messageId is
+  // not found, so callers cannot accidentally create a new message through
+  // this path. status/continuationCount the caller omits are left exactly
+  // as they already were on the stored message. incompleteReason has
+  // three-way patch semantics (see UpdateMessageContentInput's doc comment):
+  // omitted leaves it unchanged, a valid reason sets it, and `null`
+  // explicitly clears it -- needed because a successful Continue must end
+  // up with NO incompleteReason at all, not whatever stale ambiguous-
+  // terminal reason the message had before the continuation started. An
+  // actual truncation performed by this call always wins over all of this.
+  async updateMessageContent(
+    conversationId: ConversationId,
+    messageId: string,
+    update: UpdateMessageContentInput
+  ): Promise<ConversationWriteResult | null> {
+    const { content, truncated } = clampMessageContent(update.content, this.limits.maxMessageLength);
+    if (content.length === 0) return null;
+
+    try {
+      const updated = await this.store.update(conversationId, (storedConversation) => {
+        const conversation = normalizeConversation(storedConversation, this.limits);
+        const messages = conversation.messages.map((message) => {
+          if (message.id !== messageId) return message;
+
+          const status = truncated ? "incomplete" : (update.status ?? message.status);
+          const incompleteReason = truncated
+            ? "truncated"
+            : update.incompleteReason === null
+              ? undefined
+              : (update.incompleteReason ?? message.incompleteReason);
+          const continuationCount = update.continuationCount ?? message.continuationCount;
+
+          // Rebuilt field-by-field rather than `{ ...message, ... }`: a
+          // spread would carry the OLD incompleteReason key forward even
+          // when the computed value above is `undefined` (the explicit-
+          // clear case), since spreading an existing key and then
+          // conditionally omitting a replacement does not delete it.
+          return {
+            id: message.id,
+            role: message.role,
+            content,
+            createdAt: message.createdAt,
+            ...(status !== undefined ? { status } : {}),
+            ...(incompleteReason !== undefined ? { incompleteReason } : {}),
+            ...(continuationCount !== undefined ? { continuationCount } : {}),
+          };
+        });
+        return {
+          ...conversation,
+          updatedAt: this.now().toISOString(),
+          messageCount: messages.length,
+          messages,
+        };
+      });
+      return updated ? { conversation: normalizeConversation(updated, this.limits), truncated } : null;
     } catch {
       return null;
     }
@@ -227,12 +390,20 @@ export function listConversations(): Promise<ConversationMetadata[]> {
   return defaultClient.listConversations();
 }
 
-export function addMessage(conversationId: ConversationId, message: AddConversationMessageInput): Promise<Conversation | null> {
+export function addMessage(conversationId: ConversationId, message: AddConversationMessageInput): Promise<ConversationWriteResult | null> {
   return defaultClient.addMessage(conversationId, message);
 }
 
 export function updateConversationTitle(conversationId: ConversationId, title: string): Promise<Conversation | null> {
   return defaultClient.updateConversationTitle(conversationId, title);
+}
+
+export function updateMessageContent(
+  conversationId: ConversationId,
+  messageId: string,
+  update: UpdateMessageContentInput
+): Promise<ConversationWriteResult | null> {
+  return defaultClient.updateMessageContent(conversationId, messageId, update);
 }
 
 export function deleteConversation(conversationId: ConversationId): Promise<boolean> {

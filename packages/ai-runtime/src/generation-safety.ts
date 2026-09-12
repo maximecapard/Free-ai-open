@@ -18,8 +18,18 @@ export interface DegenerateOutputDetection {
   reason?: DegenerateOutputReason;
 }
 
+// maxTokens was 768 through v0.7.0-alpha. A real generation (Qwen3-4B,
+// reasoning enabled) exhausted that entire budget mid-<think> block and
+// never reached a final answer - a reasoning-capable model routinely spends
+// several hundred tokens on its <think> block alone before any answer text
+// begins (see docs/architecture.md's "Reasoning output and finish reason"
+// section). Raised to a still-bounded 2048 (well under the registry's
+// verified 4096-token context window, leaving headroom for the prompt) so
+// that legitimate reasoning has realistic room to finish, not to remove the
+// cap altogether - a real ceiling remains, deliberately conservative rather
+// than "enormous".
 export const GENERATION_SAFETY_LIMITS: GenerationSafetyLimits = {
-  maxTokens: 768,
+  maxTokens: 2048,
   maxDurationMs: 90_000,
   maxOutputCharacters: 12_000,
   maxUnbrokenSequenceCharacters: 240,

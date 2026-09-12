@@ -329,7 +329,12 @@ describe("adaptive router manual selection and fallbacks", () => {
       benchmark: undefined,
     }));
     const strongPerformance = route(input({ performanceMode: "performance" }));
-    expect([fast.recommendedContextTokens, fast.recommendedMaxOutputTokens]).toEqual([1024, 256]);
+    // 256 is the compatibility preset's own maxOutputTokens; the selected
+    // default fixture model is a reasoning ("Qwen3") family, which adds
+    // REASONING_OUTPUT_ALLOWANCE_TOKENS (512) on top of every preset - see
+    // adaptiveOutputBudget.ts and adaptiveOutputBudget.test.ts for that
+    // allowance in isolation.
+    expect([fast.recommendedContextTokens, fast.recommendedMaxOutputTokens]).toEqual([1024, 768]);
     expect(weakPerformance.recommendedContextTokens).toBe(2048);
     expect(weakPerformance.warnings).toContain("performance_evidence_limited");
     expect(strongPerformance.recommendedContextTokens).toBe(4096);

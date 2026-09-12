@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { ConversationId } from "@free-ai-open/conversation-store";
 import {
-  appendAssistantChunk,
   isGenerationCurrent,
   removeAssistantMessage,
+  setAssistantContent,
   type ActiveGenerationDescriptor,
 } from "./persistentGenerationState";
 
@@ -15,27 +15,27 @@ const activeGeneration: ActiveGenerationDescriptor = {
 };
 
 describe("persistent generation state", () => {
-  it("keeps streamed chunks associated with the active generation", () => {
+  it("sets the active generation's assistant message to the given content", () => {
     const messages = [
       { id: "user-1", role: "user" as const, content: "Hello" },
       { id: "assistant-1", role: "assistant" as const, content: "" },
     ];
 
     expect(
-      appendAssistantChunk(messages, activeGeneration, "generation-1", conversationId, "assistant-1", "Hi")
+      setAssistantContent(messages, activeGeneration, "generation-1", conversationId, "assistant-1", "Hi")
     ).toEqual([
       { id: "user-1", role: "user", content: "Hello" },
       { id: "assistant-1", role: "assistant", content: "Hi" },
     ]);
   });
 
-  it("keeps accumulating output while the chat route is not mounted", () => {
+  it("replaces (not appends) on each call, matching the accumulator-driven caller that always passes the full current value", () => {
     let providerMessages = [
       { id: "user-1", role: "user" as const, content: "Hello" },
       { id: "assistant-1", role: "assistant" as const, content: "" },
     ];
 
-    providerMessages = appendAssistantChunk(
+    providerMessages = setAssistantContent(
       providerMessages,
       activeGeneration,
       "generation-1",
@@ -43,13 +43,13 @@ describe("persistent generation state", () => {
       "assistant-1",
       "Still "
     );
-    providerMessages = appendAssistantChunk(
+    providerMessages = setAssistantContent(
       providerMessages,
       activeGeneration,
       "generation-1",
       conversationId,
       "assistant-1",
-      "running"
+      "Still running"
     );
 
     expect(providerMessages).toEqual([
@@ -58,11 +58,11 @@ describe("persistent generation state", () => {
     ]);
   });
 
-  it("ignores late chunks from stale generations", () => {
+  it("ignores late updates from stale generations", () => {
     const messages = [{ id: "assistant-1", role: "assistant" as const, content: "New" }];
 
     expect(
-      appendAssistantChunk(messages, activeGeneration, "generation-old", conversationId, "assistant-1", " stale")
+      setAssistantContent(messages, activeGeneration, "generation-old", conversationId, "assistant-1", "stale")
     ).toEqual(messages);
   });
 

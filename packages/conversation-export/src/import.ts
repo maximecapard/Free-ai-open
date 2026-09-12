@@ -55,6 +55,8 @@ export function prepareImportedConversations(
       content: message.content,
       createdAt: message.createdAt,
       ...(message.status !== undefined ? { status: message.status } : {}),
+      ...(message.incompleteReason !== undefined ? { incompleteReason: message.incompleteReason } : {}),
+      ...(message.continuationCount !== undefined ? { continuationCount: message.continuationCount } : {}),
     }));
 
     return {

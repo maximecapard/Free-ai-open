@@ -25,3 +25,12 @@ export type {
   RouterScoreBreakdown,
   RouterWarningCode,
 } from "./adaptiveRouterContracts";
+export {
+  CHAT_MESSAGE_OVERHEAD_TOKENS,
+  CONTEXT_SAFETY_MARGIN_TOKENS,
+  MINIMUM_USEFUL_OUTPUT_TOKENS,
+  calculateGenerationBudget,
+  estimateChatInputTokens,
+  estimateTokenCount,
+} from "./contextBudget";
+export type { GenerationBudgetInput, GenerationBudgetResult } from "./contextBudget";

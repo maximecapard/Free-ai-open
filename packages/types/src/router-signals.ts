@@ -140,5 +140,23 @@ export interface ModelPerformanceObservation {
     | "degenerate"
     | "out_of_memory"
     | "device_lost"
-    | "load_failed";
+    | "load_failed"
+    // A generation that exhausted its output-token budget before a natural
+    // stop (WebLLM's own finish_reason: "length" -- see @free-ai-open/
+    // ai-runtime's GenerationStopReason). Neutral, "quality/budget" evidence
+    // rather than success or instability: the model produced valid output
+    // the whole time, it simply ran out of room, so this must never inflate
+    // a "completed" success rate nor count toward failure/instability
+    // scoring (see model-router's adaptiveObservations.ts).
+    | "length_limited"
+    // WebLLM's own finish_reason: "tool_calls" -- FreeAI Open never
+    // requests tool use, so this indicates a response shape the app does
+    // not support, never model instability.
+    | "unsupported_tool_call"
+    // The generation stream ended without WebLLM ever reporting an
+    // explicit finish_reason at all. Neither a confirmed success nor
+    // confirmed runtime instability -- excluded from both, same as the
+    // other two neutral outcomes above, until there is real evidence either
+    // way.
+    | "terminal_unknown";
 }

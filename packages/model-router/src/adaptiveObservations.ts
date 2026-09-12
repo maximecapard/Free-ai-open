@@ -5,7 +5,29 @@ export const OBSERVATION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 export const MAX_ROUTER_OBSERVATIONS = 200;
 
 const OUTCOMES = new Set<ModelPerformanceObservation["outcome"]>([
-  "completed", "cancelled", "stalled", "degenerate", "out_of_memory", "device_lost", "load_failed",
+  "completed",
+  "cancelled",
+  "stalled",
+  "degenerate",
+  "out_of_memory",
+  "device_lost",
+  "load_failed",
+  "length_limited",
+  "unsupported_tool_call",
+  "terminal_unknown",
+]);
+
+// Outcomes that must never count as either a completed success or model
+// instability -- excluded from `effective` below entirely, the same
+// treatment "cancelled" already had. A length-limited, unsupported-tool-
+// call, or unexplained ("terminal_unknown") generation is technical/quality
+// evidence at most, never a signal that the model itself is unstable, and
+// never inflated into a completion.
+const NEUTRAL_OUTCOMES = new Set<ModelPerformanceObservation["outcome"]>([
+  "cancelled",
+  "length_limited",
+  "unsupported_tool_call",
+  "terminal_unknown",
 ]);
 
 export function normalizeObservations(
@@ -31,7 +53,7 @@ function average(values: Array<number | undefined>): number | undefined {
 export function summarizeObservations(observations: readonly ModelPerformanceObservation[]): ObservationSummary {
   const loadObservations = observations.filter((observation) => observation.loadTimeMs !== undefined);
   const generationObservations = observations.filter((observation) => observation.loadTimeMs === undefined);
-  const effective = generationObservations.filter((observation) => observation.outcome !== "cancelled");
+  const effective = generationObservations.filter((observation) => !NEUTRAL_OUTCOMES.has(observation.outcome));
   const count = (outcome: ModelPerformanceObservation["outcome"]) =>
     observations.filter((observation) => observation.outcome === outcome).length;
   const generationCount = (outcome: ModelPerformanceObservation["outcome"]) =>

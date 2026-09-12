@@ -1,5 +1,5 @@
 import { CreateWebWorkerMLCEngine } from "@mlc-ai/web-llm";
-import type { InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
+import type { ChatCompletionFinishReason, InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import { detectWebGPUAvailability } from "@free-ai-open/device-profiler";
 import { createLogEvent, logEvent } from "@free-ai-open/logger";
 import { classifyRuntimeError } from "./errors";
@@ -10,7 +10,7 @@ import { recordLocalLog, toLocalLogErrorCode, toLocalLogModelId } from "./local-
 import { DEFAULT_MODEL_ID } from "./model";
 import type { DegenerateOutputReason } from "./generation-safety";
 import type { GenerationWatchdog } from "./generationWatchdog";
-import type { GenerateChunk, GenerateInput, InferenceChatWorker, RuntimeError, RuntimeState, RuntimeStatus } from "./types";
+import type { GenerateChunk, GenerateInput, GenerationStopReason, InferenceChatWorker, RuntimeError, RuntimeState, RuntimeStatus } from "./types";
 
 export interface LoadModelOptions {
   initialStatus?: Extract<RuntimeStatus, "loading_model" | "recovering">;
@@ -63,6 +63,76 @@ const STALL_TIMEOUT_MS = 45_000;
 // GENERATION_SAFETY_LIMITS.maxTokens even on a very slow device. See
 // docs/architecture.md's watchdog section.
 const ABSOLUTE_GENERATION_SAFETY_LIMIT_MS = 600_000;
+
+// Maps WebLLM's own finish_reason to this package's GenerationStopReason,
+// exhaustively and without any catch-all "assume success" branch (see
+// GenerationStopReason's own doc comment in types.ts and
+// docs/architecture.md's finish-reason section - this fixes a real bug where
+// every finish_reason except "length"/"abort" silently became "completed").
+//
+// - null/undefined: the stream ended without ANY chunk ever carrying a
+//   finish_reason at all - fail closed as "unknown_terminal" rather than
+//   assume the model finished normally.
+// - "stop": a genuine natural end of turn - the only value that becomes
+//   "completed".
+// - "length": the output-token budget was exhausted first.
+// - "tool_calls": FreeAI Open never requests tool use, so this should not
+//   occur, but if it ever does it must not be scored as model instability
+//   nor silently accepted as a normal reply.
+// - "abort": WebLLM's own cancellation signal (also handled explicitly by
+//   the `cancelled` flag at the call site the instant it is seen, so this
+//   branch is a defensive fallback, not the primary path).
+//
+// The `default` branch assigns `finishReason` to a `never`-typed binding: if
+// @mlc-ai/web-llm ever adds a new ChatCompletionFinishReason literal, this
+// function fails to COMPILE at that line instead of silently reaching a
+// default that maps it to "completed". Fixing the resulting type error by
+// adding an explicit case is the required response, not widening the type.
+function mapFinishReason(finishReason: ChatCompletionFinishReason | null, cancelled: boolean): GenerationStopReason {
+  if (cancelled) return "cancelled";
+  if (finishReason === null || finishReason === undefined) return "unknown_terminal";
+
+  switch (finishReason) {
+    case "stop":
+      return "completed";
+    case "length":
+      return "length";
+    case "tool_calls":
+      return "unsupported_tool_call";
+    case "abort":
+      return "cancelled";
+    default: {
+      // Compile-time exhaustiveness: a future WebLLM finish reason narrows
+      // `finishReason` to something other than `never` here, so adding one
+      // fails to compile at this line until an explicit case is added above.
+      const exhaustiveCheck: never = finishReason;
+      void exhaustiveCheck;
+      // Runtime fail-closed guard, independent of the compile-time check
+      // above: WebLLM's actual JS value crossing the worker boundary is
+      // never verified against this type, so a genuinely unrecognized
+      // string arriving in production must still be treated as an explicit
+      // incomplete outcome - never passed through raw or assumed successful.
+      return "unknown_terminal";
+    }
+  }
+}
+
+function stopEventNameFor(stopReason: GenerationStopReason): string {
+  switch (stopReason) {
+    case "cancelled":
+      return "inference.cancelled";
+    case "length":
+      return "inference.length-limited";
+    case "unsupported_tool_call":
+      return "inference.unsupported-tool-call";
+    case "unknown_terminal":
+      return "inference.unknown-terminal";
+    case "degenerate_output":
+      return "inference.degenerate-output";
+    case "completed":
+      return "inference.completed";
+  }
+}
 
 // Must only be called from a Client Component, never from a Server Component.
 export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRuntime {
@@ -336,6 +406,12 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
 
       let responseLength = 0;
       let cancelled = false;
+      // Captures WebLLM's own finish_reason from whichever chunk carries it
+      // (normally only the final one) for mapFinishReason() above to
+      // classify exhaustively once the stream ends. Stays null if no chunk
+      // ever carries one at all - that is itself a real, distinct outcome
+      // ("unknown_terminal"), not treated as a proxy for "stop".
+      let finishReason: ChatCompletionFinishReason | null = null;
       let outputForSafety = "";
 
       for await (const chunk of stream) {
@@ -377,9 +453,12 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
           responseLength = outputForSafety.length;
           yield { type: "token", text };
         }
-        if (choice?.finish_reason === "abort") {
-          cancelled = true;
-          break;
+        if (choice?.finish_reason) {
+          finishReason = choice.finish_reason;
+          if (finishReason === "abort") {
+            cancelled = true;
+            break;
+          }
         }
       }
 
@@ -397,17 +476,19 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
 
       const { firstTokenMs, tokensPerSecond, totalTimeMs } = buildGenerationMetrics(generationStartedAt, firstTokenAt, tokenCount);
 
+      // Every terminal outcome is classified explicitly by mapFinishReason()
+      // above - there is no catch-all branch that assumes success. A
+      // length-limited, tool-call, or unexplained ("unknown_terminal") stream
+      // end is never folded into "completed"; the runtime still returns to
+      // "ready" in every one of these cases (WebLLM itself did not error).
+      const stopReason: GenerationStopReason = mapFinishReason(finishReason, cancelled);
+      const stopEvent = stopEventNameFor(stopReason);
+
       setState({ status: cancelled ? "cancelling" : "ready" });
-      yield { type: "done", reason: cancelled ? "cancelled" : "completed" };
-      logEvent(
-        createLogEvent(
-          cancelled ? "inference.cancelled" : "inference.completed",
-          "info",
-          { conversationId: input.conversationId, responseLength }
-        )
-      );
+      yield { type: "done", reason: stopReason };
+      logEvent(createLogEvent(stopEvent, "info", { conversationId: input.conversationId, responseLength }));
       recordLocalLog({
-        event: cancelled ? "inference.cancelled" : "inference.completed",
+        event: stopEvent,
         severity: "info",
         modelId: localModelId,
         backend: "webgpu",

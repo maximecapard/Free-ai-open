@@ -232,6 +232,111 @@ describe("conversation export/import", () => {
     expect(() => parseConversationImport(JSON.stringify(data))).toThrow(/Invalid conversation import data/);
   });
 
+  it("preserves incompleteReason and continuationCount through export, serialize, parse, and prepare -- an exact round trip", () => {
+    const lengthLimitedConversation: Conversation = {
+      ...baseConversation,
+      messages: baseConversation.messages.map((message, index) =>
+        index === 1
+          ? { ...message, status: "incomplete" as const, incompleteReason: "length" as const, continuationCount: 2 }
+          : message
+      ),
+    };
+
+    const exportData = buildConversationExport([lengthLimitedConversation], { now });
+    expect(exportData.conversations[0]?.messages[1]).toMatchObject({
+      status: "incomplete",
+      incompleteReason: "length",
+      continuationCount: 2,
+    });
+
+    const parsed = parseConversationImport(serializeConversationExport(exportData));
+    const prepared = prepareImportedConversations(parsed, {
+      now,
+      idFactory: (prefix) => `${prefix}-length`,
+    });
+
+    expect(prepared[0]?.messages[1]).toMatchObject({
+      status: "incomplete",
+      incompleteReason: "length",
+      continuationCount: 2,
+    });
+  });
+
+  it("item 10 (mandatory): preserves an already-truncated message's exact content, status, and incompleteReason through export, serialize, parse, and prepare", () => {
+    const truncatedContent = "x".repeat(64_000);
+    const truncatedConversation: Conversation = {
+      ...baseConversation,
+      messages: baseConversation.messages.map((message, index) =>
+        index === 1
+          ? { ...message, content: truncatedContent, status: "incomplete" as const, incompleteReason: "truncated" as const }
+          : message
+      ),
+    };
+
+    const exportData = buildConversationExport([truncatedConversation], { now });
+    expect(exportData.conversations[0]?.messages[1]).toMatchObject({
+      content: truncatedContent,
+      status: "incomplete",
+      incompleteReason: "truncated",
+    });
+
+    const parsed = parseConversationImport(serializeConversationExport(exportData));
+    const prepared = prepareImportedConversations(parsed, {
+      now,
+      idFactory: (prefix) => `${prefix}-truncated`,
+    });
+
+    // The export/import layer never re-derives or drops truncation
+    // provenance -- it is just one more incompleteReason value passed
+    // through exactly, the same as "length" or "stalled" above. The actual
+    // enforcement that a genuinely oversized imported message gets
+    // re-truncated on persist happens at addMessage() time (see
+    // conversation-store's own storage-ceiling tests and chat/page.tsx's
+    // import flow, which now surfaces saved.truncated instead of ignoring
+    // it).
+    expect(prepared[0]?.messages[1]?.content).toBe(truncatedContent);
+    expect(prepared[0]?.messages[1]?.content.length).toBe(64_000);
+    expect(prepared[0]?.messages[1]).toMatchObject({ status: "incomplete", incompleteReason: "truncated" });
+  });
+
+  it("remains valid and importable when incompleteReason/continuationCount are absent (every export before this feature shipped)", () => {
+    // baseConversation's messages never set either field -- this is the
+    // real shape of every historical export, and every other test in this
+    // file already exercises it implicitly, but this test makes the
+    // backward-compatibility guarantee explicit and load-bearing.
+    const exportData = buildConversationExport([baseConversation], { now });
+    expect(exportData.conversations[0]?.messages[0]).not.toHaveProperty("incompleteReason");
+    expect(exportData.conversations[0]?.messages[0]).not.toHaveProperty("continuationCount");
+
+    const prepared = prepareImportedConversations(exportData, { now, idFactory: (prefix) => `${prefix}-legacy` });
+    expect(prepared[0]?.messages[0]?.incompleteReason).toBeUndefined();
+    expect(prepared[0]?.messages[0]?.continuationCount).toBeUndefined();
+  });
+
+  it("rejects an incompleteReason value outside the known set", () => {
+    const data = JSON.parse(validExportJson()) as {
+      conversations: Array<{ messages: Array<Record<string, unknown>> }>;
+    };
+    data.conversations[0]!.messages[1]!.incompleteReason = "made_up_reason";
+
+    expect(validateConversationExport(data)).toMatchObject({ valid: false });
+    expect(() => parseConversationImport(JSON.stringify(data))).toThrow(/Invalid conversation import data/);
+  });
+
+  it("rejects a negative or non-integer continuationCount", () => {
+    const negative = JSON.parse(validExportJson()) as {
+      conversations: Array<{ messages: Array<Record<string, unknown>> }>;
+    };
+    negative.conversations[0]!.messages[1]!.continuationCount = -1;
+    expect(validateConversationExport(negative)).toMatchObject({ valid: false });
+
+    const fractional = JSON.parse(validExportJson()) as {
+      conversations: Array<{ messages: Array<Record<string, unknown>> }>;
+    };
+    fractional.conversations[0]!.messages[1]!.continuationCount = 1.5;
+    expect(validateConversationExport(fractional)).toMatchObject({ valid: false });
+  });
+
   it("remains a valid, importable export when task is absent (older export format)", () => {
     const exportData = buildConversationExport([baseConversation], { now });
     expect(exportData.conversations[0]?.task).toBeUndefined();

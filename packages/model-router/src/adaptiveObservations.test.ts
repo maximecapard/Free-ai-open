@@ -48,4 +48,18 @@ describe("summarizeObservations", () => {
     expect(summary.generationCount).toBe(1);
     expect(summary.completed).toBe(1);
   });
+
+  it("excludes length-limited, unsupported-tool-call, and terminal-unknown generations from both the completed success rate and the effective (instability-eligible) count -- the same neutral treatment as cancellations", () => {
+    const summary = summarizeObservations([
+      observation({ outcome: "length_limited" }),
+      observation({ outcome: "unsupported_tool_call" }),
+      observation({ outcome: "terminal_unknown" }),
+      observation({ generationDurationMs: 2_000 }),
+    ]);
+
+    expect(summary.generationCount).toBe(1);
+    expect(summary.effectiveCount).toBe(1);
+    expect(summary.completed).toBe(1);
+    expect(summary.stalls).toBe(0);
+  });
 });
