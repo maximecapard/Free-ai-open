@@ -35,3 +35,20 @@ export type {
   ModelPerformanceObservation,
   StaticCapabilityProfile,
 } from "./router-signals";
+export { modelBenchmarkContextPresets, modelBenchmarkPresets } from "./benchmark-signals";
+export type {
+  ModelBenchmarkContextPreset,
+  ModelBenchmarkEnvironment,
+  ModelBenchmarkFirstTokenMeasurement,
+  ModelBenchmarkGenerationMeasurement,
+  ModelBenchmarkGenerationMeasurementExact,
+  ModelBenchmarkGenerationMeasurementUnavailable,
+  ModelBenchmarkLoadMeasurement,
+  ModelBenchmarkModelReference,
+  ModelBenchmarkOutcome,
+  ModelBenchmarkPreset,
+  ModelBenchmarkResult,
+  ModelBenchmarkRunConfig,
+  ModelBenchmarkStage,
+  ModelBenchmarkTokenCountConfidence,
+} from "./benchmark-signals";

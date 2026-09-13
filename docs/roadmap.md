@@ -22,7 +22,7 @@ Local conversation history (store + `/chat` history sidebar) shipped in `v0.5.0-
 - **Future:** client-side encrypted export.
 - **Future:** optional Google Drive sync.
 - **Future:** better/more transparent model selection.
-- **Future:** benchmarks page.
+- **v0.8.0-alpha Phase 0 -- Local Benchmarks & Performance Intelligence: contracts and architecture complete.** `ModelBenchmarkResult` and its persistence/compatibility contracts are defined (see "Local Benchmarks & Performance Intelligence" below and docs/architecture.md); the benchmark runner and the `/benchmarks` page are not implemented yet.
 
 None of the "Future" items above are implemented yet. See the detailed phases below for full scope.
 
@@ -42,6 +42,18 @@ A narrower, sequential breakdown of `v0.7.0-alpha` itself, distinct from the ove
 8. Merge and tag `v0.7.0-alpha`.
 
 Non-goals for this version: no user accounts, no cloud sync, no remote storage of hardware profiles, no unique hardware identifier, no benchmark transmission, no prompt/response/document/conversation content in technical logs, no mandatory exact-VRAM estimate, no model choice based on RAM or GPU name alone, and no silent large-model download without informing the user first.
+
+## Local Benchmarks & Performance Intelligence (v0.8.0-alpha phases)
+
+A narrower, sequential breakdown of `v0.8.0-alpha` itself, distinct from the overall project phases below and from the `v0.7.0-alpha` "Adaptive Model Router v1" phases above. This is user-visible MODEL performance benchmarking (how fast does THIS model load/generate on THIS device/browser) -- not the existing generic device/WebGPU compute microbenchmark (`LocalBenchmarkResult`, still v0.7.0-alpha Phase 2 and unchanged by this work), and not a replacement for it.
+
+0. Contracts and architecture — **complete**. `@free-ai-open/types`' `ModelBenchmarkResult` contract (schema, metric semantics, stability classification), the new `@free-ai-open/model-benchmark` package (versioned local IndexedDB persistence with atomic insert-and-prune, migration/expiry/invalidation, an in-memory fallback, compatibility-check helpers, and a pure evidence-aggregation contract for a future router phase to consume), a dependency-boundary test, and documentation. No benchmark runner, no `/benchmarks` page, and no router-scoring wiring yet — see docs/architecture.md's "Local model benchmarking" section for the defined-but-not-yet-implemented relationship to the adaptive router.
+1. Benchmark runner — **not started**. Drive `@free-ai-open/ai-runtime` through one bounded "quick"-preset run (load, first token, a short generation) and produce a `ModelBenchmarkResult`, cancellable, with a strict maximum duration, never interfering with an active user generation, never silently downloading a large uncached model without disclosure.
+2. `/benchmarks` page — **not started**. A simple, consumer-friendly UI ("Model load time", "Time to first response", "Generation speed", "Stability", "Tested on this browser", "Results can vary") with technical fields available on demand, never as the primary surface.
+3. Router integration — **not started**. Benchmark evidence (via `summarizeModelBenchmarkEvidence()`'s `BenchmarkEvidenceSummary`) becomes additional router input alongside real usage `ModelPerformanceObservation`s, never a replacement for them and never able to instantly override a hard eligibility gate; stale or incompatible evidence (contract version, registry, WebLLM, or device/browser mismatch) is ignored outright, never down-weighted. See docs/architecture.md's "Router relationship" section.
+4. `standard`/`extended` presets — **not started**, if still wanted once "quick" has real usage evidence of its own value.
+
+Non-goals for this version: no benchmark "quality"/answer grading with subjective prompts (this is a performance/stability measurement, not a model-answer evaluation), no cloud benchmark upload, no accounts, no server inference, no unique hardware/device fingerprinting beyond the existing coarse allowlisted classes, and no persisted benchmark prompt/response content.
 
 ## Phase 0 — Project setup
 
@@ -108,6 +120,8 @@ Non-goals for this version: no user accounts, no cloud sync, no remote storage o
 - Schema migration tests
 
 ## Phase 7 — Benchmarks
+
+Contracts and architecture for this phase are now defined -- see "Local Benchmarks & Performance Intelligence (v0.8.0-alpha phases)" above. The runner and page below remain unimplemented.
 
 - `/benchmarks` page
 - tokens/sec

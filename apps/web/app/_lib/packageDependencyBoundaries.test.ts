@@ -54,3 +54,42 @@ describe("v0.7 router/runtime/registry package boundaries", () => {
     }
   });
 });
+
+// v0.8.0-alpha Phase 0 rule (see docs/architecture.md's "Persistence and
+// package boundary" / "Router relationship (defined, not wired)"
+// sections): @free-ai-open/model-benchmark must stay a thin, isolated leaf
+// depending on nothing but @free-ai-open/types -- exactly the same "shared
+// contract in a zero-dependency leaf package" shape the v0.7 packages
+// above already follow. A future router integration (not built yet) may
+// let model-router depend ON model-benchmark; the reverse edge must never
+// exist. apps/web (this very test's own app) is not itself a workspace
+// package any other package can declare a dependency on in this pnpm
+// layout (packages never depend on apps), so "must not import the web UI"
+// is enforced structurally by this same allowlist-of-one check rather than
+// needing a separate source-level scanner.
+const V0_8_RELEVANT_PACKAGES = [...V0_7_RELEVANT_PACKAGES, "model-benchmark"];
+
+describe("v0.8 model-benchmark package boundaries (Phase 0)", () => {
+  it("depends on nothing but @free-ai-open/types", () => {
+    expect(readWorkspaceDependencies("model-benchmark")).toEqual(["types"]);
+  });
+
+  it("does not depend on model-router -- a future router integration is defined but not wired, and must depend in the router -> benchmark direction only", () => {
+    expect(readWorkspaceDependencies("model-benchmark")).not.toContain("model-router");
+  });
+
+  it("does not depend on ai-runtime or model-registry", () => {
+    const deps = readWorkspaceDependencies("model-benchmark");
+    expect(deps).not.toContain("ai-runtime");
+    expect(deps).not.toContain("model-registry");
+  });
+
+  it("has no dependency cycle among the router/runtime/registry/profiler/benchmark/types packages", () => {
+    for (const pkg of V0_8_RELEVANT_PACKAGES) {
+      for (const dependency of readWorkspaceDependencies(pkg)) {
+        if (!V0_8_RELEVANT_PACKAGES.includes(dependency)) continue;
+        expect(hasPath(dependency, pkg, V0_8_RELEVANT_PACKAGES)).toBe(false);
+      }
+    }
+  });
+});
