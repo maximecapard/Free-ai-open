@@ -145,6 +145,7 @@ function createFakeRuntime(outcomes: Record<string, RuntimeState>): InferenceRun
     subscribe: () => () => {},
     loadModel: async (modelId) => {
       state = outcomes[modelId ?? ""] ?? { status: "error", modelId: null, loadProgress: 0, error: { code: "unknown", message: "no fixture" } };
+      return state.status === "ready" ? { loadTimeMs: 0 } : null;
     },
     generate: async function* () {},
     stopGeneration: () => {},
@@ -234,7 +235,7 @@ describe("attemptModelLoadWithFallback", () => {
   });
 
   it("never retries a duplicate candidate id", async () => {
-    const loadModel = vi.fn(async () => {});
+    const loadModel = vi.fn(async () => null);
     const runtime: InferenceRuntime = {
       getState: () => ({ status: "error", modelId: null, loadProgress: 0, error: { code: "unknown", message: "x" } }),
       subscribe: () => () => {},
@@ -254,6 +255,7 @@ describe("attemptModelLoadWithFallback", () => {
     let state: RuntimeState = { status: "idle", modelId: null, loadProgress: 0, error: null };
     const loadModel = vi.fn(async (modelId: string) => {
       state = { status: "ready", modelId, loadProgress: 1, error: null };
+      return { loadTimeMs: 0 };
     });
     const runtime = {
       ...createFakeRuntime({}),

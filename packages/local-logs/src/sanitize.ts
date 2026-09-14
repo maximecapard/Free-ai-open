@@ -26,6 +26,7 @@ const RUNTIME_STATUSES = new Set<RuntimeStatus>([
   "error",
 ]);
 const DEVICE_TIERS = new Set([0, 1, 2, 3, 4]);
+const TOKEN_COUNT_CONFIDENCES = new Set(["exact", "unavailable"]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -33,6 +34,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isNonNegativeNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0;
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return isNonNegativeNumber(value) && Number.isInteger(value);
 }
 
 function isTechnicalErrorCode(value: string): boolean {
@@ -49,6 +54,22 @@ function sanitizePerformanceMetrics(value: unknown): LocalLogPerformanceMetrics 
   }
   if (isNonNegativeNumber(value.tokensPerSecond)) metrics.tokensPerSecond = value.tokensPerSecond;
   if (isNonNegativeNumber(value.totalTimeMs)) metrics.totalTimeMs = value.totalTimeMs;
+  if (typeof value.tokenCountConfidence === "string" && TOKEN_COUNT_CONFIDENCES.has(value.tokenCountConfidence)) {
+    metrics.tokenCountConfidence = value.tokenCountConfidence as LocalLogPerformanceMetrics["tokenCountConfidence"];
+  }
+  // Each field below is validated independently (matching every other
+  // field in this function), but all three -- when present -- are expected
+  // to originate from one already-validated WebLLM usage object upstream
+  // (see @free-ai-open/ai-runtime's GenerationTokenUsageExact): a
+  // fractional/negative/non-finite value cannot survive any of them, and
+  // there is deliberately no field here for prompt/prefill throughput --
+  // only exact token counts and an exact OVERALL (not decode-only)
+  // completion-token rate are ever considered "exact" enough to log.
+  if (isNonNegativeInteger(value.exactGeneratedTokenCount)) metrics.exactGeneratedTokenCount = value.exactGeneratedTokenCount;
+  if (isNonNegativeInteger(value.exactPromptTokenCount)) metrics.exactPromptTokenCount = value.exactPromptTokenCount;
+  if (isNonNegativeNumber(value.exactOverallCompletionTokensPerSecond)) {
+    metrics.exactOverallCompletionTokensPerSecond = value.exactOverallCompletionTokensPerSecond;
+  }
 
   return Object.keys(metrics).length > 0 ? metrics : undefined;
 }

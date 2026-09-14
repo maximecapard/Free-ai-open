@@ -1,5 +1,55 @@
+// Verified against the installed @mlc-ai/web-llm version (0.2.84 -- see
+// packages/ai-runtime/package.json and pnpm-lock.yaml). This exact version's
+// `lib/openai_api_protocols/chat_completion.d.ts`/`types.d.ts` were read
+// directly (never assumed from memory or from web-llm's own docs, which can
+// describe a different installed version) before writing the usage-capture
+// logic below. What that inspection found:
+// - `ChatCompletionRequestBase.stream_options?: {include_usage?: boolean}`
+//   is fully supported (`ChatCompletionRequestUnsupportedFields` is an empty
+//   array in this version's compiled bundle -- "all supported as of now").
+// - With `stream_options: {include_usage: true}` set, a NORMAL (non-
+//   interrupted) stream ends with: ...content chunks with `usage` absent...,
+//   then the usual last chunk carrying `finish_reason` (still `usage`
+//   absent), then ONE EXTRA trailer chunk with `choices: []` and a populated
+//   `usage: CompletionUsage`. This trailer is only ever reached on a clean
+//   stream end -- interrupted/aborted/degenerate-output paths never see it
+//   (see the `abort`-triggered `break` in the loop below, and the catch/
+//   forced-recovery paths, none of which continue iterating far enough to
+//   receive it), so those paths always report `tokenCountConfidence:
+//   "unavailable"`, honestly.
+// - `CompletionUsage.completion_tokens`/`prompt_tokens`/`total_tokens` are
+//   real tokenizer-backed counts computed internally by WebLLM's own
+//   pipeline (`getCurRoundDecodingTotalTokens()`/`getCurRoundPrefillTotalTokens()`),
+//   not derived from characters/words/chunks -- these are trustworthy as
+//   "exact" once individually validated (see buildGenerationTokenUsage()).
+// - `CompletionUsage.extra` additionally exposes WebLLM's own self-measured
+//   `prefill_tokens_per_s`/`decode_tokens_per_s`/`e2e_latency_s`/
+//   `time_to_first_token_s` (and an opt-in `latencyBreakdown`). Deliberately
+//   NOT used here: mixing WebLLM's internal clock with this package's own
+//   wall-clock `generationDurationMs` risks producing a rate that fails a
+//   later consistency check even though each half is individually correct.
+//   `GenerationTokenUsageExact.overallCompletionTokensPerSecond` below is
+//   always derived from this package's OWN measured durations instead, so
+//   it is self-consistent by construction. A future phase may still choose
+//   to surface `extra.*` separately for diagnostics.
+// - `generationDurationMs` (the denominator of
+//   `overallCompletionTokensPerSecond`) spans the FULL inference call: from
+//   immediately before `engine.chat.completions.create()` to the moment the
+//   entire stream -- INCLUDING the usage trailer chunk above -- has been
+//   consumed. It therefore includes worker/request overhead, prefill, time
+//   to first token, first-token sampling, decode, stream delivery, and the
+//   wait for the usage trailer itself. `overallCompletionTokensPerSecond`
+//   is named the way it is specifically so it can never be mistaken for a
+//   decode-only rate ("tokens/sec while actively generating") -- it is an
+//   end-to-end completion-token rate, not `decodeTokensPerSecond`. WebLLM's
+//   own `usage.extra.prefill_tokens_per_s` is real prefill throughput, but
+//   this package does not promote it into this contract, and
+//   `promptTokens / timeToFirstTokenMs` would NOT be exact prefill
+//   throughput either (TTFT includes more than prefill -- see
+//   `timeToFirstTokenMs`'s own doc comment in types.ts) -- so no prompt/
+//   prefill throughput field exists here at all.
 import { CreateWebWorkerMLCEngine } from "@mlc-ai/web-llm";
-import type { ChatCompletionFinishReason, InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
+import type { ChatCompletionFinishReason, CompletionUsage, InitProgressReport, WebWorkerMLCEngine } from "@mlc-ai/web-llm";
 import { detectWebGPUAvailability } from "@free-ai-open/device-profiler";
 import { createLogEvent, logEvent } from "@free-ai-open/logger";
 import { classifyRuntimeError } from "./errors";
@@ -10,7 +60,18 @@ import { recordLocalLog, toLocalLogErrorCode, toLocalLogModelId } from "./local-
 import { DEFAULT_MODEL_ID } from "./model";
 import type { DegenerateOutputReason } from "./generation-safety";
 import type { GenerationWatchdog } from "./generationWatchdog";
-import type { GenerateChunk, GenerateInput, GenerationStopReason, InferenceChatWorker, RuntimeError, RuntimeState, RuntimeStatus } from "./types";
+import type {
+  GenerateChunk,
+  GenerateInput,
+  GenerationRuntimeMetrics,
+  GenerationStopReason,
+  GenerationTokenUsage,
+  InferenceChatWorker,
+  ModelLoadRuntimeMetrics,
+  RuntimeError,
+  RuntimeState,
+  RuntimeStatus,
+} from "./types";
 
 export interface LoadModelOptions {
   initialStatus?: Extract<RuntimeStatus, "loading_model" | "recovering">;
@@ -20,7 +81,11 @@ export interface LoadModelOptions {
 export interface InferenceRuntime {
   getState(): RuntimeState;
   subscribe(listener: (state: RuntimeState) => void): () => void;
-  loadModel(modelId?: string, options?: LoadModelOptions): Promise<void>;
+  // Resolves to this call's own load metrics on success, `null` on failure
+  // (WebGPU unavailable, or the load itself throwing) -- see
+  // ModelLoadRuntimeMetrics's own doc comment in types.ts for exactly what
+  // this number does and does not represent.
+  loadModel(modelId?: string, options?: LoadModelOptions): Promise<ModelLoadRuntimeMetrics | null>;
   generate(input: GenerateInput): AsyncGenerator<GenerateChunk>;
   stopGeneration(): void;
   // Lets the app layer (which owns document.visibilityState — see
@@ -208,6 +273,14 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     return error;
   }
 
+  // This heuristic, chunk-count-derived `tokensPerSecond` is used ONLY for
+  // the existing local technical log entry below -- it is never mixed into
+  // GenerationRuntimeMetrics/GenerationTokenUsage (built by
+  // buildGenerationTokenUsage() below from WebLLM's own exact usage
+  // payload). Keeping these two computations entirely separate is
+  // deliberate: a chunk count is not a token count, and this package must
+  // never let an approximate, internally-used estimate be mistaken for an
+  // authoritative benchmark/performance metric.
   function buildGenerationMetrics(generationStartedAt: number, firstTokenAt: number | null, tokenCount: number) {
     const totalTimeMs = Date.now() - generationStartedAt;
     const firstTokenMs = firstTokenAt !== null ? firstTokenAt - generationStartedAt : null;
@@ -215,6 +288,76 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       tokenCount > 0 && totalTimeMs > 0 ? Math.round((tokenCount / (totalTimeMs / 1000)) * 10) / 10 : undefined;
 
     return { firstTokenMs, tokensPerSecond, totalTimeMs };
+  }
+
+  function isFiniteNonNegativeInteger(value: unknown): value is number {
+    return typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
+  }
+
+  // Validates WebLLM's own raw usage payload and, only once every field
+  // passes, derives a self-consistent OVERALL (not decode-only) throughput
+  // figure from THIS package's own measured FULL inference duration (see
+  // this file's top-of-file WebLLM API note for why WebLLM's self-reported
+  // `extra.*` rates are deliberately not used here, and
+  // GenerationTokenUsageExact's own doc comment in types.ts for the exact
+  // denominator this divides by). Any single impossible value -- a
+  // non-integer, a negative count, or a total that does not equal
+  // prompt+completion -- degrades the WHOLE usage object to "unavailable"
+  // rather than trusting a partially-valid payload; a missing/absent
+  // payload does the same. `generationDurationMs` must be strictly
+  // positive for an "exact" result to be constructed at all (mirrors
+  // @free-ai-open/model-benchmark's own sanitizeGeneration() rule), so
+  // overallCompletionTokensPerSecond is always a well-defined, finite
+  // number within the "exact" variant -- never computed against a
+  // zero/negative duration. No prompt/prefill throughput is derived here at
+  // all -- `promptTokens / timeToFirstTokenMs` would not be exact prefill
+  // throughput (see types.ts), so it is never exposed as one.
+  function buildGenerationTokenUsage(rawUsage: CompletionUsage | undefined, generationDurationMs: number): GenerationTokenUsage {
+    const unavailable: GenerationTokenUsage = { tokenCountConfidence: "unavailable" };
+    if (!rawUsage) return unavailable;
+    if (
+      !isFiniteNonNegativeInteger(rawUsage.completion_tokens) ||
+      !isFiniteNonNegativeInteger(rawUsage.prompt_tokens) ||
+      !isFiniteNonNegativeInteger(rawUsage.total_tokens)
+    ) {
+      return unavailable;
+    }
+    if (rawUsage.total_tokens !== rawUsage.prompt_tokens + rawUsage.completion_tokens) return unavailable;
+    if (!(generationDurationMs > 0)) return unavailable;
+
+    const overallCompletionTokensPerSecond = rawUsage.completion_tokens / (generationDurationMs / 1000);
+
+    return {
+      tokenCountConfidence: "exact",
+      promptTokens: rawUsage.prompt_tokens,
+      completionTokens: rawUsage.completion_tokens,
+      totalTokens: rawUsage.total_tokens,
+      overallCompletionTokensPerSecond,
+    };
+  }
+
+  // The single place `{type: "done", ...}` metrics are assembled, whichever
+  // yield site is calling it, so every site derives `completedAt`/
+  // `generationDurationMs` the exact same way (arithmetically from
+  // `generationStartedAt` + the already-computed `totalTimeMs`, never a
+  // fresh Date.now() call -- see this file's own test suite for why
+  // avoiding an extra timer read here keeps deterministic timestamp-mocked
+  // tests stable).
+  function buildDoneMetrics(
+    generationStartedAt: number,
+    firstTokenAt: number | null,
+    firstTokenMs: number | null,
+    totalTimeMs: number,
+    rawUsage: CompletionUsage | undefined
+  ): GenerationRuntimeMetrics {
+    return {
+      inferenceStartedAt: generationStartedAt,
+      firstTokenAt,
+      timeToFirstTokenMs: firstTokenMs,
+      completedAt: generationStartedAt + totalTimeMs,
+      generationDurationMs: totalTimeMs,
+      usage: buildGenerationTokenUsage(rawUsage, totalTimeMs),
+    };
   }
 
   function recoverFromDegenerateOutput(
@@ -226,13 +369,18 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     responseLength: number,
     localModelId: string | undefined,
     conversationId: string
-  ): RuntimeError {
+  ): { error: RuntimeError; metrics: GenerationRuntimeMetrics } {
     const error: RuntimeError = {
       code: "degenerate_output",
       message: "Generation stopped because the local model output became unstable.",
     };
+    const generationMetrics = buildGenerationMetrics(generationStartedAt, firstTokenAt, tokenCount);
+    // The stream was actively interrupted (engine.interruptGenerate() below)
+    // before it could ever naturally reach WebLLM's usage trailer chunk --
+    // there is no real usage payload to report here, ever.
+    const metrics = buildDoneMetrics(generationStartedAt, firstTokenAt, generationMetrics.firstTokenMs, generationMetrics.totalTimeMs, undefined);
 
-    if (expectedEpoch !== generationEpoch) return error;
+    if (expectedEpoch !== generationEpoch) return { error, metrics };
     generationEpoch += 1;
     clearCancelTimeout();
     disposeWatchdog();
@@ -254,13 +402,13 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       backend: "webgpu",
       runtimeStatus: "error",
       errorCode: toLocalLogErrorCode(error.code),
-      performanceMetrics: buildGenerationMetrics(generationStartedAt, firstTokenAt, tokenCount),
+      performanceMetrics: generationMetrics,
     });
 
-    return error;
+    return { error, metrics };
   }
 
-  async function loadModel(modelId: string = DEFAULT_MODEL_ID, options: LoadModelOptions = {}): Promise<void> {
+  async function loadModel(modelId: string = DEFAULT_MODEL_ID, options: LoadModelOptions = {}): Promise<ModelLoadRuntimeMetrics | null> {
     const loadStartedAt = Date.now();
     const localModelId = toLocalLogModelId(modelId);
     const initialStatus = options.initialStatus ?? "loading_model";
@@ -281,7 +429,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         runtimeStatus: "error",
         errorCode: toLocalLogErrorCode(error.code),
       });
-      return;
+      return null;
     }
 
     try {
@@ -306,6 +454,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         runtimeStatus: "ready",
         performanceMetrics: { loadTimeMs },
       });
+      return { loadTimeMs };
     } catch (rawError) {
       const error = classifyRuntimeError(rawError, "load");
       setState({ status: "error", error });
@@ -317,6 +466,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         runtimeStatus: "error",
         errorCode: toLocalLogErrorCode(error.code),
       });
+      return null;
     }
   }
 
@@ -396,6 +546,10 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
           { role: "user", content: input.prompt },
         ],
         stream: true,
+        // Opts into WebLLM's dedicated usage trailer chunk (see this file's
+        // top-of-file WebLLM API note) -- without this, `chunk.usage` is
+        // never populated at all, on any chunk.
+        stream_options: { include_usage: true },
         // The router-recommended budget is a ceiling, never an increase: it
         // can only tighten the existing alpha safety cap, not raise it.
         max_tokens:
@@ -413,6 +567,13 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       // ("unknown_terminal"), not treated as a proxy for "stop".
       let finishReason: ChatCompletionFinishReason | null = null;
       let outputForSafety = "";
+      // Captured independently of `chunk.choices[0]`: WebLLM's usage
+      // trailer chunk has `choices: []` (see this file's top-of-file note),
+      // so this is checked on every chunk regardless of whether it also
+      // carries content/finish_reason. Stays undefined on any interrupted
+      // path (degenerate output, abort, stall/error) -- those never
+      // continue iterating far enough to reach it.
+      let capturedUsage: CompletionUsage | undefined;
 
       for await (const chunk of stream) {
         if (myEpoch !== generationEpoch) {
@@ -420,6 +581,8 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
           if (forcedError) yield { type: "error", error: forcedError };
           return;
         }
+
+        if (chunk.usage) capturedUsage = chunk.usage;
 
         const choice = chunk.choices[0];
         const text = choice?.delta?.content ?? "";
@@ -435,7 +598,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
           const degenerate = detectDegenerateOutput(nextOutput);
           if (degenerate.detected && degenerate.reason) {
             responseLength = nextOutput.length;
-            recoverFromDegenerateOutput(
+            const { metrics } = recoverFromDegenerateOutput(
               myEpoch,
               degenerate.reason,
               generationStartedAt,
@@ -445,7 +608,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
               localModelId,
               input.conversationId
             );
-            yield { type: "done", reason: "degenerate_output" };
+            yield { type: "done", reason: "degenerate_output", metrics };
             return;
           }
 
@@ -475,6 +638,12 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       clearSafetyLimitTimeout();
 
       const { firstTokenMs, tokensPerSecond, totalTimeMs } = buildGenerationMetrics(generationStartedAt, firstTokenAt, tokenCount);
+      // `capturedUsage` is only ever non-undefined here on a clean stream
+      // end (see this loop's own comment): an abort break above always
+      // leaves it undefined, so a cancelled-via-stream outcome always
+      // reports "unavailable" usage, honestly.
+      const metrics = buildDoneMetrics(generationStartedAt, firstTokenAt, firstTokenMs, totalTimeMs, capturedUsage);
+      const usage = metrics.usage;
 
       // Every terminal outcome is classified explicitly by mapFinishReason()
       // above - there is no catch-all branch that assumes success. A
@@ -485,7 +654,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       const stopEvent = stopEventNameFor(stopReason);
 
       setState({ status: cancelled ? "cancelling" : "ready" });
-      yield { type: "done", reason: stopReason };
+      yield { type: "done", reason: stopReason, metrics };
       logEvent(createLogEvent(stopEvent, "info", { conversationId: input.conversationId, responseLength }));
       recordLocalLog({
         event: stopEvent,
@@ -493,7 +662,19 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
         modelId: localModelId,
         backend: "webgpu",
         runtimeStatus: cancelled ? "cancelling" : "ready",
-        performanceMetrics: { firstTokenMs, tokensPerSecond, totalTimeMs },
+        performanceMetrics: {
+          firstTokenMs,
+          tokensPerSecond,
+          totalTimeMs,
+          tokenCountConfidence: usage.tokenCountConfidence,
+          ...(usage.tokenCountConfidence === "exact"
+            ? {
+                exactGeneratedTokenCount: usage.completionTokens,
+                exactPromptTokenCount: usage.promptTokens,
+                exactOverallCompletionTokensPerSecond: usage.overallCompletionTokensPerSecond,
+              }
+            : {}),
+        },
       });
     } catch (rawError) {
       if (myEpoch !== generationEpoch) {
@@ -508,7 +689,19 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
       const error = classifyRuntimeError(rawError, "generate");
       const cancelled = error.code === "generation_interrupted";
       setState({ status: cancelled ? "cancelling" : "ready", error: cancelled ? null : error });
-      yield cancelled ? { type: "done", reason: "cancelled" } : { type: "error", error };
+      if (cancelled) {
+        // No buildGenerationMetrics() call already happened on this path --
+        // one fresh Date.now() read here is the only way to know how long
+        // this attempt ran before the exception. The stream never reached a
+        // usage trailer chunk (it was interrupted), so usage is always
+        // "unavailable".
+        const totalTimeMs = Date.now() - generationStartedAt;
+        const firstTokenMs = firstTokenAt !== null ? firstTokenAt - generationStartedAt : null;
+        const metrics = buildDoneMetrics(generationStartedAt, firstTokenAt, firstTokenMs, totalTimeMs, undefined);
+        yield { type: "done", reason: "cancelled", metrics };
+      } else {
+        yield { type: "error", error };
+      }
       logEvent(
         createLogEvent(
           cancelled ? "inference.cancelled" : "inference.failed",

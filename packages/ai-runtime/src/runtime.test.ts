@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { InferenceChatWorker } from "./types";
+import type { GenerateChunk, InferenceChatWorker } from "./types";
 
 const mocks = vi.hoisted(() => ({
   detectWebGPUAvailability: vi.fn(),
@@ -49,6 +49,24 @@ async function drain<T>(generator: AsyncGenerator<T>): Promise<T[]> {
   const items: T[] = [];
   for await (const item of generator) items.push(item);
   return items;
+}
+
+// Most of this file's existing assertions are about finish-reason
+// classification (completed/length/cancelled/etc.), not about the exact
+// shape of GenerationRuntimeMetrics -- which now rides along on every
+// "done" chunk (see generate()'s own doc comments). Rather than hardcoding
+// a metrics object into every one of those assertions (which would make
+// them fragile to any future metrics field addition and obscure what each
+// test is actually about), this strips `metrics` before comparing so those
+// tests keep asserting only what they always asserted. Tests that DO care
+// about metrics content assert `chunk.metrics` directly instead.
+function omitMetrics(chunk: GenerateChunk | undefined): unknown {
+  if (!chunk) return chunk;
+  return chunk.type === "done" ? { type: chunk.type, reason: chunk.reason } : chunk;
+}
+
+function omitAllMetrics(chunks: readonly GenerateChunk[]): unknown[] {
+  return chunks.map((chunk) => omitMetrics(chunk));
 }
 
 beforeEach(() => {
@@ -141,7 +159,7 @@ describe("createInferenceRuntime", () => {
     await runtime.loadModel("test-model");
     const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
 
-    expect(chunks).toEqual([
+    expect(omitAllMetrics(chunks)).toEqual([
       { type: "token", text: "Hel" },
       { type: "token", text: "lo" },
       { type: "done", reason: "completed" },
@@ -161,7 +179,7 @@ describe("createInferenceRuntime", () => {
     await runtime.loadModel("test-model");
     const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
 
-    expect(chunks.at(-1)).toEqual({ type: "done", reason: "completed" });
+    expect(omitMetrics(chunks.at(-1))).toEqual({ type: "done", reason: "completed" });
     expect(mocks.addLocalLog).toHaveBeenCalledWith(expect.objectContaining({ event: "inference.completed" }));
     expect(mocks.addLocalLog).not.toHaveBeenCalledWith(expect.objectContaining({ event: "inference.length-limited" }));
   });
@@ -178,7 +196,7 @@ describe("createInferenceRuntime", () => {
     await runtime.loadModel("test-model");
     const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
 
-    expect(chunks).toEqual([
+    expect(omitAllMetrics(chunks)).toEqual([
       { type: "token", text: "Partial reasoning" },
       { type: "done", reason: "length" },
     ]);
@@ -214,7 +232,7 @@ describe("createInferenceRuntime", () => {
     const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "tu peux me faire un exemple..." }));
 
     const doneChunk = chunks.at(-1);
-    expect(doneChunk).toEqual({ type: "done", reason: "length" });
+    expect(omitMetrics(doneChunk)).toEqual({ type: "done", reason: "length" });
     const streamedText = chunks
       .filter((chunk): chunk is { type: "token"; text: string } => chunk.type === "token")
       .map((chunk) => chunk.text)
@@ -236,7 +254,7 @@ describe("createInferenceRuntime", () => {
     await runtime.loadModel("test-model");
     const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
 
-    expect(chunks.at(-1)).toEqual({ type: "done", reason: "unsupported_tool_call" });
+    expect(omitMetrics(chunks.at(-1))).toEqual({ type: "done", reason: "unsupported_tool_call" });
     // Not an error state: FreeAI Open simply does not support this response
     // shape yet. It is a distinct, explicit incomplete outcome, never
     // scored as model instability (see performanceObservationBuilder.ts).
@@ -261,7 +279,7 @@ describe("createInferenceRuntime", () => {
     await runtime.loadModel("test-model");
     const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
 
-    expect(chunks.at(-1)).toEqual({ type: "done", reason: "unknown_terminal" });
+    expect(omitMetrics(chunks.at(-1))).toEqual({ type: "done", reason: "unknown_terminal" });
     expect(runtime.getState().status).toBe("ready");
     expect(mocks.addLocalLog).toHaveBeenCalledWith(
       expect.objectContaining({ event: "inference.unknown-terminal" })
@@ -285,8 +303,8 @@ describe("createInferenceRuntime", () => {
     await runtime.loadModel("test-model");
     const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
 
-    expect(chunks.at(-1)).toEqual({ type: "done", reason: "unknown_terminal" });
-    expect(chunks.at(-1)).not.toEqual({ type: "done", reason: "completed" });
+    expect(omitMetrics(chunks.at(-1))).toEqual({ type: "done", reason: "unknown_terminal" });
+    expect(omitMetrics(chunks.at(-1))).not.toEqual({ type: "done", reason: "completed" });
     expect(runtime.getState().status).toBe("ready");
   });
 
@@ -403,7 +421,7 @@ describe("createInferenceRuntime", () => {
     await runtime.loadModel("test-model");
     const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "super secret prompt" }));
 
-    expect(chunks).toEqual([{ type: "done", reason: "degenerate_output" }]);
+    expect(omitAllMetrics(chunks)).toEqual([{ type: "done", reason: "degenerate_output" }]);
     expect(runtime.getState().status).toBe("error");
     expect(runtime.getState().error?.code).toBe("degenerate_output");
     expect(mocks.mockEngine.interruptGenerate).toHaveBeenCalledTimes(1);
@@ -434,7 +452,7 @@ describe("createInferenceRuntime", () => {
     await runtime.loadModel("test-model");
     const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
 
-    expect(chunks).toEqual([{ type: "token", text: "Par" }, { type: "done", reason: "cancelled" }]);
+    expect(omitAllMetrics(chunks)).toEqual([{ type: "token", text: "Par" }, { type: "done", reason: "cancelled" }]);
     expect(runtime.getState().status).toBe("cancelling");
     expect(runtime.getState().error).toBeNull();
   });
@@ -625,7 +643,7 @@ describe("createInferenceRuntime", () => {
       await recoveredRuntime.loadModel("test-model", { initialStatus: "recovering" });
       const chunks = await drain(recoveredRuntime.generate({ conversationId: "c2", prompt: "next" }));
 
-      expect(chunks).toEqual([{ type: "token", text: "Recovered" }, { type: "done", reason: "completed" }]);
+      expect(omitAllMetrics(chunks)).toEqual([{ type: "token", text: "Recovered" }, { type: "done", reason: "completed" }]);
       expect(recoveredRuntime.getState().status).toBe("ready");
       expect(mocks.CreateWebWorkerMLCEngine).toHaveBeenCalledTimes(2);
     });
@@ -858,10 +876,10 @@ describe("createInferenceRuntime", () => {
 
       vi.useFakeTimers();
       try {
-        const chunks: Array<{ type: string }> = [];
+        const chunks: GenerateChunk[] = [];
         const consume = (async () => {
           for await (const chunk of runtime.generate({ conversationId: "c1", prompt: "hi" })) {
-            chunks.push(chunk as { type: string });
+            chunks.push(chunk);
           }
         })();
 
@@ -871,7 +889,7 @@ describe("createInferenceRuntime", () => {
         expect(runtime.getState().status).toBe("ready");
         expect(runtime.getState().error).toBeNull();
         expect(chunks.filter((chunk) => chunk.type === "token")).toHaveLength(5);
-        expect(chunks.at(-1)).toEqual({ type: "done", reason: "completed" });
+        expect(omitMetrics(chunks.at(-1))).toEqual({ type: "done", reason: "completed" });
         expect(mocks.addLocalLog).not.toHaveBeenCalledWith(
           expect.objectContaining({ event: "inference.stall-timeout" })
         );
@@ -963,7 +981,7 @@ describe("createInferenceRuntime", () => {
         await vi.advanceTimersByTimeAsync(90_000);
         const chunks = await consume;
 
-        expect(chunks.at(-1)).toEqual({ type: "done", reason: "completed" });
+        expect(omitMetrics(chunks.at(-1))).toEqual({ type: "done", reason: "completed" });
         expect(runtime.getState().status).toBe("ready");
       } finally {
         vi.useRealTimers();
@@ -1349,7 +1367,12 @@ describe("createInferenceRuntime", () => {
       expect(mocks.addLocalLog).toHaveBeenCalledWith(
         expect.objectContaining({
           event: "inference.completed",
-          performanceMetrics: { firstTokenMs: 100, tokensPerSecond: 1, totalTimeMs: 2000 },
+          performanceMetrics: {
+            firstTokenMs: 100,
+            tokensPerSecond: 1,
+            totalTimeMs: 2000,
+            tokenCountConfidence: "unavailable",
+          },
         })
       );
 
@@ -1370,6 +1393,502 @@ describe("createInferenceRuntime", () => {
       for (const call of mocks.addLocalLog.mock.calls) {
         expect(JSON.stringify(call)).not.toContain("super secret");
       }
+    });
+  });
+
+  describe("GenerationRuntimeMetrics (Phase 1: runtime-backed performance metrics)", () => {
+    // Mirrors the installed @mlc-ai/web-llm 0.2.84 API exactly (see
+    // runtime.ts's own top-of-file note): content/finish_reason chunks
+    // carry `usage: null` when `stream_options.include_usage` was
+    // requested, and the real payload arrives on a SEPARATE trailer chunk
+    // with `choices: []`.
+    function streamWithUsage(usage: unknown) {
+      return (async function* () {
+        yield { choices: [{ delta: { content: "Hi" }, finish_reason: null }], usage: null };
+        yield { choices: [{ delta: {}, finish_reason: "stop" }], usage: null };
+        yield { choices: [], usage };
+      })();
+    }
+
+    function expectDone(chunk: GenerateChunk | undefined): Extract<GenerateChunk, { type: "done" }> {
+      if (chunk?.type !== "done") throw new Error(`expected a "done" chunk, got ${JSON.stringify(chunk)}`);
+      return chunk;
+    }
+
+    describe("exact token usage", () => {
+      it("requests WebLLM's usage trailer on every generation via stream_options.include_usage", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          (async function* () {
+            yield { choices: [{ delta: { content: "Hi" }, finish_reason: "stop" }] };
+          })()
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+        expect(mocks.mockEngine.chat.completions.create).toHaveBeenCalledWith(
+          expect.objectContaining({ stream_options: { include_usage: true } })
+        );
+      });
+
+      it("captures exact generated-token and prompt-token counts, with no prompt-throughput field on the exact usage object", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          streamWithUsage({ completion_tokens: 5, prompt_tokens: 10, total_tokens: 15 })
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+
+        // generationStartedAt=0, firstTokenAt=100 (TTFT), totalTimeMs read
+        // at 1000 -> generationDurationMs=1000 (the FULL inference
+        // wall-clock, including the usage trailer wait -- see
+        // "overallCompletionTokensPerSecond is completion tokens divided
+        // by the FULL inference wall-clock" below, not this 100-1000 span).
+        const timestamps = [0, 100, 1000];
+        vi.spyOn(Date, "now").mockImplementation(() => timestamps.shift() ?? 1000);
+
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        const done = expectDone(chunks.at(-1));
+
+        expect(done.metrics.usage).toEqual({
+          tokenCountConfidence: "exact",
+          promptTokens: 10,
+          completionTokens: 5,
+          totalTokens: 15,
+          overallCompletionTokensPerSecond: 5, // 5 tokens / (1000ms / 1000)
+        });
+        // No prompt-throughput field survives on the exact usage object at
+        // all -- `promptTokens / timeToFirstTokenMs` is not exact prefill
+        // throughput (see types.ts), so it is never exposed as one, not
+        // even as a nullable field.
+        expect("promptTokensPerSecond" in done.metrics.usage).toBe(false);
+        expect(done.metrics.inferenceStartedAt).toBe(0);
+        expect(done.metrics.firstTokenAt).toBe(100);
+        expect(done.metrics.timeToFirstTokenMs).toBe(100);
+        expect(done.metrics.completedAt).toBe(1000);
+        expect(done.metrics.generationDurationMs).toBe(1000);
+
+        vi.restoreAllMocks();
+      });
+
+      it("overallCompletionTokensPerSecond is completion tokens divided by ai-runtime's FULL inference wall-clock, never a decode-only surrogate", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          streamWithUsage({ completion_tokens: 5, prompt_tokens: 10, total_tokens: 15 })
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+
+        // start=0, first real token=100, stream/usage trailer fully
+        // consumed=1000 -> generationDurationMs=1000 (0 to 1000), NOT the
+        // 900ms decode-only span from firstTokenAt (100) to completion
+        // (1000). 5 completion tokens / (1000ms/1000) = 5 exactly; the
+        // decode-only surrogate would instead be 5 / (900ms/1000) =
+        // 5.555..., a materially different number this assertion rules out.
+        const timestamps = [0, 100, 1000];
+        vi.spyOn(Date, "now").mockImplementation(() => timestamps.shift() ?? 1000);
+
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        const usage = expectDone(chunks.at(-1)).metrics.usage;
+
+        expect(usage.tokenCountConfidence).toBe("exact");
+        if (usage.tokenCountConfidence === "exact") {
+          expect(usage.overallCompletionTokensPerSecond).toBe(5);
+          expect(usage.overallCompletionTokensPerSecond).not.toBeCloseTo(5.555, 2);
+        }
+
+        vi.restoreAllMocks();
+      });
+
+      it("reports unavailable usage when WebLLM never sends a usage payload at all", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          (async function* () {
+            yield { choices: [{ delta: { content: "Hi" }, finish_reason: "stop" }] };
+          })()
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+        expect(expectDone(chunks.at(-1)).metrics.usage).toEqual({ tokenCountConfidence: "unavailable" });
+      });
+
+      it("rejects a fractional generated-token count rather than trusting a partially-valid payload", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          streamWithUsage({ completion_tokens: 5.5, prompt_tokens: 10, total_tokens: 15.5 })
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+        expect(expectDone(chunks.at(-1)).metrics.usage).toEqual({ tokenCountConfidence: "unavailable" });
+      });
+
+      it("rejects a negative token count", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          streamWithUsage({ completion_tokens: -1, prompt_tokens: 10, total_tokens: 9 })
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+        expect(expectDone(chunks.at(-1)).metrics.usage).toEqual({ tokenCountConfidence: "unavailable" });
+      });
+
+      it("rejects a NaN generated-token count", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          streamWithUsage({ completion_tokens: Number.NaN, prompt_tokens: 10, total_tokens: 10 })
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+        expect(expectDone(chunks.at(-1)).metrics.usage).toEqual({ tokenCountConfidence: "unavailable" });
+      });
+
+      it("rejects an Infinite generated-token count", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          streamWithUsage({ completion_tokens: Infinity, prompt_tokens: 10, total_tokens: Infinity })
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+        expect(expectDone(chunks.at(-1)).metrics.usage).toEqual({ tokenCountConfidence: "unavailable" });
+      });
+
+      it("rejects a usage payload whose total does not equal prompt + completion", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          streamWithUsage({ completion_tokens: 5, prompt_tokens: 10, total_tokens: 999 })
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+        expect(expectDone(chunks.at(-1)).metrics.usage).toEqual({ tokenCountConfidence: "unavailable" });
+      });
+
+      it("treats zero generated tokens as a valid exact measurement with a zero rate, not a malformed payload", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          streamWithUsage({ completion_tokens: 0, prompt_tokens: 10, total_tokens: 10 })
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+
+        // Guarantees a strictly positive generationDurationMs: a real,
+        // unmocked test run can otherwise complete in 0ms, which would
+        // itself (correctly) degrade this to "unavailable" and mask what
+        // this test is actually checking.
+        const timestamps = [0, 100, 500];
+        vi.spyOn(Date, "now").mockImplementation(() => timestamps.shift() ?? 500);
+
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+        const usage = expectDone(chunks.at(-1)).metrics.usage;
+        expect(usage.tokenCountConfidence).toBe("exact");
+        if (usage.tokenCountConfidence === "exact") {
+          expect(usage.completionTokens).toBe(0);
+          expect(usage.overallCompletionTokensPerSecond).toBe(0);
+        }
+
+        vi.restoreAllMocks();
+      });
+
+      it("logs exact token counts/confidence in the local technical log, never the heuristic chunk-derived count", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          streamWithUsage({ completion_tokens: 5, prompt_tokens: 10, total_tokens: 15 })
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+
+        const timestamps = [0, 100, 500];
+        vi.spyOn(Date, "now").mockImplementation(() => timestamps.shift() ?? 500);
+
+        await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+        expect(mocks.addLocalLog).toHaveBeenCalledWith(
+          expect.objectContaining({
+            event: "inference.completed",
+            performanceMetrics: expect.objectContaining({
+              tokenCountConfidence: "exact",
+              exactGeneratedTokenCount: 5,
+              exactPromptTokenCount: 10,
+            }),
+          })
+        );
+
+        vi.restoreAllMocks();
+      });
+    });
+
+    describe("time to first token", () => {
+      it("records TTFT from the first raw content chunk", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          (async function* () {
+            yield { choices: [{ delta: { content: "Hel" }, finish_reason: null }] };
+            yield { choices: [{ delta: { content: "lo" }, finish_reason: null }] };
+            yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+          })()
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+
+        const timestamps = [0, 50, 200];
+        vi.spyOn(Date, "now").mockImplementation(() => timestamps.shift() ?? 200);
+
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        expect(expectDone(chunks.at(-1)).metrics.timeToFirstTokenMs).toBe(50);
+
+        vi.restoreAllMocks();
+      });
+
+      it("does not overwrite the first-token timestamp on later chunks", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          (async function* () {
+            yield { choices: [{ delta: { content: "A" }, finish_reason: null }] };
+            yield { choices: [{ delta: { content: "B" }, finish_reason: null }] };
+            yield { choices: [{ delta: { content: "C" }, finish_reason: null }] };
+            yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+          })()
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+
+        // Only ONE Date.now() call happens for firstTokenAt (guarded by
+        // `if (firstTokenAt === null)`), regardless of how many further
+        // content chunks arrive -- so this array is exactly as long as
+        // "records TTFT" above: generationStartedAt, firstTokenAt, totalTimeMs.
+        const timestamps = [0, 30, 500];
+        vi.spyOn(Date, "now").mockImplementation(() => timestamps.shift() ?? 500);
+
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        const done = expectDone(chunks.at(-1));
+        expect(done.metrics.firstTokenAt).toBe(30);
+        expect(done.metrics.timeToFirstTokenMs).toBe(30);
+
+        vi.restoreAllMocks();
+      });
+
+      it("does not count an empty/non-progress chunk as the first token", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          (async function* () {
+            yield { choices: [{ delta: {}, finish_reason: null }] }; // no content -- must not count
+            yield { choices: [{ delta: { content: "Hi" }, finish_reason: null }] };
+            yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+          })()
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+
+        // The empty chunk never calls Date.now() at all (gated by `if
+        // (text)`), so this sequence is unaffected by it: generationStartedAt,
+        // firstTokenAt (on the REAL "Hi" chunk), totalTimeMs.
+        const timestamps = [0, 10, 40];
+        vi.spyOn(Date, "now").mockImplementation(() => timestamps.shift() ?? 40);
+
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        expect(expectDone(chunks.at(-1)).metrics.timeToFirstTokenMs).toBe(10);
+
+        vi.restoreAllMocks();
+      });
+
+      it("captures TTFT the instant the raw chunk arrives, unaffected by how slowly the caller consumes the generator afterward (simulated UI buffering delay)", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          (async function* () {
+            yield { choices: [{ delta: { content: "Hel" }, finish_reason: null }] };
+            yield { choices: [{ delta: {}, finish_reason: "stop" }] };
+          })()
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+
+        const timestamps = [1000, 1050, 1050];
+        vi.spyOn(Date, "now").mockImplementation(() => timestamps.shift() ?? 1050);
+
+        const generator = runtime.generate({ conversationId: "c1", prompt: "hi" });
+        const first = await generator.next();
+        expect(first.value).toEqual({ type: "token", text: "Hel" });
+
+        // A slow downstream consumer (e.g. a UI flush buffer) taking real
+        // wall-clock time before asking for the next chunk must never be
+        // able to inflate TTFT -- it was already captured, from the mocked
+        // clock, the instant the raw chunk was read above.
+        await new Promise((resolve) => setTimeout(resolve, 5));
+
+        const second = await generator.next();
+        const done = expectDone(second.value);
+        expect(done.metrics.timeToFirstTokenMs).toBe(50);
+
+        vi.restoreAllMocks();
+      });
+    });
+
+    describe("lifecycle correctness", () => {
+      it("attaches unavailable-usage metrics (never fabricated) to a length-limited completion", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          (async function* () {
+            yield { choices: [{ delta: { content: "Partial" }, finish_reason: null }] };
+            yield { choices: [{ delta: {}, finish_reason: "length" }] };
+          })()
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        const done = expectDone(chunks.at(-1));
+
+        expect(done.reason).toBe("length");
+        expect(done.metrics.usage).toEqual({ tokenCountConfidence: "unavailable" });
+      });
+
+      it("attaches unavailable-usage metrics to a user Stop (abort mid-stream)", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          (async function* () {
+            yield { choices: [{ delta: { content: "Par" }, finish_reason: null }] };
+            yield { choices: [{ delta: {}, finish_reason: "abort" }] };
+            // Never reached: the loop breaks on "abort" before it could see
+            // this, even if WebLLM would otherwise have sent one.
+            yield { choices: [], usage: { completion_tokens: 1, prompt_tokens: 1, total_tokens: 2 } };
+          })()
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        const done = expectDone(chunks.at(-1));
+
+        expect(done.reason).toBe("cancelled");
+        expect(done.metrics.usage).toEqual({ tokenCountConfidence: "unavailable" });
+      });
+
+      it("attaches unavailable-usage metrics to a degenerate-output interruption", async () => {
+        const unstableOutput = "<>".repeat(GENERATION_SAFETY_LIMITS.maxRepeatedSymbolBlockRun + 1);
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          (async function* () {
+            yield { choices: [{ delta: { content: unstableOutput }, finish_reason: null }] };
+          })()
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        const done = expectDone(chunks.at(-1));
+
+        expect(done.reason).toBe("degenerate_output");
+        expect(done.metrics.usage).toEqual({ tokenCountConfidence: "unavailable" });
+        expect(done.metrics.inferenceStartedAt).toEqual(expect.any(Number));
+        expect(done.metrics.generationDurationMs).toEqual(expect.any(Number));
+      });
+
+      it("attaches unavailable-usage metrics when a thrown runtime error is classified as a clean cancellation", async () => {
+        mocks.mockEngine.chat.completions.create.mockRejectedValue(new Error("generation was interrupted"));
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+        const done = expectDone(chunks.at(-1));
+
+        expect(done.reason).toBe("cancelled");
+        expect(done.metrics.usage).toEqual({ tokenCountConfidence: "unavailable" });
+        expect(done.metrics.generationDurationMs).toEqual(expect.any(Number));
+      });
+
+      it("never attaches metrics to a genuine error chunk (a real runtime failure stays a plain error, not a fabricated done)", async () => {
+        mocks.mockEngine.chat.completions.create.mockRejectedValue(new Error("device lost, out of memory"));
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+
+        expect(chunks).toEqual([{ type: "error", error: { code: "out_of_memory", message: "device lost, out of memory" } }]);
+      });
+
+      it("never lets a stale chunk from an abandoned generation contribute usage to the generation that superseded it", async () => {
+        // The epoch check at the very top of the loop runs BEFORE this
+        // phase's new `if (chunk.usage) capturedUsage = chunk.usage;` line
+        // -- so a chunk arriving after forceRecovery() has already bumped
+        // the epoch is discarded before its usage is ever inspected. This
+        // reproduces exactly that stall+late-chunk shape used elsewhere in
+        // this file, with an added (never-consulted) usage trailer.
+        let releaseLateChunk: (() => void) | undefined;
+        mocks.mockEngine.chat.completions.create.mockResolvedValueOnce(
+          (async function* () {
+            yield { choices: [{ delta: { content: "Hel" }, finish_reason: null }] };
+            await new Promise<void>((resolve) => {
+              releaseLateChunk = resolve;
+            });
+            yield { choices: [], usage: { completion_tokens: 999, prompt_tokens: 999, total_tokens: 1998 } };
+          })()
+        );
+
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+
+        vi.useFakeTimers();
+        try {
+          const consume = drain(runtime.generate({ conversationId: "c1", prompt: "hi" }));
+          await Promise.resolve();
+          await Promise.resolve();
+          await Promise.resolve();
+
+          await vi.advanceTimersByTimeAsync(45_000);
+          expect(runtime.getState().error?.code).toBe("generation_stalled");
+
+          releaseLateChunk?.();
+          const chunks = await consume;
+
+          // The stale chunk's usage never surfaces anywhere: this
+          // generation resolved via the forced error path, which carries
+          // no metrics at all.
+          expect(chunks.every((chunk) => chunk.type !== "done")).toBe(true);
+          expect(JSON.stringify(chunks)).not.toContain("999");
+        } finally {
+          vi.useRealTimers();
+        }
+      });
+
+      it("keeps each generate() call's metrics fully independent -- separate Continue attempts never aggregate into one fake combined measurement", async () => {
+        mocks.mockEngine.chat.completions.create
+          .mockResolvedValueOnce(streamWithUsage({ completion_tokens: 5, prompt_tokens: 5, total_tokens: 10 }))
+          .mockResolvedValueOnce(streamWithUsage({ completion_tokens: 50, prompt_tokens: 50, total_tokens: 100 }));
+
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+
+        // Two independent positive-duration windows, one per generate()
+        // call: (generationStartedAt, firstTokenAt, totalTimeMs) x 2.
+        const timestamps = [0, 10, 100, 200, 210, 300];
+        vi.spyOn(Date, "now").mockImplementation(() => timestamps.shift() ?? 300);
+
+        const firstChunks = await drain(runtime.generate({ conversationId: "c1", prompt: "first attempt" }));
+        const secondChunks = await drain(runtime.generate({ conversationId: "c1", prompt: "continue" }));
+
+        const firstUsage = expectDone(firstChunks.at(-1)).metrics.usage;
+        const secondUsage = expectDone(secondChunks.at(-1)).metrics.usage;
+
+        expect(firstUsage).toMatchObject({ tokenCountConfidence: "exact", completionTokens: 5 });
+        expect(secondUsage).toMatchObject({ tokenCountConfidence: "exact", completionTokens: 50 });
+
+        vi.restoreAllMocks();
+      });
+    });
+
+    describe("privacy", () => {
+      it("never leaks the prompt or any content-shaped text through GenerationRuntimeMetrics, even with an adversarial prompt", async () => {
+        mocks.mockEngine.chat.completions.create.mockResolvedValue(
+          streamWithUsage({ completion_tokens: 3, prompt_tokens: 3, total_tokens: 6 })
+        );
+        const runtime = createInferenceRuntime(fakeWorker());
+        await runtime.loadModel("test-model");
+        const secretPrompt = "super secret prompt mentioning reasoning, messages, systemPrompt, and rawOutput";
+        const chunks = await drain(runtime.generate({ conversationId: "c1", prompt: secretPrompt }));
+        const done = expectDone(chunks.at(-1));
+
+        expect(JSON.stringify(done.metrics)).not.toContain("secret");
+        // The metrics object's own top-level shape is a closed, known
+        // allowlist -- proving no extra/injected field could have carried
+        // content through.
+        expect(Object.keys(done.metrics).sort()).toEqual(
+          ["completedAt", "firstTokenAt", "generationDurationMs", "inferenceStartedAt", "timeToFirstTokenMs", "usage"].sort()
+        );
+
+        for (const call of [...mocks.createLogEvent.mock.calls, ...mocks.addLocalLog.mock.calls]) {
+          expect(JSON.stringify(call)).not.toContain("secret");
+        }
+      });
     });
   });
 });

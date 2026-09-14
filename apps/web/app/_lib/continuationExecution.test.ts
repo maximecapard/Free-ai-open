@@ -6,8 +6,21 @@ import {
   serializeConversationExport,
 } from "@free-ai-open/conversation-export";
 import { addMessage, createConversation, getConversation } from "@free-ai-open/conversation-store";
-import type { GenerateChunk, InferenceRuntime } from "@free-ai-open/ai-runtime";
+import type { GenerateChunk, GenerationRuntimeMetrics, InferenceRuntime } from "@free-ai-open/ai-runtime";
 import { runContinuationAttempt } from "./continuationExecution";
+
+// This file only exercises runContinuationAttempt()'s handling of
+// GenerateChunk's `reason`/`text` fields, never its `metrics` -- a single
+// shared, minimally-valid stub keeps every "done" chunk fixture below
+// type-correct without pretending these tests care about metrics content.
+const FAKE_METRICS: GenerationRuntimeMetrics = {
+  inferenceStartedAt: 0,
+  firstTokenAt: null,
+  timeToFirstTokenMs: null,
+  completedAt: 0,
+  generationDurationMs: 0,
+  usage: { tokenCountConfidence: "unavailable" },
+};
 
 function fakeRuntime(chunks: readonly GenerateChunk[]): Pick<InferenceRuntime, "generate"> {
   return {
@@ -43,7 +56,7 @@ describe("runContinuationAttempt", () => {
       { type: "token", text: " that" },
       { type: "token", text: " continues" },
       { type: "token", text: " naturally." },
-      { type: "done", reason: "completed" },
+      { type: "done", reason: "completed", metrics: FAKE_METRICS },
     ]);
 
     const outcome = await runContinuationAttempt({
@@ -140,7 +153,7 @@ describe("runContinuationAttempt", () => {
 
     const runtime = fakeRuntime([
       { type: "token", text: " second part" },
-      { type: "done", reason: "length" },
+      { type: "done", reason: "length", metrics: FAKE_METRICS },
     ]);
 
     const outcome = await runContinuationAttempt({
@@ -182,7 +195,7 @@ describe("runContinuationAttempt", () => {
 
     const runtime = fakeRuntime([
       { type: "token", text: " some new text that should be discarded" },
-      { type: "done", reason: "cancelled" },
+      { type: "done", reason: "cancelled", metrics: FAKE_METRICS },
     ]);
 
     const outcome = await runContinuationAttempt({
@@ -222,7 +235,7 @@ describe("runContinuationAttempt", () => {
 
     const runtime = fakeRuntime([
       { type: "token", text: "!!!!!!!!!!!!!!!!!!!!" },
-      { type: "done", reason: "degenerate_output" },
+      { type: "done", reason: "degenerate_output", metrics: FAKE_METRICS },
     ]);
 
     const outcome = await runContinuationAttempt({
@@ -251,7 +264,7 @@ describe("runContinuationAttempt", () => {
 
     const runtime = fakeRuntime([
       { type: "token", text: " more" },
-      { type: "done", reason: "completed" },
+      { type: "done", reason: "completed", metrics: FAKE_METRICS },
     ]);
 
     const outcome = await runContinuationAttempt({
@@ -292,7 +305,7 @@ describe("runContinuationAttempt", () => {
     const hugeDelta = "b".repeat(10_000);
     const runtime = fakeRuntime([
       { type: "token", text: hugeDelta },
-      { type: "done", reason: "completed" },
+      { type: "done", reason: "completed", metrics: FAKE_METRICS },
     ]);
 
     const outcome = await runContinuationAttempt({
@@ -345,7 +358,7 @@ describe("runContinuationAttempt", () => {
     const runtime = fakeRuntime([
       { type: "token", text: priorContent }, // fully overlaps the prior content's tail
       { type: "token", text: " and this is genuinely new." },
-      { type: "done", reason: "completed" },
+      { type: "done", reason: "completed", metrics: FAKE_METRICS },
     ]);
 
     const progressUpdates: string[] = [];

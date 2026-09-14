@@ -82,6 +82,109 @@ describe("local logs", () => {
     await expect(client.getLocalLogs()).resolves.toEqual([record]);
   });
 
+  it("stores exact token-count/confidence performance metrics (Phase 1: ai-runtime usage capture)", async () => {
+    const store = new MemoryLocalLogStore();
+    const client = createTestClient(store);
+
+    const record = await client.addLocalLog({
+      event: "inference.completed",
+      severity: "info",
+      modelId: "sample-general-light",
+      backend: "webgpu",
+      runtimeStatus: "ready",
+      performanceMetrics: {
+        firstTokenMs: 100,
+        tokensPerSecond: 12.5,
+        totalTimeMs: 2000,
+        tokenCountConfidence: "exact",
+        exactGeneratedTokenCount: 25,
+        exactPromptTokenCount: 40,
+        exactOverallCompletionTokensPerSecond: 12.5,
+      },
+    });
+
+    expect(record?.performanceMetrics).toEqual({
+      firstTokenMs: 100,
+      tokensPerSecond: 12.5,
+      totalTimeMs: 2000,
+      tokenCountConfidence: "exact",
+      exactGeneratedTokenCount: 25,
+      exactPromptTokenCount: 40,
+      exactOverallCompletionTokensPerSecond: 12.5,
+    });
+  });
+
+  it("keeps tokenCountConfidence 'unavailable' distinct from simply omitting it", async () => {
+    const store = new MemoryLocalLogStore();
+    const client = createTestClient(store);
+
+    const record = await client.addLocalLog({
+      event: "inference.completed",
+      severity: "info",
+      performanceMetrics: { tokenCountConfidence: "unavailable" },
+    });
+
+    expect(record?.performanceMetrics).toEqual({ tokenCountConfidence: "unavailable" });
+  });
+
+  it("drops a fractional or negative exact token count rather than storing an impossible value", async () => {
+    const store = new MemoryLocalLogStore();
+    const client = createTestClient(store);
+
+    const record = await client.addLocalLog({
+      event: "inference.completed",
+      severity: "info",
+      performanceMetrics: {
+        exactGeneratedTokenCount: 5.5,
+        exactPromptTokenCount: -1,
+        exactOverallCompletionTokensPerSecond: 10,
+      },
+    });
+
+    // Only the valid field survives; the malformed ones are dropped, not
+    // coerced, matching this store's existing per-field allowlist policy.
+    expect(record?.performanceMetrics).toEqual({ exactOverallCompletionTokensPerSecond: 10 });
+  });
+
+  it("never lets an injected prompt-throughput field enter the exact metric set -- no such field is allowlisted, exact or otherwise", async () => {
+    const store = new MemoryLocalLogStore();
+    const client = createTestClient(store);
+
+    const record = await client.addLocalLog({
+      event: "inference.completed",
+      severity: "info",
+      performanceMetrics: {
+        tokenCountConfidence: "exact",
+        exactGeneratedTokenCount: 25,
+        exactPromptTokenCount: 40,
+        // Neither an old-style "promptTokensPerSecond" nor an
+        // "exact"-prefixed variant of it is a recognized field -- an
+        // unknown key is simply never copied, regardless of name.
+        promptTokensPerSecond: 400,
+        exactPromptTokensPerSecond: 400,
+      } as never,
+    });
+
+    expect(record?.performanceMetrics).toEqual({
+      tokenCountConfidence: "exact",
+      exactGeneratedTokenCount: 25,
+      exactPromptTokenCount: 40,
+    });
+  });
+
+  it("rejects an unrecognized tokenCountConfidence value", async () => {
+    const store = new MemoryLocalLogStore();
+    const client = createTestClient(store);
+
+    const record = await client.addLocalLog({
+      event: "inference.completed",
+      severity: "info",
+      performanceMetrics: { tokenCountConfidence: "approximate" as never, exactGeneratedTokenCount: 5 },
+    });
+
+    expect(record?.performanceMetrics).toEqual({ exactGeneratedTokenCount: 5 });
+  });
+
   it("removes forbidden prompt and response fields before storage", async () => {
     const store = new MemoryLocalLogStore();
     const client = createTestClient(store);

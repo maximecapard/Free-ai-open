@@ -9,8 +9,13 @@ export type { DegenerateOutputDetection, DegenerateOutputReason, GenerationSafet
 export type {
   GenerateChunk,
   GenerateInput,
+  GenerationRuntimeMetrics,
   GenerationStopReason,
+  GenerationTokenUsage,
+  GenerationTokenUsageExact,
+  GenerationTokenUsageUnavailable,
   InferenceChatWorker,
+  ModelLoadRuntimeMetrics,
   RuntimeLocale,
   RuntimeError,
   RuntimeErrorCode,
