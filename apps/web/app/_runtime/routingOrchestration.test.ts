@@ -175,6 +175,38 @@ describe("attemptModelLoadWithFallback", () => {
     expect(mocks.recordModelPerformanceObservation).toHaveBeenCalledOnce();
   });
 
+  it("stops AT ONCE when the caller abandons the attempt: no further candidate is loaded and no observation is recorded for a load that settles late", async () => {
+    let cancelled = false;
+    let loads = 0;
+    const runtime: InferenceRuntime = {
+      ...createFakeRuntime({}),
+      getState: () => ({ status: "error", modelId: null, loadProgress: 0, error: { code: "unknown", message: "late failure" } }),
+      loadModel: async () => {
+        loads += 1;
+        // The caller gives up while this load is still in flight.
+        cancelled = true;
+        return null;
+      },
+    };
+
+    const result = await attemptModelLoadWithFallback(runtime, [CANDIDATE_A, CANDIDATE_B], { isCancelled: () => cancelled });
+
+    expect(loads).toBe(1);
+    expect(result.succeeded).toBe(false);
+    expect(result.registryId).toBeNull();
+    expect(mocks.recordModelPerformanceObservation).not.toHaveBeenCalled();
+  });
+
+  it("never starts a load at all when already cancelled", async () => {
+    const loadModel = vi.fn(async () => null);
+    const runtime: InferenceRuntime = { ...createFakeRuntime({}), loadModel };
+
+    const result = await attemptModelLoadWithFallback(runtime, [CANDIDATE_A], { isCancelled: () => true });
+
+    expect(loadModel).not.toHaveBeenCalled();
+    expect(result.succeeded).toBe(false);
+  });
+
   it("records the observation under the registry ID, not the WebLLM model ID", async () => {
     const runtime = createFakeRuntime({
       "Model-A-MLC": { status: "ready", modelId: "Model-A-MLC", loadProgress: 1, error: null },

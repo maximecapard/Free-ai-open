@@ -36,7 +36,7 @@ function buildValid(): ModelBenchmarkResult {
       generationDurationMs: 4200,
       generatedTokenCount: 96,
       tokenCountConfidence: "exact",
-      generationTokensPerSecond: 22.9,
+      overallCompletionTokensPerSecond: 22.9,
     },
     confidence: "medium",
     environment: { webllmVersion: "0.2.84", appVersion: "0.8.0-alpha" },
@@ -150,7 +150,7 @@ describe("sanitizeModelBenchmarkResult -- schema validation", () => {
     expect(sanitizeModelBenchmarkResult({ ...valid, modelId: "Not Valid!", model: { ...valid.model, modelId: "Not Valid!" } })).toBeNull();
   });
 
-  it("drops generatedTokenCount/generationTokensPerSecond when tokenCountConfidence is unavailable, even if present in the raw input -- never trusts a character-length-derived rate", () => {
+  it("drops generatedTokenCount/overallCompletionTokensPerSecond when tokenCountConfidence is unavailable, even if present in the raw input -- never trusts a character-length-derived rate", () => {
     const valid = buildValid();
     const withUnavailableConfidence = sanitizeModelBenchmarkResult({
       ...valid,
@@ -158,19 +158,19 @@ describe("sanitizeModelBenchmarkResult -- schema validation", () => {
         tokenCountConfidence: "unavailable",
         generationDurationMs: 4000,
         generatedTokenCount: 999,
-        generationTokensPerSecond: 250,
+        overallCompletionTokensPerSecond: 250,
       },
     });
     expect(withUnavailableConfidence).not.toBeNull();
     const generation = withUnavailableConfidence!.generation;
     // `generation` is the "unavailable" branch of the discriminated union at
-    // the type level, so `generatedTokenCount`/`generationTokensPerSecond`
+    // the type level, so `generatedTokenCount`/`overallCompletionTokensPerSecond`
     // are not even nameable properties on it -- checking with `in` (rather
     // than reading `.generatedTokenCount`) proves at runtime that a caller
     // who injected those fields anyway gets an object that truly lacks
     // them, not merely one where TypeScript pretends they don't exist.
     expect("generatedTokenCount" in generation).toBe(false);
-    expect("generationTokensPerSecond" in generation).toBe(false);
+    expect("overallCompletionTokensPerSecond" in generation).toBe(false);
     expect(generation.tokenCountConfidence).toBe("unavailable");
     expect((generation as { generationDurationMs?: number }).generationDurationMs).toBe(4000);
   });
@@ -193,6 +193,25 @@ describe("sanitizeModelBenchmarkResult -- schema validation", () => {
     const valid = buildValid();
     expect(
       sanitizeModelBenchmarkResult({ ...valid, environment: { ...valid.environment, webllmVersion: "latest" } })
+    ).toBeNull();
+  });
+
+  it.each([
+    ["webllmModelId", "https://invalid.example/model"],
+    ["registryVersion", "latest"],
+    ["quantization", "bad value"],
+    ["verifiedWithWebLLMVersion", "latest"],
+  ])("rejects a present malformed model-reference %s instead of silently dropping it", (field, value) => {
+    const valid = buildValid();
+    expect(
+      sanitizeModelBenchmarkResult({ ...valid, model: { ...valid.model, [field]: value } })
+    ).toBeNull();
+  });
+
+  it("rejects a present malformed appVersion instead of silently dropping it", () => {
+    const valid = buildValid();
+    expect(
+      sanitizeModelBenchmarkResult({ ...valid, environment: { ...valid.environment, appVersion: "latest" } })
     ).toBeNull();
   });
 
@@ -284,7 +303,7 @@ describe("sanitizeModelBenchmarkResult -- exact token throughput invariants", ()
   it("rejects tokenCountConfidence 'exact' with a fractional generatedTokenCount", () => {
     const valid = buildValid();
     expect(
-      sanitizeModelBenchmarkResult({ ...valid, generation: { ...valid.generation, generatedTokenCount: 95.5, generationTokensPerSecond: 22.7 } })
+      sanitizeModelBenchmarkResult({ ...valid, generation: { ...valid.generation, generatedTokenCount: 95.5, overallCompletionTokensPerSecond: 22.7 } })
     ).toBeNull();
   });
 
@@ -305,25 +324,25 @@ describe("sanitizeModelBenchmarkResult -- exact token throughput invariants", ()
     expect(sanitizeModelBenchmarkResult({ ...valid, generation: { ...valid.generation, generationDurationMs: 0 } })).toBeNull();
   });
 
-  it("rejects a NaN or Infinite generationTokensPerSecond", () => {
+  it("rejects a NaN or Infinite overallCompletionTokensPerSecond", () => {
     const valid = buildValid();
     expect(
-      sanitizeModelBenchmarkResult({ ...valid, generation: { ...valid.generation, generationTokensPerSecond: Number.NaN } })
+      sanitizeModelBenchmarkResult({ ...valid, generation: { ...valid.generation, overallCompletionTokensPerSecond: Number.NaN } })
     ).toBeNull();
     expect(
-      sanitizeModelBenchmarkResult({ ...valid, generation: { ...valid.generation, generationTokensPerSecond: Infinity } })
+      sanitizeModelBenchmarkResult({ ...valid, generation: { ...valid.generation, overallCompletionTokensPerSecond: Infinity } })
     ).toBeNull();
   });
 
-  it("rejects a generationTokensPerSecond that is not numerically consistent with count/duration", () => {
+  it("rejects a overallCompletionTokensPerSecond that is not numerically consistent with count/duration", () => {
     const valid = buildValid();
     // 96 tokens / 4.2s ~= 22.86 tok/s -- 500 is nowhere near consistent.
     expect(
-      sanitizeModelBenchmarkResult({ ...valid, generation: { ...valid.generation, generationTokensPerSecond: 500 } })
+      sanitizeModelBenchmarkResult({ ...valid, generation: { ...valid.generation, overallCompletionTokensPerSecond: 500 } })
     ).toBeNull();
   });
 
-  it("accepts a generationTokensPerSecond within the small rounding tolerance of count/duration", () => {
+  it("accepts a overallCompletionTokensPerSecond within the small rounding tolerance of count/duration", () => {
     const valid = buildValid();
     // Exact value would be 96 / 4.2 = 22.857142..., 22.9 is within tolerance.
     const sanitized = sanitizeModelBenchmarkResult(valid);
@@ -331,12 +350,12 @@ describe("sanitizeModelBenchmarkResult -- exact token throughput invariants", ()
     expect(sanitized?.generation).toEqual(valid.generation);
   });
 
-  it("requires generationTokensPerSecond to be exactly 0 when generatedTokenCount is 0", () => {
+  it("requires overallCompletionTokensPerSecond to be exactly 0 when generatedTokenCount is 0", () => {
     const valid = buildValid();
     expect(
       sanitizeModelBenchmarkResult({
         ...valid,
-        generation: { tokenCountConfidence: "exact", generationDurationMs: 1000, generatedTokenCount: 0, generationTokensPerSecond: 0.1 },
+        generation: { tokenCountConfidence: "exact", generationDurationMs: 1000, generatedTokenCount: 0, overallCompletionTokensPerSecond: 0.1 },
       })
     ).toBeNull();
     // Stage stays "complete"/outcome "completed" (inherited from `valid`) --
@@ -347,7 +366,7 @@ describe("sanitizeModelBenchmarkResult -- exact token throughput invariants", ()
     // produced zero tokenizable output, e.g. an immediate stop signal).
     const sanitized = sanitizeModelBenchmarkResult({
       ...valid,
-      generation: { tokenCountConfidence: "exact", generationDurationMs: 1000, generatedTokenCount: 0, generationTokensPerSecond: 0 },
+      generation: { tokenCountConfidence: "exact", generationDurationMs: 1000, generatedTokenCount: 0, overallCompletionTokensPerSecond: 0 },
     });
     expect(sanitized).not.toBeNull();
   });
@@ -356,17 +375,17 @@ describe("sanitizeModelBenchmarkResult -- exact token throughput invariants", ()
     const valid = buildValid();
     const sanitized = sanitizeModelBenchmarkResult({
       ...valid,
-      generation: { tokenCountConfidence: "exact", generationDurationMs: 10_000, generatedTokenCount: 500_000, generationTokensPerSecond: 50_000 },
+      generation: { tokenCountConfidence: "exact", generationDurationMs: 10_000, generatedTokenCount: 500_000, overallCompletionTokensPerSecond: 50_000 },
     });
     expect(sanitized).not.toBeNull();
   });
 
-  it("rejects a generationTokensPerSecond far beyond any plausible rate", () => {
+  it("rejects a overallCompletionTokensPerSecond far beyond any plausible rate", () => {
     const valid = buildValid();
     expect(
       sanitizeModelBenchmarkResult({
         ...valid,
-        generation: { tokenCountConfidence: "exact", generationDurationMs: 10, generatedTokenCount: 1, generationTokensPerSecond: 1_000_000 },
+        generation: { tokenCountConfidence: "exact", generationDurationMs: 10, generatedTokenCount: 1, overallCompletionTokensPerSecond: 1_000_000 },
       })
     ).toBeNull();
   });
@@ -379,7 +398,7 @@ describe("sanitizeModelBenchmarkResult -- exact token throughput invariants", ()
     const malformedProvenance = { ...(valid.generation as unknown as Record<string, unknown>) };
     delete malformedProvenance.generationDurationMs;
     expect(
-      sanitizeModelBenchmarkResult({ ...valid, generation: { ...malformedProvenance, generationTokensPerSecond: 22.9 } })
+      sanitizeModelBenchmarkResult({ ...valid, generation: { ...malformedProvenance, overallCompletionTokensPerSecond: 22.9 } })
     ).toBeNull();
   });
 });
@@ -444,6 +463,11 @@ describe("sanitizeModelBenchmarkResult -- benchmarkVersion / expiry invalidation
 
   it("rejects an arbitrary/future benchmarkVersion", () => {
     expect(sanitizeModelBenchmarkResult({ ...buildValid(), benchmarkVersion: "2.0.0" })).toBeNull();
+  });
+
+  it("rejects a pre-Phase-2 1.0.0 record -- it was stamped before the real benchmark workload existed and is not comparable to a result actually measured against it", () => {
+    expect(MODEL_BENCHMARK_VERSION).not.toBe("1.0.0");
+    expect(sanitizeModelBenchmarkResult({ ...buildValid(), benchmarkVersion: "1.0.0" })).toBeNull();
   });
 
   it("rejects an expiresAt earlier than the canonical createdAt + TTL formula", () => {
@@ -526,14 +550,50 @@ describe("sanitizeModelBenchmarkResult -- stage/outcome/measurement legality (it
     ).toBeNull();
   });
 
-  it("rejects stage 'generating' with no firstTokenTimeMs -- at least one token must have arrived to reach this stage", () => {
+  it("accepts stage 'generating' with no firstTokenTimeMs -- Phase 2 correction: a real Phase-1 measurement is not always available even when a token did arrive (e.g. a runtime error chunk carries no metrics at all), and this must be representable honestly rather than forcing a fabricated timestamp or an outright rejection", () => {
+    const valid = buildValid();
+    const sanitized = sanitizeModelBenchmarkResult({
+      ...valid,
+      stage: "generating",
+      outcome: "stalled",
+      firstToken: {},
+      generation: { tokenCountConfidence: "unavailable" },
+    });
+    expect(sanitized).not.toBeNull();
+    expect(sanitized?.firstToken).toEqual({});
+  });
+
+  it("accepts generation-reached terminal_unknown without fabricated metrics", () => {
+    const valid = buildValid();
+    const sanitized = sanitizeModelBenchmarkResult({
+      ...valid,
+      stage: "generating",
+      outcome: "terminal_unknown",
+      firstToken: {},
+      generation: { tokenCountConfidence: "unavailable" },
+    });
+
+    expect(sanitized).not.toBeNull();
+    expect(sanitized?.outcome).toBe("terminal_unknown");
+  });
+
+  it("still rejects stage 'loading_model'/'not_started' claiming a firstTokenTimeMs -- a stage that never reached generation cannot have measured one, in either direction", () => {
     const valid = buildValid();
     expect(
       sanitizeModelBenchmarkResult({
         ...valid,
-        stage: "generating",
-        outcome: "stalled",
-        firstToken: {},
+        stage: "loading_model",
+        outcome: "load_failed",
+        firstToken: { firstTokenTimeMs: 100 },
+        generation: { tokenCountConfidence: "unavailable" },
+      })
+    ).toBeNull();
+    expect(
+      sanitizeModelBenchmarkResult({
+        ...valid,
+        stage: "not_started",
+        outcome: "cancelled",
+        firstToken: { firstTokenTimeMs: 100 },
         generation: { tokenCountConfidence: "unavailable" },
       })
     ).toBeNull();
@@ -566,7 +626,7 @@ describe("sanitizeModelBenchmarkResult -- stage/outcome/measurement legality (it
         stage: "loading_model",
         outcome: "cancelled",
         firstToken: {},
-        generation: { tokenCountConfidence: "exact", generationDurationMs: 100, generatedTokenCount: 5, generationTokensPerSecond: 50 },
+        generation: { tokenCountConfidence: "exact", generationDurationMs: 100, generatedTokenCount: 5, overallCompletionTokensPerSecond: 50 },
       })
     ).toBeNull();
   });

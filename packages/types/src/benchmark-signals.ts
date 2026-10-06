@@ -1,6 +1,6 @@
 // v0.8.0-alpha "Local Benchmarks & Performance Intelligence" contracts
-// (Phase 0: contracts/architecture only — no runner, no /benchmarks page
-// yet, see docs/roadmap.md). A separate file from router-signals.ts on
+// (Phase 0 contracts, now consumed by the Phase 2 core runner; no production
+// app adapters or /benchmarks page yet, see docs/roadmap.md). A separate file from router-signals.ts on
 // purpose: this is a distinct, later-versioned concern (a user-initiated,
 // bounded MODEL benchmark run) that happens to share some vocabulary with
 // the v0.7 adaptive-router contracts, not a replacement or extension of
@@ -53,19 +53,27 @@ export type ModelBenchmarkContextPreset = (typeof modelBenchmarkContextPresets)[
 // microbenchmark.
 export type ModelBenchmarkStage = "not_started" | "loading_model" | "awaiting_first_token" | "generating" | "complete";
 
-// Deliberately the EXACT SAME union as ModelPerformanceObservation["outcome"]
-// (see router-signals.ts) rather than a parallel-but-different one: a
-// benchmark run and a real chat generation can end in exactly the same set
-// of ways (a natural stop, hitting the output-token budget, a user
-// cancelling, an unsupported response shape, an unexplained stream end, a
-// genuine stall, out-of-memory, device loss, or a load failure), and
-// reusing the identical type means any future change to that vocabulary
-// (e.g. a new terminal case) is a single edit that keeps both in sync by
-// construction, never two unions silently drifting apart. See
+// A SUPERSET of ModelPerformanceObservation["outcome"] (see router-signals.ts)
+// rather than an identical alias: a benchmark run and a real chat generation
+// can end in exactly the same set of MODEL-caused ways (a natural stop,
+// hitting the output-token budget, a user cancelling, an unsupported
+// response shape, an unexplained stream end, a genuine stall, out-of-memory,
+// device loss, or a load failure) -- every one of those is reused verbatim so
+// a future addition to that shared vocabulary keeps both in sync by
+// construction. But a benchmark run ALSO has terminal cases a real chat
+// generation does not: the benchmark RUNNER's own policy deadlines
+// (`benchmark_timeout` for the generation phase, `load_timeout` for the load
+// phase) firing before the model itself either confirmed success or genuine
+// instability. These two are deliberately NOT folded into `"stalled"`: a
+// model that was emitting healthy progress right up until the runner's own
+// safety deadline is not evidence of model instability, and conflating a
+// RUNNER policy limit with a REAL runtime-reported stall would contaminate
+// benchmark evidence with the runner's own conservatism. See
 // docs/architecture.md's "Benchmark stability classification" section and
-// classifyModelBenchmarkStability() in @free-ai-open/model-benchmark for
-// the positive/neutral/negative grouping applied to this same union.
-export type ModelBenchmarkOutcome = ModelPerformanceObservation["outcome"];
+// classifyModelBenchmarkStability() in @free-ai-open/model-benchmark for the
+// positive/neutral/negative grouping applied to this union -- both new
+// values are neutral, never negative.
+export type ModelBenchmarkOutcome = ModelPerformanceObservation["outcome"] | "benchmark_timeout" | "load_timeout";
 
 // Which exact model (registry entry + verified backend version) a result
 // applies to — everything needed to detect "the registry or the verified
@@ -125,8 +133,8 @@ export interface ModelBenchmarkFirstTokenMeasurement {
 // was available; "unavailable" otherwise. There is no third, approximate
 // option: character-length-derived tok/s is explicitly disallowed as
 // authoritative (see docs/architecture.md) — a caller with "unavailable"
-// confidence must treat generationTokensPerSecond as absent, never fall
-// back to estimating one from generatedCharacterCount/durationMs.
+// confidence must treat overallCompletionTokensPerSecond as absent, never
+// fall back to estimating one from generatedCharacterCount/durationMs.
 export type ModelBenchmarkTokenCountConfidence = "exact" | "unavailable";
 
 // No real token count is available -- generationDurationMs alone (wall-
@@ -146,16 +154,31 @@ export interface ModelBenchmarkGenerationMeasurementUnavailable {
 // sanitizeModelBenchmarkResult() additionally enforces, at the value
 // level (impossible to express as a TypeScript type constraint):
 // generatedTokenCount is a non-negative INTEGER; generationDurationMs is
-// strictly positive; generationTokensPerSecond is 0 when
+// strictly positive; overallCompletionTokensPerSecond is 0 when
 // generatedTokenCount is 0, otherwise strictly positive AND numerically
 // consistent with generatedTokenCount / (generationDurationMs / 1000)
 // within a small explicit tolerance -- an authoritative "exact" rate can
 // never merely be asserted, only actually be true.
+//
+// `generationDurationMs` is the FULL wall-clock duration of the
+// generation step: from the moment generation was actually requested
+// (immediately before inference start -- the same boundary
+// ModelBenchmarkFirstTokenMeasurement's own doc comment uses) to the
+// moment the response was fully received. This INCLUDES prefill and time
+// to first token; it is NOT decode-only duration. `overallCompletionTokensPerSecond`
+// (generatedTokenCount divided by this same full duration) is named
+// explicitly to rule out any reading as a decode-only rate -- see
+// @free-ai-open/ai-runtime's identically-named, identically-scoped
+// `GenerationTokenUsageExact.overallCompletionTokensPerSecond`, which this
+// field mirrors exactly (a benchmark runner maps one directly onto the
+// other). There is no separate exact prompt/prefill-throughput field on
+// this type, for the same reason ai-runtime does not expose one: time to
+// first token is not an exact prefill-time measurement.
 export interface ModelBenchmarkGenerationMeasurementExact {
   tokenCountConfidence: "exact";
   generationDurationMs: number;
   generatedTokenCount: number;
-  generationTokensPerSecond: number;
+  overallCompletionTokensPerSecond: number;
 }
 
 export type ModelBenchmarkGenerationMeasurement =

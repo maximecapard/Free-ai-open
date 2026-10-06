@@ -3,7 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
 import { DEFAULT_MODEL_ID, isModelCached } from "@free-ai-open/ai-runtime";
-import type { InferenceRuntime, RuntimeLocale, RuntimeState } from "@free-ai-open/ai-runtime";
+import type {
+  InferenceRuntime,
+  RuntimeLocale,
+  RuntimeOperationCoordinator,
+  RuntimeOperationLease,
+  RuntimeRecoveryResult,
+  RuntimeState,
+} from "@free-ai-open/ai-runtime";
 import { createLogEvent, logEvent } from "@free-ai-open/logger";
 import { modelRegistryV2 } from "@free-ai-open/model-registry";
 import type { ModelRegistryRecord } from "@free-ai-open/model-registry";
@@ -13,6 +20,7 @@ import type { PerformanceMode, TaskCategory } from "@free-ai-open/types";
 import type { TranslationKey } from "../_i18n/dictionary";
 import { getStoredCapabilityProfile } from "../_lib/capabilityProfileStore";
 import { setStoredPerformanceMode } from "../_lib/gettingStartedPreference";
+import { RECOVERY_REPLACEMENT_LOAD_TIMEOUT_MS, awaitWithDeadline } from "../_lib/replacementLoadBound";
 import {
   getStoredManualModelPreference,
   setAutomaticModelSelection,
@@ -64,15 +72,31 @@ export interface PendingModelSwitch {
   isMobileFormFactor: boolean;
 }
 
+// The slice of the persistent runtime lifecycle this hook needs. Creation and
+// replacement are asynchronous and SEQUENTIAL: a replacement is only created
+// after the previous worker is confirmed terminated, and `ok: false` means no
+// replacement exists because isolation could not be confirmed.
 interface RuntimeLifecycle {
-  ensureRuntime(listener: (state: RuntimeState) => void): { runtime: InferenceRuntime };
+  ensureRuntimeSequenced(listener: (state: RuntimeState) => void): Promise<RuntimeLifecycleResult>;
   replaceRuntime(
     trigger: "explicit_reload" | "performance_replacement" | "recovery" | "model_replacement",
     listener: (state: RuntimeState) => void
-  ): { runtime: InferenceRuntime };
+  ): Promise<RuntimeLifecycleResult>;
+  isolateCurrent(): Promise<{ isolated: boolean }>;
+  confirmIsolation(): Promise<{ isolated: boolean }>;
   getCurrentRuntime(): InferenceRuntime | null;
   hasRuntime(): boolean;
 }
+
+// Optional caps on how long an initialization may wait for its replacement
+// model to load. Recovery always has one (see replacementLoadBound.ts); a
+// reroute the watchdog triggers passes one explicitly so it cannot hold
+// runtime ownership for ever either.
+export interface InitializationBounds {
+  replacementLoadTimeoutMs?: number;
+}
+
+type RuntimeLifecycleResult = { ok: true; instance: { runtime: InferenceRuntime } } | { ok: false; isolated: false };
 
 export interface UseAdaptiveRuntimeRoutingOptions {
   lifecycleRef: MutableRefObject<RuntimeLifecycle>;
@@ -86,6 +110,7 @@ export interface UseAdaptiveRuntimeRoutingOptions {
   activeConversationTaskRef: MutableRefObject<TaskCategory>;
   locale: RuntimeLocale;
   localeRef: MutableRefObject<RuntimeLocale>;
+  runtimeOperations: RuntimeOperationCoordinator;
 }
 
 function toPendingModelSwitch(record: ModelRegistryRecord): PendingModelSwitch {
@@ -126,6 +151,7 @@ export function useAdaptiveRuntimeRouting(options: UseAdaptiveRuntimeRoutingOpti
     runtimeState,
     setPerformanceMode,
     setRuntimeStateSnapshot,
+    runtimeOperations,
   } = options;
   const [routerDecision, setRouterDecisionState] = useState<RouterDecision | null>(null);
   const [pendingModelSwitch, setPendingModelSwitch] = useState<PendingModelSwitch | null>(null);
@@ -141,6 +167,7 @@ export function useAdaptiveRuntimeRouting(options: UseAdaptiveRuntimeRoutingOpti
   const modelSwitchEpochRef = useRef(0);
   const runtimeLoadEpochRef = useRef(0);
   const recoveryInProgressRef = useRef(false);
+  const initializationsInFlightRef = useRef(0);
   const loadedManualPreferenceRef = useRef(false);
   const declinedModelIdsRef = useRef(new Set<string>());
   const failedModelIdsRef = useRef(new Set<string>());
@@ -255,136 +282,278 @@ export function useAdaptiveRuntimeRouting(options: UseAdaptiveRuntimeRoutingOpti
     return filterDisclosedLoadCandidates(candidates, { preDisclosedRegistryIds: PRE_DISCLOSED_MODEL_IDS });
   }, []);
 
-  const initializeRuntime = useCallback(async (
+  // Replaces/creates the runtime and reports the outcome as TWO independent
+  // facts (see RuntimeRecoveryResult in @free-ai-open/ai-runtime):
+  //
+  // - isolated: the previous runtime/worker domain is confirmed terminated.
+  //   Replacement is physically sequential -- the lifecycle only creates the
+  //   new worker after the old one is confirmed gone -- so isolated=false
+  //   means NO replacement was created. The lease (borrowed or acquired) is
+  //   then QUARANTINED rather than released: the coordinator stays
+  //   unavailable to ordinary operations until a later isolation retry
+  //   (see the quarantine-lift step below) proves the old worker is gone.
+  // - ready: the replacement loaded a model and is usable.
+  //
+  // `existingLease` lets recovery triggered BY the current owner run under
+  // that same lease instead of acquiring a second one (which would be
+  // refused as busy and could fail forever).
+  //
+  // Safety and readiness are separate phases. Phase A (isolating the old
+  // domain) is what a lease's release depends on and is bounded by the worker
+  // teardown. Phase B (loading the replacement model) is optional for the
+  // lease: during recovery, or whenever `bounds` asks for it, the replacement
+  // load itself is capped. If the cap is hit the replacement worker is torn
+  // down and isolated too and the result is {isolated: true, ready: false} --
+  // an uncooperative loadModel() can therefore never keep ownership.
+  const runRuntimeInitialization = useCallback(async (
     reason: "initial" | "explicit_reload" | "performance_replacement" | "recovery" | "model_replacement" = "initial",
     explicitCandidates?: ModelLoadCandidate[],
-    approvedRegistryId?: string
-  ): Promise<boolean> => {
+    approvedRegistryId?: string,
+    existingLease?: RuntimeOperationLease,
+    bounds?: InitializationBounds
+  ): Promise<RuntimeRecoveryResult> => {
+    const notIsolated: RuntimeRecoveryResult = { isolated: false, ready: false };
     const busyBlocked = reason === "model_replacement"
       ? isModelSwitchBlockedStatus(runtimeStateRef.current.status)
       : reason !== "recovery" && isConversationSwitchBlockedStatus(runtimeStateRef.current.status);
-    if (busyBlocked) return false;
+    if (busyBlocked) return notIsolated;
 
-    const lifecycle = lifecycleRef.current;
-    if (reason === "initial" && lifecycle.hasRuntime()) return true;
-    const priorRegistryId = registryIdForWebllmModelId(modelRegistryV2, runtimeStateRef.current.modelId);
-    const runtimeLoadEpoch = ++runtimeLoadEpochRef.current;
-    const isRecovery = reason === "recovery";
-    if (isRecovery) recordRuntimeRecoveryEvent("runtime.recovery.started", "info", "recovering");
-
-    const instance = reason === "initial"
-      ? lifecycle.ensureRuntime(setRuntimeStateSnapshot)
-      : lifecycle.replaceRuntime(reason, setRuntimeStateSnapshot);
-    setRuntimeStateSnapshot(
-      isRecovery ? { status: "recovering", modelId: null, loadProgress: 0, error: null } : instance.runtime.getState()
-    );
-
-    let decision = routerDecisionRef.current;
-    if (reason === "initial" || !decision) decision = await evaluateRouting();
-    if (runtimeLoadEpoch !== runtimeLoadEpochRef.current || lifecycle.getCurrentRuntime() !== instance.runtime) return true;
-
-    let candidates = explicitCandidates;
-    if (!candidates) {
-      if (reason === "initial") {
-        candidates = await resolveInitialLoadCandidates(decision);
-      } else {
-        const decisionIds = decision?.selectedModelId
-          ? [decision.selectedModelId, ...decision.fallbackModelIds]
-          : [];
-        const candidateIds = isRecovery && priorRegistryId
-          ? [priorRegistryId, ...decisionIds.filter((id) => id !== priorRegistryId)]
-          : decisionIds;
-        candidates = await filterDisclosedLoadCandidates(
-          buildLoadCandidatesFromDecision(modelRegistryV2, candidateIds),
-          { preDisclosedRegistryIds: PRE_DISCLOSED_MODEL_IDS }
-        );
-      }
-    } else {
-      candidates = await filterDisclosedLoadCandidates(candidates, {
-        approvedRegistryIds: approvedRegistryId ? new Set([approvedRegistryId]) : undefined,
-        preDisclosedRegistryIds: PRE_DISCLOSED_MODEL_IDS,
-      });
+    // A previous recovery that could not prove isolation left the shared
+    // coordinator quarantined. Only an explicit retry that CONFIRMS the old
+    // worker is gone (and no initialization is mid-flight) may lift it.
+    if (runtimeOperations.isQuarantined()) {
+      if (initializationsInFlightRef.current > 0) return notIsolated;
+      const isolation = await lifecycleRef.current.confirmIsolation();
+      if (!isolation.isolated || !runtimeOperations.clearQuarantine({ isolated: true, ready: false })) return notIsolated;
     }
-    if (candidates.length === 0) candidates = [DEFAULT_LOAD_CANDIDATE];
-    if (runtimeLoadEpoch !== runtimeLoadEpochRef.current || lifecycle.getCurrentRuntime() !== instance.runtime) return true;
 
-    setIsFallbackRetry(false);
+    const borrowedLease = existingLease && runtimeOperations.isLeaseCurrent(existingLease) ? existingLease : null;
+    const acquiredLease = borrowedLease ? null : runtimeOperations.tryAcquire(`app-runtime:${reason}`);
+    const lease = borrowedLease ?? acquiredLease;
+    if (!lease) return notIsolated;
+
+    initializationsInFlightRef.current += 1;
     try {
-      const result = await attemptModelLoadWithFallback(instance.runtime, candidates, {
-        initialStatus: isRecovery ? "recovering" : "loading_model",
-        contextWindowTokens: contextWindowForCandidates(decision, candidates),
-        onAttempt: (_candidate, attemptIndex) => {
-          if (attemptIndex > 0) setIsFallbackRetry(true);
-        },
+      const lifecycle = lifecycleRef.current;
+      if (reason === "initial" && lifecycle.hasRuntime()) {
+        return { isolated: true, ready: lifecycle.getCurrentRuntime()?.getState().status === "ready" };
+      }
+      const priorRegistryId = registryIdForWebllmModelId(modelRegistryV2, runtimeStateRef.current.modelId);
+      const runtimeLoadEpoch = ++runtimeLoadEpochRef.current;
+      const isRecovery = reason === "recovery";
+      if (isRecovery) recordRuntimeRecoveryEvent("runtime.recovery.started", "info", "recovering");
+
+      // Mark the old runtime unusable and block new work BEFORE teardown.
+      if (isRecovery) {
+        setRuntimeStateSnapshot({ status: "recovering", modelId: null, loadProgress: 0, error: null });
+      }
+
+      let instance: { runtime: InferenceRuntime };
+      try {
+        const replacement = reason === "initial"
+          ? await lifecycle.ensureRuntimeSequenced(setRuntimeStateSnapshot)
+          : await lifecycle.replaceRuntime(reason, setRuntimeStateSnapshot);
+        if (!replacement.ok) {
+          lease.quarantine();
+          setRuntimeStateSnapshot({
+            status: "error",
+            modelId: null,
+            loadProgress: 0,
+            error: { code: "unknown", message: "Runtime isolation could not be confirmed." },
+          });
+          if (isRecovery) recordRuntimeRecoveryEvent("runtime.recovery.failed", "error", "error", "RUNTIME_ISOLATION_UNCONFIRMED");
+          return notIsolated;
+        }
+        instance = replacement.instance;
+      } catch {
+        // Unexpected failure while tearing down: nothing proves the old
+        // domain is gone, so fail closed.
+        lease.quarantine();
+        return notIsolated;
+      }
+      setRuntimeStateSnapshot(
+        isRecovery ? { status: "recovering", modelId: null, loadProgress: 0, error: null } : instance.runtime.getState()
+      );
+
+      // From here on the previous domain IS isolated (its worker was
+      // confirmed terminated); only readiness remains in question.
+      const superseded = (): boolean =>
+        runtimeLoadEpoch !== runtimeLoadEpochRef.current || lifecycle.getCurrentRuntime() !== instance.runtime;
+      const currentReadiness = (): RuntimeRecoveryResult => ({
+        isolated: true,
+        ready: lifecycle.getCurrentRuntime()?.getState().status === "ready",
       });
-      for (const modelId of result.failedRegistryIds) failedModelIdsRef.current.add(modelId);
-      if (result.registryId) failedModelIdsRef.current.delete(result.registryId);
-      if (result.failedRegistryIds.length > 0) routingCacheKeyRef.current = null;
-    } catch {
-      if (runtimeLoadEpoch === runtimeLoadEpochRef.current && lifecycle.getCurrentRuntime() === instance.runtime) {
+
+      let decision = routerDecisionRef.current;
+      if (reason === "initial" || !decision) decision = await evaluateRouting();
+      if (superseded()) return currentReadiness();
+
+      let candidates = explicitCandidates;
+      if (!candidates) {
+        if (reason === "initial") {
+          candidates = await resolveInitialLoadCandidates(decision);
+        } else {
+          const decisionIds = decision?.selectedModelId
+            ? [decision.selectedModelId, ...decision.fallbackModelIds]
+            : [];
+          const candidateIds = isRecovery && priorRegistryId
+            ? [priorRegistryId, ...decisionIds.filter((id) => id !== priorRegistryId)]
+            : decisionIds;
+          candidates = await filterDisclosedLoadCandidates(
+            buildLoadCandidatesFromDecision(modelRegistryV2, candidateIds),
+            { preDisclosedRegistryIds: PRE_DISCLOSED_MODEL_IDS }
+          );
+        }
+      } else {
+        candidates = await filterDisclosedLoadCandidates(candidates, {
+          approvedRegistryIds: approvedRegistryId ? new Set([approvedRegistryId]) : undefined,
+          preDisclosedRegistryIds: PRE_DISCLOSED_MODEL_IDS,
+        });
+      }
+      if (candidates.length === 0) candidates = [DEFAULT_LOAD_CANDIDATE];
+      if (superseded()) return currentReadiness();
+
+      setIsFallbackRetry(false);
+      const loadTimeoutMs = bounds?.replacementLoadTimeoutMs ?? (isRecovery ? RECOVERY_REPLACEMENT_LOAD_TIMEOUT_MS : null);
+      let loadAbandoned = false;
+      const loadOutcome = await awaitWithDeadline(
+        attemptModelLoadWithFallback(instance.runtime, candidates, {
+          initialStatus: isRecovery ? "recovering" : "loading_model",
+          contextWindowTokens: contextWindowForCandidates(decision, candidates),
+          onAttempt: (_candidate, attemptIndex) => {
+            if (attemptIndex > 0) setIsFallbackRetry(true);
+          },
+          isCancelled: () => loadAbandoned,
+        }),
+        loadTimeoutMs
+      );
+
+      if (loadOutcome.kind === "timeout") {
+        // The replacement load did not finish in time and cannot be
+        // interrupted: abandon it and isolate ITS worker as well, so no
+        // uncooperative load outlives this ownership scope.
+        loadAbandoned = true;
+        if (superseded()) return currentReadiness();
+        let replacementIsolation: { isolated: boolean };
+        try {
+          replacementIsolation = await lifecycle.isolateCurrent();
+        } catch {
+          replacementIsolation = { isolated: false };
+        }
+        if (!replacementIsolation.isolated) {
+          lease.quarantine();
+          setRuntimeStateSnapshot({
+            status: "error",
+            modelId: null,
+            loadProgress: 0,
+            error: { code: "unknown", message: "Runtime isolation could not be confirmed." },
+          });
+          if (isRecovery) recordRuntimeRecoveryEvent("runtime.recovery.failed", "error", "error", "RUNTIME_ISOLATION_UNCONFIRMED");
+          return notIsolated;
+        }
         setRuntimeStateSnapshot({
           status: "error",
-          modelId: instance.runtime.getState().modelId,
-          loadProgress: instance.runtime.getState().loadProgress,
-          error: { code: "unknown", message: "Runtime initialization failed." },
+          modelId: null,
+          loadProgress: 0,
+          error: { code: "model_load_failed", message: "The replacement model did not finish loading in time." },
         });
-        if (isRecovery) {
-          recordRuntimeRecoveryEvent("runtime.recovery.failed", "error", "error", "RUNTIME_RECOVERY_FAILED");
+        if (isRecovery) recordRuntimeRecoveryEvent("runtime.recovery.failed", "error", "error", "RUNTIME_RECOVERY_LOAD_TIMEOUT");
+        return { isolated: true, ready: false };
+      }
+
+      if (loadOutcome.kind === "rejected") {
+        if (!superseded()) {
+          setRuntimeStateSnapshot({
+            status: "error",
+            modelId: instance.runtime.getState().modelId,
+            loadProgress: instance.runtime.getState().loadProgress,
+            error: { code: "unknown", message: "Runtime initialization failed." },
+          });
+          if (isRecovery) {
+            recordRuntimeRecoveryEvent("runtime.recovery.failed", "error", "error", "RUNTIME_RECOVERY_FAILED");
+          }
+        }
+        return { isolated: true, ready: false };
+      }
+
+      const loadResult = loadOutcome.value;
+      for (const modelId of loadResult.failedRegistryIds) failedModelIdsRef.current.add(modelId);
+      if (loadResult.registryId) failedModelIdsRef.current.delete(loadResult.registryId);
+      if (loadResult.failedRegistryIds.length > 0) routingCacheKeyRef.current = null;
+
+      if (superseded()) return currentReadiness();
+      const nextState = instance.runtime.getState();
+      setRuntimeStateSnapshot(nextState);
+      if (isRecovery) {
+        if (nextState.status === "ready") {
+          recordRuntimeRecoveryEvent("runtime.recovery.completed", "info", "ready");
+        } else {
+          recordRuntimeRecoveryEvent(
+            "runtime.recovery.failed",
+            "error",
+            "error",
+            nextState.error?.code ? nextState.error.code.toUpperCase() : "RUNTIME_RECOVERY_FAILED"
+          );
         }
       }
-      return true;
+      return { isolated: true, ready: nextState.status === "ready" };
+    } finally {
+      initializationsInFlightRef.current -= 1;
+      // A no-op when the lease was quarantined above.
+      acquiredLease?.release();
     }
+  }, [evaluateRouting, lifecycleRef, resolveInitialLoadCandidates, runtimeOperations, runtimeStateRef, setRuntimeStateSnapshot]);
 
-    if (runtimeLoadEpoch !== runtimeLoadEpochRef.current || lifecycle.getCurrentRuntime() !== instance.runtime) return true;
-    const nextState = instance.runtime.getState();
-    setRuntimeStateSnapshot(nextState);
-    if (isRecovery) {
-      if (nextState.status === "ready") {
-        recordRuntimeRecoveryEvent("runtime.recovery.completed", "info", "ready");
-      } else {
-        recordRuntimeRecoveryEvent(
-          "runtime.recovery.failed",
-          "error",
-          "error",
-          nextState.error?.code ? nextState.error.code.toUpperCase() : "RUNTIME_RECOVERY_FAILED"
-        );
-      }
-    }
-    return true;
-  }, [evaluateRouting, lifecycleRef, resolveInitialLoadCandidates, runtimeStateRef, setRuntimeStateSnapshot]);
+  // Boolean convenience for callers that only care whether a usable runtime
+  // exists afterwards (initial load, explicit reload, model switches).
+  const initializeRuntime = useCallback(async (
+    reason: "initial" | "explicit_reload" | "performance_replacement" | "recovery" | "model_replacement" = "initial",
+    explicitCandidates?: ModelLoadCandidate[],
+    approvedRegistryId?: string,
+    existingLease?: RuntimeOperationLease
+  ): Promise<boolean> => (await runRuntimeInitialization(reason, explicitCandidates, approvedRegistryId, existingLease)).ready,
+  [runRuntimeInitialization]);
 
+  // Resolves with the outcome of the runtime REPLACEMENT it performed -- two
+  // independent facts, never inferred from side effects -- or null when no
+  // replacement was attempted (nothing to switch to, or a precondition kept it
+  // from starting).
   const performModelSwitch = useCallback(async (
     decision: RouterDecision,
-    approvedRegistryId?: string
-  ): Promise<void> => {
-    if (!decision.selectedModelId) return;
-    if (!approvedRegistryId && failedModelIdsRef.current.has(decision.selectedModelId)) return;
+    approvedRegistryId?: string,
+    bounds?: InitializationBounds
+  ): Promise<RuntimeRecoveryResult | null> => {
+    if (!decision.selectedModelId) return null;
+    if (!approvedRegistryId && failedModelIdsRef.current.has(decision.selectedModelId)) return null;
     const candidates = buildLoadCandidatesFromDecision(modelRegistryV2, [
       decision.selectedModelId,
       ...decision.fallbackModelIds,
     ]);
-    if (candidates.length === 0) return;
-    await initializeRuntime("model_replacement", candidates, approvedRegistryId);
-  }, [initializeRuntime]);
+    if (candidates.length === 0) return null;
+    return runRuntimeInitialization("model_replacement", candidates, approvedRegistryId, undefined, bounds);
+  }, [runRuntimeInitialization]);
 
-  const applyModelSwitchIfNeeded = useCallback(async (decision: RouterDecision | null): Promise<void> => {
-    if (!decision?.selectedModelId || !lifecycleRef.current.hasRuntime()) return;
+  const applyModelSwitchIfNeeded = useCallback(async (
+    decision: RouterDecision | null,
+    bounds?: InitializationBounds
+  ): Promise<RuntimeRecoveryResult | null> => {
+    if (!decision?.selectedModelId || !lifecycleRef.current.hasRuntime()) return null;
     const selectedRecord = modelRegistryV2.find((record) => record.id === decision.selectedModelId);
-    if (!selectedRecord) return;
+    if (!selectedRecord) return null;
 
     const switchEpoch = ++modelSwitchEpochRef.current;
     const currentRegistryId = registryIdForWebllmModelId(modelRegistryV2, runtimeStateRef.current.modelId);
     if (currentRegistryId === selectedRecord.id) {
       setPendingModelSwitch(null);
-      return;
+      return null;
     }
     if (failedModelIdsRef.current.has(selectedRecord.id)) {
       setPendingModelSwitch(null);
-      return;
+      return null;
     }
 
     const cached = await isModelCached(selectedRecord.webllmModelId);
-    if (switchEpoch !== modelSwitchEpochRef.current) return;
+    if (switchEpoch !== modelSwitchEpochRef.current) return null;
     const switchDecision = resolveModelSwitch({
       currentModelId: currentRegistryId,
       selectedModelId: selectedRecord.id,
@@ -395,18 +564,30 @@ export function useAdaptiveRuntimeRouting(options: UseAdaptiveRuntimeRoutingOpti
     });
     if (switchDecision.type === "switch_now") {
       setPendingModelSwitch(null);
-      await performModelSwitch(decision);
+      return performModelSwitch(decision, undefined, bounds);
     } else if (switchDecision.type === "needs_consent") {
       setPendingModelSwitch(toPendingModelSwitch(selectedRecord));
     } else if (switchDecision.type === "declined") {
       setPendingModelSwitch(null);
     }
+    return null;
   }, [lifecycleRef, performModelSwitch, runtimeStateRef]);
 
   const refreshRoutingDecision = useCallback(async (): Promise<void> => {
     routingCacheKeyRef.current = null;
     const decision = await evaluateRouting();
     await applyModelSwitchIfNeeded(decision);
+  }, [applyModelSwitchIfNeeded, evaluateRouting]);
+
+  // The reroute the WATCHDOG performs after a stall/safety-limit recovery.
+  // Unlike refreshRoutingDecision() it reports what any model replacement it
+  // performed actually achieved (so recovery can never claim readiness the
+  // replacement did not deliver), and the replacement is bounded like
+  // recovery's own -- it must not hold runtime ownership for ever.
+  const refreshRoutingAfterRecovery = useCallback(async (): Promise<RuntimeRecoveryResult | null> => {
+    routingCacheKeyRef.current = null;
+    const decision = await evaluateRouting();
+    return applyModelSwitchIfNeeded(decision, { replacementLoadTimeoutMs: RECOVERY_REPLACEMENT_LOAD_TIMEOUT_MS });
   }, [applyModelSwitchIfNeeded, evaluateRouting]);
 
   const confirmModelSwitch = useCallback(async (): Promise<void> => {
@@ -425,15 +606,19 @@ export function useAdaptiveRuntimeRouting(options: UseAdaptiveRuntimeRoutingOpti
     setPendingModelSwitch(null);
   }, [pendingModelSwitch]);
 
-  const recoverRuntime = useCallback(async (): Promise<boolean> => {
-    if (recoveryInProgressRef.current) return false;
+  // Recovery reports isolation and readiness separately -- never a single
+  // "success" boolean. Pass the CURRENT OWNER's lease when recovery is
+  // triggered by that owner (watchdog/cancel handling), so it runs inside
+  // the same ownership scope instead of competing for a second lease.
+  const recoverRuntime = useCallback(async (existingLease?: RuntimeOperationLease): Promise<RuntimeRecoveryResult> => {
+    if (recoveryInProgressRef.current) return { isolated: false, ready: false };
     recoveryInProgressRef.current = true;
     try {
-      return await initializeRuntime("recovery");
+      return await runRuntimeInitialization("recovery", undefined, undefined, existingLease);
     } finally {
       recoveryInProgressRef.current = false;
     }
-  }, [initializeRuntime]);
+  }, [runRuntimeInitialization]);
 
   const reloadRuntime = useCallback(async (): Promise<boolean> => {
     const currentRegistryId = registryIdForWebllmModelId(modelRegistryV2, runtimeStateRef.current.modelId);
@@ -522,5 +707,6 @@ export function useAdaptiveRuntimeRouting(options: UseAdaptiveRuntimeRoutingOpti
     setAutomaticModel,
     clearObservations,
     refreshRoutingDecision,
+    refreshRoutingAfterRecovery,
   };
 }

@@ -55,33 +55,39 @@ describe("v0.7 router/runtime/registry package boundaries", () => {
   });
 });
 
-// v0.8.0-alpha Phase 0 rule (see docs/architecture.md's "Persistence and
-// package boundary" / "Router relationship (defined, not wired)"
-// sections): @free-ai-open/model-benchmark must stay a thin, isolated leaf
-// depending on nothing but @free-ai-open/types -- exactly the same "shared
-// contract in a zero-dependency leaf package" shape the v0.7 packages
-// above already follow. A future router integration (not built yet) may
+// v0.8.0-alpha Phase 0/2 rule (see docs/architecture.md's "Persistence and
+// package boundary" / "Router relationship (defined, not wired)" /
+// "Benchmark runner package placement" sections): @free-ai-open/model-benchmark
+// started (Phase 0) as a thin, isolated leaf depending on nothing but
+// @free-ai-open/types. Phase 2 deliberately adds exactly ONE new dependency,
+// on @free-ai-open/ai-runtime, so the runner can orchestrate real
+// loadModel()/generate() calls against runtime-backed metrics -- see
+// runner.ts's own top-of-file comment. It must still never depend on
+// model-registry (a benchmark target is validated structurally, not looked
+// up in a live registry) or model-router (a future router integration may
 // let model-router depend ON model-benchmark; the reverse edge must never
-// exist. apps/web (this very test's own app) is not itself a workspace
+// exist). apps/web (this very test's own app) is not itself a workspace
 // package any other package can declare a dependency on in this pnpm
 // layout (packages never depend on apps), so "must not import the web UI"
-// is enforced structurally by this same allowlist-of-one check rather than
-// needing a separate source-level scanner.
+// is enforced structurally by this same allowlist check rather than needing
+// a separate source-level scanner.
 const V0_8_RELEVANT_PACKAGES = [...V0_7_RELEVANT_PACKAGES, "model-benchmark"];
 
-describe("v0.8 model-benchmark package boundaries (Phase 0)", () => {
-  it("depends on nothing but @free-ai-open/types", () => {
-    expect(readWorkspaceDependencies("model-benchmark")).toEqual(["types"]);
+describe("v0.8 model-benchmark package boundaries (Phase 0/2)", () => {
+  it("depends on exactly @free-ai-open/types and @free-ai-open/ai-runtime", () => {
+    expect(readWorkspaceDependencies("model-benchmark").sort()).toEqual(["ai-runtime", "types"]);
   });
 
   it("does not depend on model-router -- a future router integration is defined but not wired, and must depend in the router -> benchmark direction only", () => {
     expect(readWorkspaceDependencies("model-benchmark")).not.toContain("model-router");
   });
 
-  it("does not depend on ai-runtime or model-registry", () => {
-    const deps = readWorkspaceDependencies("model-benchmark");
-    expect(deps).not.toContain("ai-runtime");
-    expect(deps).not.toContain("model-registry");
+  it("does not depend on model-registry -- a benchmark target is validated structurally, never looked up in a live registry catalog", () => {
+    expect(readWorkspaceDependencies("model-benchmark")).not.toContain("model-registry");
+  });
+
+  it("does not let ai-runtime depend back on model-benchmark", () => {
+    expect(readWorkspaceDependencies("ai-runtime")).not.toContain("model-benchmark");
   });
 
   it("has no dependency cycle among the router/runtime/registry/profiler/benchmark/types packages", () => {

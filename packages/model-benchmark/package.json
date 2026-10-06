@@ -10,9 +10,11 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@free-ai-open/ai-runtime": "workspace:*",
     "@free-ai-open/types": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^26.1.0",
     "fake-indexeddb": "^6.2.5",
     "typescript": "^6.0.3",
     "vitest": "^4.1.9"

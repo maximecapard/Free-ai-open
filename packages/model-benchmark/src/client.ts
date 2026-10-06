@@ -2,11 +2,17 @@ import type { ModelBenchmarkResult } from "@free-ai-open/types";
 import { MAX_STORED_BENCHMARK_RESULTS, MAX_STORED_BENCHMARK_RESULTS_PER_MODEL } from "./constants";
 import { createIndexedDbModelBenchmarkStore } from "./indexed-db-store";
 import { createMemoryModelBenchmarkStore } from "./memory-store";
-import type { ModelBenchmarkStore } from "./store";
+import type { ModelBenchmarkStoreWriteOptions } from "./store";
+import { isTrustedBackend, markTrustedClient } from "./trusted-store";
+import type { TrustedModelBenchmarkStore } from "./trusted-store";
 import { sanitizeModelBenchmarkResult } from "./validation";
 
 export interface ModelBenchmarkStoreClientOptions {
-  store?: ModelBenchmarkStore | null;
+  // Only a backend produced by this package's own factories is accepted --
+  // both at the type level (the brand) and at runtime (the constructor throws
+  // for anything else). See trusted-store.ts for why persistence trust is
+  // nominal rather than structural.
+  store?: TrustedModelBenchmarkStore | null;
 }
 
 // Mirrors @free-ai-open/conversation-store's ConversationStoreClient shape:
@@ -18,23 +24,43 @@ export interface ModelBenchmarkStoreClientOptions {
 // see store.ts's own comment and docs/architecture.md's "IndexedDB
 // transaction atomicity" section.
 export class ModelBenchmarkStoreClient {
-  private readonly store: ModelBenchmarkStore;
+  private readonly store: TrustedModelBenchmarkStore;
 
   constructor(options: ModelBenchmarkStoreClientOptions = {}) {
-    this.store = options.store ?? createIndexedDbModelBenchmarkStore() ?? createMemoryModelBenchmarkStore();
+    // Not extensible: a subclass could override recordResult() and quietly
+    // drop the cancellation semantics the benchmark runner relies on.
+    if (new.target !== ModelBenchmarkStoreClient) {
+      throw new TypeError("ModelBenchmarkStoreClient cannot be subclassed.");
+    }
+    const supplied = options.store;
+    if (supplied !== undefined && supplied !== null && !isTrustedBackend(supplied)) {
+      throw new TypeError(
+        "ModelBenchmarkStoreClient only accepts a store backend created by @free-ai-open/model-benchmark."
+      );
+    }
+    this.store = supplied ?? createIndexedDbModelBenchmarkStore() ?? createMemoryModelBenchmarkStore();
+    markTrustedClient(this);
   }
 
   // Validates `result` before ever reaching the backend -- a caller that
   // somehow constructs a malformed ModelBenchmarkResult (or passes through
   // untrusted data) gets a clean `false` rather than corrupt data silently
   // landing in storage. Returns whether the write actually happened.
-  async recordResult(result: ModelBenchmarkResult): Promise<boolean> {
+  async recordResult(
+    result: ModelBenchmarkResult,
+    options: ModelBenchmarkStoreWriteOptions = {}
+  ): Promise<boolean> {
+    if (options.signal?.aborted) throw createAbortError();
     const sanitized = sanitizeModelBenchmarkResult(result);
     if (!sanitized) return false;
-    await this.store.putAndPrune(sanitized, {
-      maxTotal: MAX_STORED_BENCHMARK_RESULTS,
-      maxPerModel: MAX_STORED_BENCHMARK_RESULTS_PER_MODEL,
-    });
+    await this.store.putAndPrune(
+      sanitized,
+      {
+        maxTotal: MAX_STORED_BENCHMARK_RESULTS,
+        maxPerModel: MAX_STORED_BENCHMARK_RESULTS_PER_MODEL,
+      },
+      options
+    );
     return true;
   }
 
@@ -75,8 +101,17 @@ export function createModelBenchmarkStoreClient(options: ModelBenchmarkStoreClie
   return new ModelBenchmarkStoreClient(options);
 }
 
-export function recordModelBenchmarkResult(result: ModelBenchmarkResult): Promise<boolean> {
-  return defaultClient.recordResult(result);
+export function recordModelBenchmarkResult(
+  result: ModelBenchmarkResult,
+  options: ModelBenchmarkStoreWriteOptions = {}
+): Promise<boolean> {
+  return defaultClient.recordResult(result, options);
+}
+
+function createAbortError(): Error {
+  const error = new Error("Model benchmark persistence was aborted");
+  error.name = "AbortError";
+  return error;
 }
 
 export function listModelBenchmarkResults(): Promise<ModelBenchmarkResult[]> {

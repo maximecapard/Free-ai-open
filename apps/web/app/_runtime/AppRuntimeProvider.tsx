@@ -3,12 +3,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { createInferenceRuntime } from "@free-ai-open/ai-runtime";
+import { createInferenceRuntime, createRuntimeOperationCoordinator } from "@free-ai-open/ai-runtime";
 import type {
   GenerationStopReason,
   InferenceRuntime,
   RuntimeErrorCode,
   RuntimeLocale,
+  RuntimeOperationCoordinator,
+  RuntimeRecoveryResult,
   RuntimeState,
 } from "@free-ai-open/ai-runtime";
 import {
@@ -40,6 +42,8 @@ import { mergeContinuationOverlap } from "../_lib/continuationMerge";
 import { buildContinuationPrompt } from "../_lib/continuationPrompt";
 import { deriveConversationTitle, toChatMessageItems } from "../_lib/conversationMessages";
 import { computeBudgetedOutputTokens } from "../_lib/generationBudget";
+import { createGenerationLeaseHandle } from "../_lib/generationLeaseOwnership";
+import type { GenerationLeaseHandle } from "../_lib/generationLeaseOwnership";
 import {
   generationNoticeKey,
   incompleteReasonFor,
@@ -156,7 +160,7 @@ interface AppRuntimeContextValue {
   sendMessage: (prompt: string, responseLocale: RuntimeLocale) => Promise<boolean>;
   stopGeneration: () => void;
   reloadRuntime: () => Promise<boolean>;
-  recoverRuntime: () => Promise<boolean>;
+  recoverRuntime: () => Promise<RuntimeRecoveryResult>;
   applyPerformanceMode: (mode: PerformanceMode) => Promise<PerformanceModeApplyResult>;
   confirmModelSwitch: () => Promise<void>;
   cancelModelSwitch: () => void;
@@ -187,10 +191,15 @@ function createClientId(prefix: string): string {
 export function AppRuntimeProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { locale } = useLocale();
+  const runtimeOperationsRef = useRef<RuntimeOperationCoordinator | null>(null);
+  if (runtimeOperationsRef.current === null) {
+    runtimeOperationsRef.current = createRuntimeOperationCoordinator();
+  }
+  const runtimeOperations = runtimeOperationsRef.current;
   const lifecycleRef = useRef(
     createPersistentRuntimeLifecycle<InferenceRuntime, Worker>({
       createWorker: createClientWorker,
-      createRuntime: createInferenceRuntime,
+      createRuntime: (worker) => createInferenceRuntime(worker, { operationCoordinator: runtimeOperations }),
       teardownGraceMs: TEARDOWN_GRACE_MS,
     })
   );
@@ -223,6 +232,10 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
   // generation attempt, so the watchdog-error effect below can always read
   // it whenever activeGenerationRef.current is set.
   const generationAccumulatorRef = useRef<GenerationAccumulator | null>(null);
+  // The runtime lease of the single in-flight generation (sendMessage/Continue),
+  // exposed so watchdog recovery can run UNDER that same lease -- see
+  // generationLeaseOwnership.ts. Null whenever no generation owns the runtime.
+  const generationLeaseRef = useRef<GenerationLeaseHandle | null>(null);
 
   const setRuntimeStateSnapshot = useCallback((next: RuntimeState) => {
     runtimeStateRef.current = next;
@@ -288,6 +301,7 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     modelSelectionMode,
     pendingModelSwitch,
     recoverRuntime,
+    refreshRoutingAfterRecovery,
     refreshRoutingDecision,
     reloadRuntime,
     routerDecision,
@@ -307,6 +321,7 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     activeConversationTaskRef,
     locale,
     localeRef,
+    runtimeOperations,
   });
 
   useEffect(() => {
@@ -382,6 +397,10 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     if (runtimeState.status !== "error" || !runtimeState.error || !activeGenerationRef.current) return;
 
     const activeGeneration = activeGenerationRef.current;
+    // Captured synchronously: the generation owner may clear the ref (or
+    // never reach its `finally` at all, for a non-cooperative stream) before
+    // the async persistence step below completes.
+    const ownerLease = generationLeaseRef.current;
     const errorCode = runtimeState.error.code;
     const acc = generationAccumulatorRef.current;
     const isContinuation = acc?.isContinuation ?? false;
@@ -442,21 +461,33 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      void runRecoveryAction(outcome.recoveryAction, { recoverRuntime, refreshRoutingDecision }).then((recoveryResult) => {
+      void runRecoveryAction(outcome.recoveryAction, {
+        recoverRuntime,
+        // The reroute reports what any replacement it made achieved, so a
+        // failed replacement can never hide behind an earlier recovery result.
+        refreshRoutingDecision: refreshRoutingAfterRecovery,
+        // ready=true is only reported while the live runtime really is ready.
+        isRuntimeReady: () => lifecycleRef.current.getCurrentRuntime()?.getState().status === "ready",
+        owner: ownerLease,
+      }).then((recoveryResult) => {
         // The most specific, latest-arriving signal wins -- matching the
         // existing "async notice overrides the generic one" convention just
-        // above -- since recoverRuntime() failing means the local model is
-        // not actually usable again yet, which is more urgent than whatever
-        // the persistence-outcome notice already said.
-        if (!recoveryResult.recoverySucceeded) {
+        // above -- since a recovery that is not ready means the local model
+        // is not actually usable again yet, which is more urgent than
+        // whatever the persistence-outcome notice already said. Isolation is
+        // handled where it is decided (recovery itself releases or
+        // quarantines the lease); the user-facing message is the same either
+        // way.
+        if (recoveryResult.recovery && !recoveryResult.recovery.ready) {
           setStorageNoticeState({ key: "storageNotice.runtimeRecoveryFailed" });
         }
       });
     });
   }, [
+    lifecycleRef,
     recoverRuntime,
     refreshConversations,
-    refreshRoutingDecision,
+    refreshRoutingAfterRecovery,
     runtimeState.error,
     runtimeState.modelId,
     runtimeState.status,
@@ -542,6 +573,19 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     [refreshConversations, replaceMessages, setActiveConversationId, setActiveConversationTask]
   );
 
+  // Recovery requested by a generation's OWN owner (e.g. after Stop): runs
+  // under that owner's lease, then settles it from the two-fact result --
+  // released only when the old runtime domain is proven isolated, quarantined
+  // otherwise. Readiness only decides whether the user is told the runtime is
+  // not usable; it never affects lease release.
+  const recoverOwnedRuntime = useCallback(
+    async (handle: GenerationLeaseHandle): Promise<void> => {
+      const recovery = await handle.recoverUnderLease((lease) => recoverRuntime(lease));
+      if (recovery && !recovery.ready) setStorageNoticeState({ key: "storageNotice.runtimeRecoveryFailed" });
+    },
+    [recoverRuntime]
+  );
+
   // Applies one raw chunk to the accumulator synchronously (runtime chunk ->
   // accumulator, before any buffered UI rendering, in the raw-chunk loops
   // below -- this function only ever REFLECTS the accumulator's current
@@ -578,6 +622,13 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
         setStorageNoticeState({ key: "storageNotice.generationContextTooLong" });
         return false;
       }
+
+      const operationLease = runtimeOperations.tryAcquire("chat-generation");
+      if (!operationLease) return false;
+      const leaseHandle = createGenerationLeaseHandle(operationLease);
+      generationLeaseRef.current = leaseHandle;
+      let refreshRoutingAfterLease = false;
+      try {
 
       let conversationId = activeConversationIdRef.current;
 
@@ -699,7 +750,7 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
             errorCode: runtimeErrorCode,
           })
         );
-        void evaluateRouting().then((decision) => applyModelSwitchIfNeeded(decision));
+        refreshRoutingAfterLease = true;
       }
 
       const hasPartialOutput = assistantText.length > 0;
@@ -714,7 +765,7 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
             : generationNoticeKey(stopReason, runtimeErrorCode);
         if (noticeKey) setStorageNoticeState({ key: noticeKey });
         if (stopReason === "cancelled") {
-          await recoverRuntime();
+          await recoverOwnedRuntime(leaseHandle);
         }
         return true;
       }
@@ -768,14 +819,24 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
       }
 
       return true;
+      } finally {
+        // A no-op once watchdog recovery has taken the lease over -- only
+        // recovery decides when (and whether) it is released.
+        leaseHandle.releaseFromOwner();
+        if (generationLeaseRef.current === leaseHandle) generationLeaseRef.current = null;
+        if (refreshRoutingAfterLease) {
+          void evaluateRouting().then((decision) => applyModelSwitchIfNeeded(decision));
+        }
+      }
     },
     [
       flushAccumulatorToMessages,
       applyModelSwitchIfNeeded,
       evaluateRouting,
-      recoverRuntime,
+      recoverOwnedRuntime,
       refreshConversations,
       routerDecisionRef,
+      runtimeOperations,
       setActiveConversationId,
       setActiveGeneration,
       setMessages,
@@ -838,6 +899,13 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
       setStorageNoticeState({ key: "storageNotice.generationContextTooLong" });
       return false;
     }
+
+    const operationLease = runtimeOperations.tryAcquire("chat-continuation");
+    if (!operationLease) return false;
+    const leaseHandle = createGenerationLeaseHandle(operationLease);
+    generationLeaseRef.current = leaseHandle;
+    let refreshRoutingAfterLease = false;
+    try {
 
     setStorageNoticeState(null);
 
@@ -944,7 +1012,7 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
           errorCode: outcome.kind === "persisted" ? outcome.errorCode : undefined,
         })
       );
-      void evaluateRouting().then((decision) => applyModelSwitchIfNeeded(decision));
+      refreshRoutingAfterLease = true;
     }
 
     // Both outcomes already reflect the fully-resolved final state --
@@ -969,7 +1037,7 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
 
     if (outcome.kind === "reverted") {
       if (outcome.stopReason === "cancelled") {
-        await recoverRuntime();
+        await recoverOwnedRuntime(leaseHandle);
       }
       return true;
     }
@@ -980,13 +1048,21 @@ export function AppRuntimeProvider({ children }: { children: ReactNode }) {
     }
 
     return true;
+    } finally {
+      leaseHandle.releaseFromOwner();
+      if (generationLeaseRef.current === leaseHandle) generationLeaseRef.current = null;
+      if (refreshRoutingAfterLease) {
+        void evaluateRouting().then((decision) => applyModelSwitchIfNeeded(decision));
+      }
+    }
   }, [
     flushAccumulatorToMessages,
     applyModelSwitchIfNeeded,
     evaluateRouting,
-    recoverRuntime,
+    recoverOwnedRuntime,
     refreshConversations,
     routerDecisionRef,
+    runtimeOperations,
     setActiveGeneration,
     setMessages,
   ]);

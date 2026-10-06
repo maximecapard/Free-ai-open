@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { addMessage, createConversation, getConversation } from "@free-ai-open/conversation-store";
-import { runRecoveryAction, runWatchdogRecovery } from "./watchdogRecovery";
+import { createRuntimeOperationCoordinator } from "@free-ai-open/ai-runtime";
+import type { RuntimeRecoveryResult } from "@free-ai-open/ai-runtime";
+import { createGenerationLeaseHandle } from "./generationLeaseOwnership";
+import { combineRecoveryWithRefresh, runRecoveryAction, runWatchdogRecovery } from "./watchdogRecovery";
 
 describe("runWatchdogRecovery", () => {
   it("cancel_timeout during Continue: restores priorContent/status/incompleteReason exactly, keeps the original bubble, and requests a runtime recovery", async () => {
@@ -298,24 +301,25 @@ describe("runRecoveryAction", () => {
     expect(outcome.recoveryAction).toBe("recover_runtime");
 
     // Step 2: recoverRuntime() rejects outright (e.g. an exception escaping
-    // deep inside initializeRuntime(), before it ever settles its own
-    // boolean -- see runRecoveryAction()'s doc comment).
-    const recoverRuntime = async (): Promise<boolean> => {
+    // deep inside initializeRuntime(), before it ever settles a result --
+    // see runRecoveryAction()'s doc comment). A rejection proves NOTHING
+    // about isolation, so it is reported as neither isolated nor ready.
+    const recoverRuntime = async (): Promise<RuntimeRecoveryResult> => {
       throw new Error("simulated recoverRuntime() rejection");
     };
-    const refreshRoutingDecision = async (): Promise<void> => {};
+    const refreshRoutingDecision = async (): Promise<RuntimeRecoveryResult | null> => null;
 
     await expect(runRecoveryAction(outcome.recoveryAction, { recoverRuntime, refreshRoutingDecision })).resolves.toEqual({
-      recoverySucceeded: false,
+      recovery: { isolated: false, ready: false },
     });
 
     // The original message -- id, content, status, incompleteReason,
     // continuationCount -- remains exactly as the revert left it: not
     // deleted, not duplicated, not marked complete, and not further
     // mutated by the failed recovery attempt. AppRuntimeProvider.tsx uses
-    // { recoverySucceeded: false } to show storageNotice.runtimeRecoveryFailed
-    // -- verified here at the contract point runRecoveryAction() returns,
-    // since mounting the provider itself needs a DOM this repo does not have.
+    // a recovery that is not ready to show storageNotice.runtimeRecoveryFailed
+    // -- verified here at the contract point runRecoveryAction() returns, and
+    // end-to-end by AppRuntimeProvider.watchdog.test.tsx.
     const reloaded = await getConversation(conversationId);
     const assistantMessages = reloaded?.messages.filter((m) => m.role === "assistant") ?? [];
     expect(assistantMessages).toHaveLength(1);
@@ -355,12 +359,14 @@ describe("runRecoveryAction", () => {
 
     // recoverRuntime() settles normally but reports failure (e.g. it was
     // already busy recovering another generation -- see
-    // useAdaptiveRuntimeRouting.ts's recoveryInProgressRef guard).
-    const recoverRuntime = async (): Promise<boolean> => false;
-    const refreshRoutingDecision = async (): Promise<void> => {};
+    // useAdaptiveRuntimeRouting.ts's recoveryInProgressRef guard). The old
+    // domain is isolated here, but nothing is usable yet: isolation and
+    // readiness are reported independently.
+    const recoverRuntime = async (): Promise<RuntimeRecoveryResult> => ({ isolated: true, ready: false });
+    const refreshRoutingDecision = async (): Promise<RuntimeRecoveryResult | null> => null;
 
     await expect(runRecoveryAction(outcome.recoveryAction, { recoverRuntime, refreshRoutingDecision })).resolves.toEqual({
-      recoverySucceeded: false,
+      recovery: { isolated: true, ready: false },
     });
 
     const reloaded = await getConversation(conversationId);
@@ -372,29 +378,261 @@ describe("runRecoveryAction", () => {
     expect(assistantMessages[0]?.continuationCount).toBe(1);
   });
 
-  it("recoverRuntime() succeeding is reported as success", async () => {
-    const recoverRuntime = async (): Promise<boolean> => true;
-    const refreshRoutingDecision = async (): Promise<void> => {};
+  it("a recovery that is both isolated and ready is reported as such", async () => {
+    const recoverRuntime = async (): Promise<RuntimeRecoveryResult> => ({ isolated: true, ready: true });
+    const refreshRoutingDecision = async (): Promise<RuntimeRecoveryResult | null> => null;
     await expect(runRecoveryAction("recover_runtime", { recoverRuntime, refreshRoutingDecision })).resolves.toEqual({
-      recoverySucceeded: true,
+      recovery: { isolated: true, ready: true },
     });
   });
 
-  it("refresh_routing (a non-cancel_timeout watchdog error) always reports success and never calls recoverRuntime() at all", async () => {
+  it("a legacy boolean (or any malformed value) can never be mistaken for proven isolation", async () => {
+    const refreshRoutingDecision = async (): Promise<RuntimeRecoveryResult | null> => null;
+    for (const malformed of [true, false, undefined, { ready: true }]) {
+      const recoverRuntime = (async () => malformed) as unknown as () => Promise<RuntimeRecoveryResult>;
+      await expect(runRecoveryAction("recover_runtime", { recoverRuntime, refreshRoutingDecision })).resolves.toEqual({
+        recovery: { isolated: false, ready: false },
+      });
+    }
+  });
+
+  it("refresh_routing without an interrupted generation's owner never recovers the runtime, and reports no recovery at all", async () => {
     let recoverRuntimeCalled = false;
-    const recoverRuntime = async (): Promise<boolean> => {
+    const recoverRuntime = async (): Promise<RuntimeRecoveryResult> => {
       recoverRuntimeCalled = true;
-      return true;
+      return { isolated: true, ready: true };
     };
     let refreshCalled = false;
-    const refreshRoutingDecision = async (): Promise<void> => {
+    const refreshRoutingDecision = async (): Promise<RuntimeRecoveryResult | null> => {
       refreshCalled = true;
+      return null;
     };
 
     await expect(runRecoveryAction("refresh_routing", { recoverRuntime, refreshRoutingDecision })).resolves.toEqual({
-      recoverySucceeded: true,
+      recovery: null,
     });
     expect(refreshCalled).toBe(true);
     expect(recoverRuntimeCalled).toBe(false);
+  });
+
+  it("a routing refresh that throws never masks the outcome", async () => {
+    const recoverRuntime = async (): Promise<RuntimeRecoveryResult> => ({ isolated: true, ready: true });
+    const refreshRoutingDecision = async (): Promise<RuntimeRecoveryResult | null> => {
+      throw new Error("routing failed");
+    };
+    await expect(runRecoveryAction("refresh_routing", { recoverRuntime, refreshRoutingDecision })).resolves.toEqual({
+      recovery: null,
+    });
+  });
+});
+
+// The reroute that follows a stall recovery may replace the runtime again. Its
+// result must be folded into the recovery's, never swallowed: no path may
+// report ready=true unless the runtime intended for continued use is
+// genuinely ready.
+describe("refresh_routing result propagation (recovery + replacement)", () => {
+  // A generation whose stream never ends: recovery takes the lease over after
+  // a (tiny) owner-release grace and isolates under it.
+  function nonCooperativeOwner() {
+    const coordinator = createRuntimeOperationCoordinator();
+    const handle = createGenerationLeaseHandle(coordinator.tryAcquire("chat-generation")!);
+    const recoverRuntime = async (): Promise<RuntimeRecoveryResult> => ({ isolated: true, ready: true });
+    return { coordinator, handle, recoverRuntime };
+  }
+  const grace = { ownerReleaseGraceMs: 1 };
+
+  it("recovery isolated the old worker but the routing replacement FAILED to initialize (initializeRuntime false) -> the final result is NOT ready", async () => {
+    const { handle, recoverRuntime } = nonCooperativeOwner();
+
+    const result = await runRecoveryAction("refresh_routing", {
+      owner: handle,
+      recoverRuntime,
+      refreshRoutingDecision: async () => ({ isolated: true, ready: false }),
+      isRuntimeReady: () => false,
+      ...grace,
+    });
+
+    expect(result).toEqual({ recovery: { isolated: true, ready: false } });
+  });
+
+  it("the replacement says ready AND the runtime is actually ready -> ready", async () => {
+    const { handle, recoverRuntime } = nonCooperativeOwner();
+
+    await expect(
+      runRecoveryAction("refresh_routing", {
+        owner: handle,
+        recoverRuntime,
+        refreshRoutingDecision: async () => ({ isolated: true, ready: true }),
+        isRuntimeReady: () => true,
+        ...grace,
+      })
+    ).resolves.toEqual({ recovery: { isolated: true, ready: true } });
+  });
+
+  it("the replacement claims ready but the live runtime is not ready -> NOT ready (a claim the runtime contradicts)", async () => {
+    const { handle, recoverRuntime } = nonCooperativeOwner();
+
+    await expect(
+      runRecoveryAction("refresh_routing", {
+        owner: handle,
+        recoverRuntime,
+        refreshRoutingDecision: async () => ({ isolated: true, ready: true }),
+        isRuntimeReady: () => false,
+        ...grace,
+      })
+    ).resolves.toEqual({ recovery: { isolated: true, ready: false } });
+  });
+
+  it("the routing replacement leaves isolation UNPROVEN (and quarantines) -> {isolated:false, ready:false} and the quarantine stands", async () => {
+    const { coordinator, handle, recoverRuntime } = nonCooperativeOwner();
+
+    const result = await runRecoveryAction("refresh_routing", {
+      owner: handle,
+      recoverRuntime,
+      refreshRoutingDecision: async () => {
+        // What the hook does when a replacement worker cannot be isolated.
+        coordinator.tryAcquire("app-runtime:model_replacement")?.quarantine();
+        return { isolated: false, ready: false };
+      },
+      isRuntimeReady: () => true,
+      ...grace,
+    });
+
+    expect(result).toEqual({ recovery: { isolated: false, ready: false } });
+    expect(coordinator.isQuarantined()).toBe(true);
+    expect(coordinator.tryAcquire("anything")).toBeNull();
+  });
+
+  it.each([
+    ["throws", async (): Promise<RuntimeRecoveryResult | null> => { throw new Error("refresh failed"); }],
+    ["rejects", () => Promise.reject(new Error("refresh rejected"))],
+  ])("a refresh that %s after a successful recovery can never leave an earlier ready=true standing", async (_label, refreshRoutingDecision) => {
+    const { handle, recoverRuntime } = nonCooperativeOwner();
+
+    const result = await runRecoveryAction("refresh_routing", {
+      owner: handle,
+      recoverRuntime,
+      refreshRoutingDecision,
+      isRuntimeReady: () => true,
+      ...grace,
+    });
+
+    expect(result).toEqual({ recovery: { isolated: true, ready: false } });
+  });
+
+  it("a malformed (legacy boolean/undefined) replacement result fails closed", async () => {
+    for (const malformed of [true, false, undefined, { ready: true }]) {
+      const { handle, recoverRuntime } = nonCooperativeOwner();
+      const result = await runRecoveryAction("refresh_routing", {
+        owner: handle,
+        recoverRuntime,
+        refreshRoutingDecision: (async () => malformed) as unknown as () => Promise<RuntimeRecoveryResult | null>,
+        isRuntimeReady: () => true,
+        ...grace,
+      });
+      // Only an explicit `null` means "no replacement attempted"; anything
+      // else that is not a well-formed result is an unproven replacement.
+      expect(result.recovery).toEqual({ isolated: false, ready: false });
+    }
+  });
+
+  it("when the refresh replaced nothing, the recovery's result stands but is still subject to the live readiness check", async () => {
+    const ready = nonCooperativeOwner();
+    await expect(
+      runRecoveryAction("refresh_routing", {
+        owner: ready.handle,
+        recoverRuntime: ready.recoverRuntime,
+        refreshRoutingDecision: async () => null,
+        isRuntimeReady: () => true,
+        ...grace,
+      })
+    ).resolves.toEqual({ recovery: { isolated: true, ready: true } });
+
+    const notReady = nonCooperativeOwner();
+    await expect(
+      runRecoveryAction("refresh_routing", {
+        owner: notReady.handle,
+        recoverRuntime: notReady.recoverRuntime,
+        refreshRoutingDecision: async () => null,
+        isRuntimeReady: () => false,
+        ...grace,
+      })
+    ).resolves.toEqual({ recovery: { isolated: true, ready: false } });
+  });
+
+  it("a recovery that could not prove isolation (quarantined) is never followed by an automatic reroute", async () => {
+    const { coordinator, handle } = nonCooperativeOwner();
+    let refreshCalls = 0;
+
+    const result = await runRecoveryAction("refresh_routing", {
+      owner: handle,
+      recoverRuntime: async () => ({ isolated: false, ready: false }),
+      refreshRoutingDecision: async () => {
+        refreshCalls += 1;
+        return { isolated: true, ready: true };
+      },
+      isRuntimeReady: () => true,
+      ...grace,
+    });
+
+    expect(refreshCalls).toBe(0);
+    expect(result).toEqual({ recovery: { isolated: false, ready: false } });
+    expect(coordinator.isQuarantined()).toBe(true);
+  });
+
+  it("recover_runtime (cancel_timeout) is also subject to the live readiness check", async () => {
+    const { handle, recoverRuntime } = nonCooperativeOwner();
+
+    await expect(
+      runRecoveryAction("recover_runtime", {
+        owner: handle,
+        recoverRuntime,
+        refreshRoutingDecision: async () => null,
+        isRuntimeReady: () => false,
+      })
+    ).resolves.toEqual({ recovery: { isolated: true, ready: false } });
+  });
+
+  it("with no recovery at all, a failing refresh reports nothing while the runtime is still ready, and not-ready when it is not", async () => {
+    const refreshRoutingDecision = async (): Promise<RuntimeRecoveryResult | null> => {
+      throw new Error("refresh failed");
+    };
+    const recoverRuntime = async (): Promise<RuntimeRecoveryResult> => ({ isolated: true, ready: true });
+
+    await expect(
+      runRecoveryAction("refresh_routing", { recoverRuntime, refreshRoutingDecision, isRuntimeReady: () => true })
+    ).resolves.toEqual({ recovery: null });
+    await expect(
+      runRecoveryAction("refresh_routing", { recoverRuntime, refreshRoutingDecision, isRuntimeReady: () => false })
+    ).resolves.toEqual({ recovery: { isolated: true, ready: false } });
+  });
+});
+
+describe("combineRecoveryWithRefresh", () => {
+  const ok: RuntimeRecoveryResult = { isolated: true, ready: true };
+
+  it("returns null only when neither a recovery nor a replacement happened", () => {
+    expect(combineRecoveryWithRefresh(null, { kind: "completed", replacement: null })).toBeNull();
+  });
+
+  it("a replacement's own result supersedes the earlier recovery's readiness (the replacement is the runtime that will be used)", () => {
+    expect(
+      combineRecoveryWithRefresh({ isolated: true, ready: false }, { kind: "completed", replacement: ok }, () => true)
+    ).toEqual({ isolated: true, ready: true });
+  });
+
+  it("isolation must hold for both the recovery and the replacement", () => {
+    expect(
+      combineRecoveryWithRefresh({ isolated: false, ready: false }, { kind: "completed", replacement: ok }, () => true)
+    ).toEqual({ isolated: false, ready: false });
+    expect(
+      combineRecoveryWithRefresh(ok, { kind: "completed", replacement: { isolated: false, ready: false } }, () => true)
+    ).toEqual({ isolated: false, ready: false });
+  });
+
+  it("never reports ready without isolation, whatever a result claims", () => {
+    expect(
+      combineRecoveryWithRefresh(ok, { kind: "completed", replacement: { isolated: false, ready: true } as RuntimeRecoveryResult }, () => true)
+    ).toEqual({ isolated: false, ready: false });
   });
 });

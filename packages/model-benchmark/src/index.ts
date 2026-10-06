@@ -17,7 +17,7 @@ export {
   MODEL_BENCHMARK_SCHEMA_VERSION,
   MODEL_BENCHMARK_VERSION,
 } from "./constants";
-export { classifyModelBenchmarkStability } from "./stability";
+export { classifyModelBenchmarkResultStability, classifyModelBenchmarkStability } from "./stability";
 export type { ModelBenchmarkStabilityClass } from "./stability";
 export {
   filterUsableModelBenchmarkResults,
@@ -40,3 +40,35 @@ export {
   recordModelBenchmarkResult,
 } from "./client";
 export type { ModelBenchmarkStoreClientOptions } from "./client";
+export type { ModelBenchmarkStoreWriteOptions } from "./store";
+// Phase 2: the local model benchmark runner. Deliberately narrow, matching
+// this file's own top comment -- the benchmark prompt/workload internals
+// (runner-workload.ts) are never exported; only the runner's factory and its
+// public request/state types are.
+export { createModelBenchmarkRunner } from "./runner";
+export type {
+  ModelBenchmarkRunOptions,
+  ModelBenchmarkRuntimeRecoveryContext,
+  ModelBenchmarkRunner,
+  ModelBenchmarkRunnerError,
+  ModelBenchmarkRunnerErrorCode,
+  ModelBenchmarkRunnerOptions,
+  ModelBenchmarkRunnerState,
+  ModelBenchmarkRunnerStatus,
+} from "./runner";
+// The runner's trust boundary -- an application/integration layer (not
+// built yet -- no `/benchmarks` page exists) implements these against its
+// own real model-registry/capability-profiler/router-eligibility logic. See
+// runner-trust.ts's own top comment for why this package defines the
+// contracts without depending on those packages itself.
+export { trustedBenchmarkTargetsEqual } from "./runner-trust";
+export type {
+  BenchmarkEligibilityEligible,
+  BenchmarkEligibilityEvaluator,
+  BenchmarkEligibilityIneligible,
+  BenchmarkEligibilityResult,
+  TrustedBenchmarkEnvironmentProvider,
+  TrustedBenchmarkEnvironmentSnapshot,
+  TrustedBenchmarkTarget,
+  TrustedBenchmarkTargetResolver,
+} from "./runner-trust";

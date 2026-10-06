@@ -72,6 +72,11 @@ import type {
   RuntimeState,
   RuntimeStatus,
 } from "./types";
+import {
+  associateRuntimeOperationCoordinator,
+  createRuntimeOperationCoordinator,
+} from "./runtime-operation-coordinator";
+import type { RuntimeOperationCoordinator } from "./runtime-operation-coordinator";
 
 export interface LoadModelOptions {
   initialStatus?: Extract<RuntimeStatus, "loading_model" | "recovering">;
@@ -95,6 +100,10 @@ export interface InferenceRuntime {
   // genuine stall; this is a no-op when no generation is active.
   setGenerationWatchdogSuspended(suspended: boolean): void;
   dispose(): Promise<void>;
+}
+
+export interface CreateInferenceRuntimeOptions {
+  operationCoordinator?: RuntimeOperationCoordinator;
 }
 
 const IDLE_STATE: RuntimeState = { status: "idle", modelId: null, loadProgress: 0, error: null };
@@ -200,7 +209,8 @@ function stopEventNameFor(stopReason: GenerationStopReason): string {
 }
 
 // Must only be called from a Client Component, never from a Server Component.
-export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRuntime {
+export function createInferenceRuntime(worker: InferenceChatWorker,
+  options: CreateInferenceRuntimeOptions = {}): InferenceRuntime {
   let state: RuntimeState = { ...IDLE_STATE };
   let engine: WebWorkerMLCEngine | null = null;
   const listeners = new Set<(state: RuntimeState) => void>();
@@ -783,7 +793,7 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     }
   }
 
-  return {
+  const runtime: InferenceRuntime = {
     getState: () => state,
     subscribe(listener) {
       listeners.add(listener);
@@ -795,4 +805,9 @@ export function createInferenceRuntime(worker: InferenceChatWorker): InferenceRu
     setGenerationWatchdogSuspended,
     dispose,
   };
+  associateRuntimeOperationCoordinator(
+    runtime,
+    options.operationCoordinator ?? createRuntimeOperationCoordinator(),
+  );
+  return runtime;
 }

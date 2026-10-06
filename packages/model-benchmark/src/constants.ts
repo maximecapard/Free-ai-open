@@ -8,7 +8,16 @@
 // @free-ai-open/local-benchmark's own LOCAL_BENCHMARK_VERSION convention
 // exactly, kept as a separate constant because these are unrelated
 // benchmarks (see benchmark-signals.ts's own top comment).
-export const MODEL_BENCHMARK_VERSION = "1.0.0";
+//
+// Bumped 1.0.0 -> 1.1.0 in Phase 2: 1.0.0 was stamped during Phase 0/1 when
+// no real workload existed yet -- it could not have been measured against
+// the actual fixed benchmark prompt/preset `runner-workload.ts` now ships.
+// A hypothetical pre-Phase-2 "1.0.0" record and a real Phase-2 measurement
+// are not comparable (they were never run against the same workload), so
+// isModelBenchmarkResultCompatible()/sanitizeModelBenchmarkResult()'s exact
+// benchmarkVersion match already treats any such stale record as
+// incompatible/invalid, exactly as intended.
+export const MODEL_BENCHMARK_VERSION = "1.1.0";
 
 // The schema version sanitizeModelBenchmarkResult() currently accepts. A
 // stored record from a different schemaVersion is dropped on read rather

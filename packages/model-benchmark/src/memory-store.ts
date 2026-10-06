@@ -1,6 +1,7 @@
 import type { ModelBenchmarkResult } from "@free-ai-open/types";
 import { computeModelBenchmarkIdsToPrune } from "./pruning";
-import type { ModelBenchmarkStore } from "./store";
+import { markTrustedBackend } from "./trusted-store";
+import type { TrustedModelBenchmarkStore } from "./trusted-store";
 import { sanitizeModelBenchmarkResult } from "./validation";
 
 // INTERNAL implementation detail -- not exported from this package's public
@@ -13,13 +14,30 @@ import { sanitizeModelBenchmarkResult } from "./validation";
 // object -- one carrying, say, a stray `prompt`/`response` field a caller
 // spread onto an otherwise-valid-looking object -- out of storage. See
 // docs/security.md's "Local model benchmarking" section.
-export function createMemoryModelBenchmarkStore(): ModelBenchmarkStore {
+//
+// TRUSTED backend (see trusted-store.ts): this implementation guarantees that an
+// aborted write can never mutate afterwards. putAndPrune() performs both abort
+// checks and then the insert-and-prune with no `await` in between, so there is
+// no point at which an abort could interleave -- a write is either entirely
+// refused before it mutates anything, or entirely applied before the call
+// settles.
+export function createMemoryModelBenchmarkStore(): TrustedModelBenchmarkStore {
   const records = new Map<string, ModelBenchmarkResult>();
 
-  return {
-    async putAndPrune(result, limits) {
+  return markTrustedBackend({
+    async putAndPrune(result, limits, options = {}) {
+      if (options.signal?.aborted) {
+        const error = new Error("Model benchmark persistence was aborted");
+        error.name = "AbortError";
+        throw error;
+      }
       const sanitized = sanitizeModelBenchmarkResult(result);
       if (!sanitized) throw new Error("Cannot persist an invalid ModelBenchmarkResult");
+      if (options.signal?.aborted) {
+        const error = new Error("Model benchmark persistence was aborted");
+        error.name = "AbortError";
+        throw error;
+      }
       // Persist the freshly-constructed sanitized object, never the
       // caller's own input reference -- sanitizeModelBenchmarkResult()
       // already rebuilds an allowlisted-fields-only object, so this never
@@ -53,5 +71,5 @@ export function createMemoryModelBenchmarkStore(): ModelBenchmarkStore {
         if (result.modelId === modelId) records.delete(id);
       }
     },
-  };
+  });
 }

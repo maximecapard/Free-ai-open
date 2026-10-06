@@ -1,15 +1,19 @@
 import { IDBObjectStore as FakeIDBObjectStore, indexedDB as fakeIndexedDB } from "fake-indexeddb";
 import { describe, expect, it } from "vitest";
 import type { ModelBenchmarkResult } from "@free-ai-open/types";
-import { createModelBenchmarkStoreClient } from "./client";
+import { ModelBenchmarkStoreClient, createModelBenchmarkStoreClient } from "./client";
+import {
+  MODEL_BENCHMARK_SCHEMA_VERSION,
+  MODEL_BENCHMARK_VERSION,
+} from "./constants";
 import { createIndexedDbModelBenchmarkStore } from "./indexed-db-store";
 import { createMemoryModelBenchmarkStore } from "./memory-store";
-import type { ModelBenchmarkStore } from "./store";
+import type { TrustedModelBenchmarkStore } from "./trusted-store";
 
 function buildResult(overrides: Partial<ModelBenchmarkResult> = {}): ModelBenchmarkResult {
   return {
-    schemaVersion: 1,
-    benchmarkVersion: "1.0.0",
+    schemaVersion: MODEL_BENCHMARK_SCHEMA_VERSION,
+    benchmarkVersion: MODEL_BENCHMARK_VERSION,
     id: overrides.id ?? `benchmark-${Math.random().toString(36).slice(2)}`,
     modelId: "qwen3-4b-instruct-q4f16",
     model: {
@@ -32,7 +36,7 @@ function buildResult(overrides: Partial<ModelBenchmarkResult> = {}): ModelBenchm
       tokenCountConfidence: "exact",
       generationDurationMs: 4000,
       generatedTokenCount: 200,
-      generationTokensPerSecond: 50,
+      overallCompletionTokensPerSecond: 50,
     },
     environment: { webllmVersion: "0.2.84" },
     ...overrides,
@@ -40,6 +44,22 @@ function buildResult(overrides: Partial<ModelBenchmarkResult> = {}): ModelBenchm
 }
 
 describe("ModelBenchmarkStoreClient (in-memory store)", () => {
+  it("rejects an already-aborted write without mutating memory", async () => {
+    const client = createModelBenchmarkStoreClient({
+      store: createMemoryModelBenchmarkStore(),
+    });
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      client.recordResult(buildResult({ id: "aborted-memory" }), {
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    expect(await client.listResults()).toEqual([]);
+  });
   it("records a valid result and lists it back exactly", async () => {
     const client = createModelBenchmarkStoreClient({ store: createMemoryModelBenchmarkStore() });
     const result = buildResult({ id: "a" });
@@ -152,7 +172,7 @@ async function withFakeIndexedDb(test: () => Promise<void>): Promise<void> {
 describe("ModelBenchmarkStoreClient (real IndexedDB via fake-indexeddb)", () => {
   it("persists core operations through IndexedDB", async () => {
     await withFakeIndexedDb(async () => {
-      const store = createIndexedDbModelBenchmarkStore() as ModelBenchmarkStore;
+      const store = createIndexedDbModelBenchmarkStore() as TrustedModelBenchmarkStore;
       expect(store).not.toBeNull();
       const client = createModelBenchmarkStoreClient({ store });
 
@@ -177,7 +197,7 @@ describe("ModelBenchmarkStoreClient (real IndexedDB via fake-indexeddb)", () => 
       // every sanctioned write path (recordResult -> putAndPrune) now
       // rejects it outright -- see memory-store.ts/indexed-db-store.ts's
       // own "defense in depth" comments.
-      const store = createIndexedDbModelBenchmarkStore() as ModelBenchmarkStore;
+      const store = createIndexedDbModelBenchmarkStore() as TrustedModelBenchmarkStore;
       expect(store).not.toBeNull();
       const client = createModelBenchmarkStoreClient({ store });
       await client.recordResult(buildResult({ id: "valid" }));
@@ -243,7 +263,7 @@ describe("ModelBenchmarkStoreClient (real IndexedDB via fake-indexeddb)", () => 
       };
 
       try {
-        const store = createIndexedDbModelBenchmarkStore() as ModelBenchmarkStore;
+        const store = createIndexedDbModelBenchmarkStore() as TrustedModelBenchmarkStore;
         expect(store).not.toBeNull();
         const client = createModelBenchmarkStoreClient({ store });
 
@@ -270,9 +290,49 @@ describe("ModelBenchmarkStoreClient (real IndexedDB via fake-indexeddb)", () => 
     });
   });
 
+  it("aborts an in-flight transaction through AbortSignal and never commits a late record", async () => {
+    await withFakeIndexedDb(async () => {
+      const originalPut = FakeIDBObjectStore.prototype.put;
+      const controller = new AbortController();
+      let requestBegan = false;
+      let transactionAborted = false;
+
+      FakeIDBObjectStore.prototype.put = function (
+        this: IDBObjectStore,
+        ...args: Parameters<IDBObjectStore["put"]>
+      ): IDBRequest<IDBValidKey> {
+        requestBegan = true;
+        const request = originalPut.apply(this, args);
+        this.transaction.addEventListener("abort", () => {
+          transactionAborted = true;
+        });
+        request.addEventListener("success", () => controller.abort());
+        return request;
+      };
+
+      try {
+        const store =
+          createIndexedDbModelBenchmarkStore() as TrustedModelBenchmarkStore;
+        const client = createModelBenchmarkStoreClient({ store });
+
+        await expect(
+          client.recordResult(buildResult({ id: "signal-aborted" }), {
+            signal: controller.signal,
+          }),
+        ).rejects.toBeDefined();
+
+        expect(requestBegan).toBe(true);
+        expect(transactionAborted).toBe(true);
+        expect(await client.listResults()).toEqual([]);
+      } finally {
+        FakeIDBObjectStore.prototype.put = originalPut;
+      }
+    });
+  });
+
   it("retains atomic put+prune behavior: a per-model history cap enforced through the real IndexedDB backend still leaves exactly the newest allowed results", async () => {
     await withFakeIndexedDb(async () => {
-      const store = createIndexedDbModelBenchmarkStore() as ModelBenchmarkStore;
+      const store = createIndexedDbModelBenchmarkStore() as TrustedModelBenchmarkStore;
       expect(store).not.toBeNull();
       const client = createModelBenchmarkStoreClient({ store });
 
@@ -291,5 +351,65 @@ describe("ModelBenchmarkStoreClient (real IndexedDB via fake-indexeddb)", () => 
       expect(results.map((result) => result.id)).not.toContain("idb-run-1");
       expect(results.map((result) => result.id)).toContain("idb-run-21");
     });
+  });
+});
+
+describe("persistence trust boundary -- official backends guarantee no late mutation after abort", () => {
+  const abortedSignal = (): AbortSignal => {
+    const controller = new AbortController();
+    controller.abort();
+    return controller.signal;
+  };
+
+  it("memory backend: an aborted write never mutates storage -- not immediately and not after the event loop has turned", async () => {
+    const client = createModelBenchmarkStoreClient({ store: createMemoryModelBenchmarkStore() });
+
+    await expect(client.recordResult(buildResult({ id: "aborted" }), { signal: abortedSignal() })).rejects.toMatchObject({
+      name: "AbortError",
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(await client.listResults()).toEqual([]);
+  });
+
+  it("memory backend: aborting AFTER a write has settled cannot retroactively change or remove it (the write is atomic with its abort checks)", async () => {
+    const client = createModelBenchmarkStoreClient({ store: createMemoryModelBenchmarkStore() });
+    const controller = new AbortController();
+
+    expect(await client.recordResult(buildResult({ id: "committed" }), { signal: controller.signal })).toBe(true);
+    controller.abort();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    expect((await client.listResults()).map((result) => result.id)).toEqual(["committed"]);
+  });
+
+  it("memory backend: an abort issued right after the call cannot half-apply the write -- it is applied whole (synchronously) and stays applied", async () => {
+    const client = createModelBenchmarkStoreClient({ store: createMemoryModelBenchmarkStore() });
+    const controller = new AbortController();
+    const writing = client.recordResult(buildResult({ id: "raced" }), { signal: controller.signal });
+    controller.abort();
+
+    expect(await writing).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect((await client.listResults()).map((result) => result.id)).toEqual(["raced"]);
+  });
+
+  it("a client only wraps backends this package created, and cannot be subclassed", () => {
+    const structuralBackend = {
+      putAndPrune: async () => {},
+      get: async () => null,
+      getAll: async () => [],
+      delete: async () => {},
+      clear: async () => {},
+      clearForModel: async () => {},
+    };
+    class Subclass extends ModelBenchmarkStoreClient {}
+
+    expect(() => new ModelBenchmarkStoreClient({ store: structuralBackend as never })).toThrow(TypeError);
+    expect(() => createModelBenchmarkStoreClient({ store: structuralBackend as never })).toThrow(TypeError);
+    expect(() => new Subclass({ store: createMemoryModelBenchmarkStore() })).toThrow(TypeError);
+    // The default and package-created backends keep working.
+    expect(() => new ModelBenchmarkStoreClient()).not.toThrow();
+    expect(() => new ModelBenchmarkStoreClient({ store: createMemoryModelBenchmarkStore() })).not.toThrow();
   });
 });

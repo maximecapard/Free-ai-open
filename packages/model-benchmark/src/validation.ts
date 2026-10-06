@@ -14,6 +14,7 @@ import type {
   ModelBenchmarkRunConfig,
   ModelBenchmarkStage,
 } from "@free-ai-open/types";
+import type { TrustedBenchmarkEnvironmentSnapshot } from "./runner-trust";
 import { MODEL_BENCHMARK_SCHEMA_VERSION, MODEL_BENCHMARK_VERSION } from "./constants";
 import { calculateModelBenchmarkExpiry } from "./expiry";
 
@@ -27,7 +28,7 @@ const MAX_TOKEN_COUNT = 1_000_000;
 const MAX_TOKEN_RATE = 100_000;
 const MAX_CONTEXT_TOKENS = 10_000_000;
 
-// A small explicit tolerance for comparing a claimed generationTokensPerSecond
+// A small explicit tolerance for comparing a claimed overallCompletionTokensPerSecond
 // against generatedTokenCount / (generationDurationMs / 1000): a real runner
 // computes and then rounds/truncates the rate for storage/display, so exact
 // floating-point equality would reject legitimate values. 2% relative (with
@@ -55,6 +56,11 @@ const VALID_OUTCOMES = new Set<ModelBenchmarkOutcome>([
   "length_limited",
   "unsupported_tool_call",
   "terminal_unknown",
+  // Benchmark-runner-only neutral policy outcomes -- see
+  // @free-ai-open/types' ModelBenchmarkOutcome doc comment. Never valid on a
+  // real ModelPerformanceObservation, only here.
+  "benchmark_timeout",
+  "load_timeout",
 ]);
 const VALID_PRESETS = new Set<string>(modelBenchmarkPresets);
 const VALID_CONTEXT_PRESETS = new Set<string>(modelBenchmarkContextPresets);
@@ -109,13 +115,35 @@ const LEGAL_STAGE_OUTCOMES: Record<ModelBenchmarkStage, ReadonlySet<ModelBenchma
   // Never even attempted -- the only thing that can end a run before it
   // starts is a cancellation.
   not_started: new Set<ModelBenchmarkOutcome>(["cancelled"]),
-  // Attempted a load, never reached generation.
-  loading_model: new Set<ModelBenchmarkOutcome>(["load_failed", "cancelled", "out_of_memory", "device_lost"]),
+  // Attempted a load, never reached generation. "load_timeout" is the
+  // benchmark runner's OWN load-phase deadline firing (neutral -- see
+  // ModelBenchmarkOutcome's own doc comment), distinct from "load_failed"
+  // (a genuine runtime-reported load failure).
+  loading_model: new Set<ModelBenchmarkOutcome>(["load_failed", "load_timeout", "cancelled", "out_of_memory", "device_lost"]),
   // Loaded successfully, generation was requested, no token has arrived yet.
-  awaiting_first_token: new Set<ModelBenchmarkOutcome>(["stalled", "cancelled", "out_of_memory", "device_lost", "terminal_unknown"]),
+  // "benchmark_timeout" is the runner's own first-token-phase deadline
+  // firing (neutral), distinct from a genuine runtime-reported "stalled".
+  awaiting_first_token: new Set<ModelBenchmarkOutcome>([
+    "stalled",
+    "benchmark_timeout",
+    "cancelled",
+    "out_of_memory",
+    "device_lost",
+    "terminal_unknown",
+  ]),
   // At least one token was produced; the generate loop was interrupted
-  // before it could reach its own terminal signal.
-  generating: new Set<ModelBenchmarkOutcome>(["stalled", "cancelled", "degenerate", "out_of_memory", "device_lost"]),
+  // before it could reach its own terminal signal. "benchmark_timeout" is
+  // the runner's own stall/absolute-deadline firing (neutral), distinct
+  // from a genuine runtime-reported "stalled".
+  generating: new Set<ModelBenchmarkOutcome>([
+    "stalled",
+    "benchmark_timeout",
+    "cancelled",
+    "degenerate",
+    "out_of_memory",
+    "device_lost",
+    "terminal_unknown",
+  ]),
   // The generate loop reached its own terminal signal, one way or another.
   complete: new Set<ModelBenchmarkOutcome>(["completed", "length_limited", "unsupported_tool_call", "terminal_unknown"]),
 };
@@ -147,16 +175,32 @@ function isRateConsistentWithCountAndDuration(rate: number, tokenCount: number, 
   return Math.abs(rate - expected) <= tolerance;
 }
 
-function sanitizeModelReference(value: unknown): ModelBenchmarkModelReference | null {
+// Exported so @free-ai-open/model-benchmark's own benchmark runner (runner.ts)
+// can validate a caller-supplied ModelBenchmarkTarget through the exact same
+// structural rules a persisted result's model reference must satisfy,
+// without duplicating MODEL_ID_PATTERN/length-check logic in a second place
+// that could silently drift from this one.
+export function sanitizeModelReference(value: unknown): ModelBenchmarkModelReference | null {
   const candidate = asRecord(value);
   if (!candidate) return null;
   if (typeof candidate.modelId !== "string" || !MODEL_ID_PATTERN.test(candidate.modelId)) return null;
-  if (typeof candidate.webllmModelId !== "string" || candidate.webllmModelId.length === 0 || candidate.webllmModelId.length > 200) {
+  if (
+    typeof candidate.webllmModelId !== "string" ||
+    !/^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$/.test(candidate.webllmModelId)
+  ) {
     return null;
   }
-  if (typeof candidate.registryVersion !== "string" || candidate.registryVersion.length === 0 || candidate.registryVersion.length > 40) {
+  if (typeof candidate.registryVersion !== "string" || !SEMVER_LIKE_PATTERN.test(candidate.registryVersion)) {
     return null;
   }
+  if (
+    candidate.quantization !== undefined &&
+    (typeof candidate.quantization !== "string" || !/^[A-Za-z0-9._-]{1,40}$/.test(candidate.quantization))
+  ) return null;
+  if (
+    candidate.verifiedWithWebLLMVersion !== undefined &&
+    (typeof candidate.verifiedWithWebLLMVersion !== "string" || !SEMVER_LIKE_PATTERN.test(candidate.verifiedWithWebLLMVersion))
+  ) return null;
 
   const reference: ModelBenchmarkModelReference = {
     modelId: candidate.modelId,
@@ -237,14 +281,18 @@ function sanitizeFirstToken(value: unknown): ModelBenchmarkFirstTokenMeasurement
 // figure trustworthy rather than merely asserted (see
 // @free-ai-open/types' ModelBenchmarkGenerationMeasurementExact doc comment
 // for the full list): generatedTokenCount must be a non-negative INTEGER;
-// generationDurationMs must be present and strictly positive; when
-// generatedTokenCount is 0, generationTokensPerSecond must be exactly 0
-// (the only value consistent with the rate formula at zero tokens);
-// otherwise generationTokensPerSecond must be strictly positive AND
-// numerically consistent with generatedTokenCount / (generationDurationMs
-// / 1000) within a small explicit tolerance. A character-length-derived or
-// otherwise merely-plausible-looking rate that fails this consistency
-// check is rejected exactly like any other impossible value.
+// generationDurationMs must be present and strictly positive (it is the
+// FULL wall-clock duration of the generation step -- includes prefill/TTFT,
+// NOT decode-only, mirroring @free-ai-open/ai-runtime's
+// GenerationRuntimeMetrics.generationDurationMs exactly); when
+// generatedTokenCount is 0, overallCompletionTokensPerSecond must be
+// exactly 0 (the only value consistent with the rate formula at zero
+// tokens); otherwise overallCompletionTokensPerSecond must be strictly
+// positive AND numerically consistent with generatedTokenCount /
+// (generationDurationMs / 1000) within a small explicit tolerance. A
+// character-length-derived or otherwise merely-plausible-looking rate that
+// fails this consistency check is rejected exactly like any other
+// impossible value.
 function sanitizeGeneration(value: unknown): ModelBenchmarkGenerationMeasurement | null {
   const candidate = asRecord(value);
   if (!candidate) return null;
@@ -252,10 +300,11 @@ function sanitizeGeneration(value: unknown): ModelBenchmarkGenerationMeasurement
   if (isPresentButInvalid(candidate.generationDurationMs, 0, MAX_TIMING_MS)) return null;
 
   if (candidate.tokenCountConfidence === "unavailable") {
-    // generatedTokenCount/generationTokensPerSecond are never meaningful
-    // here and are dropped even if present in the raw input -- they are
-    // not even expressible on this variant of the return type, matching
-    // the contract's own "never a character-length-derived tok/s" rule.
+    // generatedTokenCount/overallCompletionTokensPerSecond are never
+    // meaningful here and are dropped even if present in the raw input --
+    // they are not even expressible on this variant of the return type,
+    // matching the contract's own "never a character-length-derived
+    // tok/s" rule.
     const generation: ModelBenchmarkGenerationMeasurement = { tokenCountConfidence: "unavailable" };
     if (isFiniteInRange(candidate.generationDurationMs, 0, MAX_TIMING_MS)) {
       generation.generationDurationMs = candidate.generationDurationMs;
@@ -279,13 +328,13 @@ function sanitizeGeneration(value: unknown): ModelBenchmarkGenerationMeasurement
   ) {
     return null;
   }
-  if (candidate.generationTokensPerSecond === undefined || !isFiniteInRange(candidate.generationTokensPerSecond, 0, MAX_TOKEN_RATE)) {
+  if (candidate.overallCompletionTokensPerSecond === undefined || !isFiniteInRange(candidate.overallCompletionTokensPerSecond, 0, MAX_TOKEN_RATE)) {
     return null;
   }
 
   const durationMs = candidate.generationDurationMs;
   const tokenCount = candidate.generatedTokenCount;
-  const rate = candidate.generationTokensPerSecond;
+  const rate = candidate.overallCompletionTokensPerSecond;
 
   if (tokenCount === 0) {
     // The only value consistent with tokenCount / (durationMs / 1000) at
@@ -300,7 +349,7 @@ function sanitizeGeneration(value: unknown): ModelBenchmarkGenerationMeasurement
     tokenCountConfidence: "exact",
     generationDurationMs: durationMs,
     generatedTokenCount: tokenCount,
-    generationTokensPerSecond: rate,
+    overallCompletionTokensPerSecond: rate,
   };
 }
 
@@ -309,10 +358,46 @@ function sanitizeEnvironment(value: unknown): ModelBenchmarkEnvironment | null {
   if (!candidate) return null;
   if (typeof candidate.webllmVersion !== "string" || !SEMVER_LIKE_PATTERN.test(candidate.webllmVersion)) return null;
 
+  if (
+    candidate.appVersion !== undefined &&
+    (typeof candidate.appVersion !== "string" || !SEMVER_LIKE_PATTERN.test(candidate.appVersion))
+  ) return null;
+
   const environment: ModelBenchmarkEnvironment = { webllmVersion: candidate.webllmVersion };
-  if (typeof candidate.appVersion === "string" && candidate.appVersion.length > 0 && candidate.appVersion.length <= 40) {
+  if (typeof candidate.appVersion === "string") {
     environment.appVersion = candidate.appVersion;
   }
+  return environment;
+}
+
+// Trust adapters are authoritative sources, not infallible code. Validate
+// their output before it can influence eligibility, cache lookup, or a
+// runtime call. This intentionally reuses the persisted low-entropy grammar.
+export function sanitizeTrustedBenchmarkEnvironment(
+  value: unknown,
+): TrustedBenchmarkEnvironmentSnapshot | null {
+  const candidate = asRecord(value);
+  if (!candidate) return null;
+  if (
+    typeof candidate.browserFamily !== "string" ||
+    !VALID_BROWSER_FAMILIES.has(candidate.browserFamily)
+  ) return null;
+  if (!isValidCapabilityProfileKey(candidate.capabilityProfileKey)) return null;
+  if (
+    typeof candidate.performanceMode !== "string" ||
+    !VALID_PERFORMANCE_MODES.has(candidate.performanceMode)
+  ) return null;
+  if (
+    candidate.appVersion !== undefined &&
+    (typeof candidate.appVersion !== "string" || !SEMVER_LIKE_PATTERN.test(candidate.appVersion))
+  ) return null;
+
+  const environment: TrustedBenchmarkEnvironmentSnapshot = {
+    browserFamily: candidate.browserFamily as TrustedBenchmarkEnvironmentSnapshot["browserFamily"],
+    capabilityProfileKey: candidate.capabilityProfileKey,
+    performanceMode: candidate.performanceMode as TrustedBenchmarkEnvironmentSnapshot["performanceMode"],
+  };
+  if (typeof candidate.appVersion === "string") environment.appVersion = candidate.appVersion;
   return environment;
 }
 
@@ -379,8 +464,25 @@ export function sanitizeModelBenchmarkResult(value: unknown, now: Date = new Dat
   // Cross-field legality between stage and the measurements themselves --
   // see LEGAL_STAGE_OUTCOMES's own doc comment for why this lives here
   // rather than as a TypeScript discriminated union over the whole result.
+  //
+  // Deliberately ONE-DIRECTIONAL (Phase 2 correction): a stage that never
+  // reached generation (`not_started`/`loading_model`) can never carry a
+  // `firstTokenTimeMs` -- there is nothing it could have measured. A stage
+  // that DID reach generation (`generating`/`complete`) MAY carry one when a
+  // real Phase-1 measurement was available, but honestly OMITS it when one
+  // was not -- e.g. a runtime-reported error chunk carries no
+  // GenerationRuntimeMetrics at all, or the benchmark runner gave up
+  // waiting for a terminal signal entirely (see
+  // @free-ai-open/model-benchmark's runner.ts). The original Phase 0/1
+  // draft of this check required presence in BOTH directions, which forced
+  // the runner to either fabricate a `firstTokenTimeMs` from its own
+  // wall-clock tracking (never a real Phase-1 measurement) or reject an
+  // otherwise-honest, fully-measured record outright -- both wrong. There
+  // is no requirement in the other direction: a genuinely missing
+  // measurement is never itself illegal, only a measurement claimed for a
+  // stage that could not have produced one.
   const reachedFirstToken = STAGES_WITH_FIRST_TOKEN.has(stage);
-  if (reachedFirstToken !== (firstToken.firstTokenTimeMs !== undefined)) return null;
+  if (!reachedFirstToken &&firstToken.firstTokenTimeMs !== undefined) return null;
 
   const generationPossible = STAGES_WITH_GENERATION.has(stage);
   if (!generationPossible) {

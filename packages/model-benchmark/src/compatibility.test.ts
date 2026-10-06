@@ -35,7 +35,7 @@ function buildResult(overrides: Partial<ModelBenchmarkResult> = {}): ModelBenchm
       tokenCountConfidence: "exact",
       generationDurationMs: 4000,
       generatedTokenCount: 200,
-      generationTokensPerSecond: 50,
+      overallCompletionTokensPerSecond: 50,
     },
     environment: { webllmVersion: "0.2.84" },
     ...overrides,

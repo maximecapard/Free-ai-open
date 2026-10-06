@@ -10,6 +10,10 @@ export interface ModelBenchmarkHistoryLimits {
   maxPerModel: number;
 }
 
+export interface ModelBenchmarkStoreWriteOptions {
+  signal?: AbortSignal;
+}
+
 // The storage backend contract ModelBenchmarkStoreClient drives -- mirrors
 // @free-ai-open/conversation-store's ConversationStore shape so both
 // packages follow one recognizable pattern: a thin, swappable backend
@@ -25,7 +29,11 @@ export interface ModelBenchmarkHistoryLimits {
 // IndexedDB backend implements this as one readwrite transaction; the
 // in-memory backend is trivially atomic since it never yields mid-mutation.
 export interface ModelBenchmarkStore {
-  putAndPrune(result: ModelBenchmarkResult, limits: ModelBenchmarkHistoryLimits): Promise<void>;
+  putAndPrune(
+    result: ModelBenchmarkResult,
+    limits: ModelBenchmarkHistoryLimits,
+    options?: ModelBenchmarkStoreWriteOptions
+  ): Promise<void>;
   get(id: string): Promise<ModelBenchmarkResult | null>;
   getAll(): Promise<ModelBenchmarkResult[]>;
   delete(id: string): Promise<void>;

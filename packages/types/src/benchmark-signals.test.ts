@@ -48,7 +48,7 @@ function buildExample(overrides: Partial<ModelBenchmarkResult> = {}): ModelBench
       generationDurationMs: 4200,
       generatedTokenCount: 96,
       tokenCountConfidence: "exact",
-      generationTokensPerSecond: 22.9,
+      overallCompletionTokensPerSecond: 22.9,
     },
     confidence: "medium",
     environment: {
@@ -87,8 +87,8 @@ describe("ModelBenchmarkResult contract", () => {
     expect(Date.parse(example.expiresAt)).toBeGreaterThan(Date.parse(example.createdAt));
   });
 
-  it("shares its outcome vocabulary exactly with ModelPerformanceObservation, including every neutral/negative case", () => {
-    const outcomes: ModelBenchmarkResult["outcome"][] = [
+  it("shares every ModelPerformanceObservation outcome, plus two benchmark-runner-only neutral policy outcomes not valid for a real chat generation", () => {
+    const sharedOutcomes: ModelBenchmarkResult["outcome"][] = [
       "completed",
       "cancelled",
       "stalled",
@@ -100,7 +100,16 @@ describe("ModelBenchmarkResult contract", () => {
       "unsupported_tool_call",
       "terminal_unknown",
     ];
-    for (const outcome of outcomes) {
+    for (const outcome of sharedOutcomes) {
+      expect(buildExample({ outcome }).outcome).toBe(outcome);
+    }
+
+    // Benchmark-runner-only: the runner's own policy deadline firing before
+    // the model confirmed success or genuine instability -- never a real
+    // ModelPerformanceObservation outcome, so this is a deliberate, additive
+    // widening of the shared vocabulary, not an exact alias of it.
+    const benchmarkOnlyOutcomes: ModelBenchmarkResult["outcome"][] = ["benchmark_timeout", "load_timeout"];
+    for (const outcome of benchmarkOnlyOutcomes) {
       expect(buildExample({ outcome }).outcome).toBe(outcome);
     }
   });
@@ -118,7 +127,7 @@ describe("ModelBenchmarkResult contract", () => {
     });
     expect(unavailable.generation.tokenCountConfidence).toBe("unavailable");
     expect("generatedTokenCount" in unavailable.generation).toBe(false);
-    expect("generationTokensPerSecond" in unavailable.generation).toBe(false);
+    expect("overallCompletionTokensPerSecond" in unavailable.generation).toBe(false);
   });
 
   it("accepts a load-failure result with no generation/first-token measurements at all", () => {
@@ -144,7 +153,7 @@ describe("ModelBenchmarkGenerationMeasurement discriminated union -- impossible 
     const invalid: ModelBenchmarkResult["generation"] = {
       tokenCountConfidence: "exact",
       generationDurationMs: 4000,
-      generationTokensPerSecond: 24,
+      overallCompletionTokensPerSecond: 24,
     };
     expect(invalid).toBeDefined();
   });
@@ -154,13 +163,13 @@ describe("ModelBenchmarkGenerationMeasurement discriminated union -- impossible 
     const invalid: ModelBenchmarkResult["generation"] = {
       tokenCountConfidence: "exact",
       generatedTokenCount: 96,
-      generationTokensPerSecond: 24,
+      overallCompletionTokensPerSecond: 24,
     };
     expect(invalid).toBeDefined();
   });
 
-  it("does not allow an 'exact' measurement with a missing generationTokensPerSecond", () => {
-    // @ts-expect-error -- generationTokensPerSecond is required when tokenCountConfidence is "exact"
+  it("does not allow an 'exact' measurement with a missing overallCompletionTokensPerSecond", () => {
+    // @ts-expect-error -- overallCompletionTokensPerSecond is required when tokenCountConfidence is "exact"
     const invalid: ModelBenchmarkResult["generation"] = {
       tokenCountConfidence: "exact",
       generatedTokenCount: 96,
@@ -169,7 +178,7 @@ describe("ModelBenchmarkGenerationMeasurement discriminated union -- impossible 
     expect(invalid).toBeDefined();
   });
 
-  it("does not allow generatedTokenCount/generationTokensPerSecond on the 'unavailable' variant", () => {
+  it("does not allow generatedTokenCount/overallCompletionTokensPerSecond on the 'unavailable' variant", () => {
     const invalid: ModelBenchmarkResult["generation"] = {
       tokenCountConfidence: "unavailable",
       // @ts-expect-error -- generatedTokenCount does not exist on the "unavailable" variant

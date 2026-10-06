@@ -28,7 +28,7 @@ function buildResult(overrides: Partial<ModelBenchmarkResult> = {}): ModelBenchm
       tokenCountConfidence: "exact",
       generationDurationMs: 4000,
       generatedTokenCount: 200,
-      generationTokensPerSecond: 50,
+      overallCompletionTokensPerSecond: 50,
     },
     environment: { webllmVersion: "0.2.84" },
     ...overrides,
@@ -40,10 +40,11 @@ describe("summarizeModelBenchmarkEvidence -- evidence level (count-gated, never 
     const summary = summarizeModelBenchmarkEvidence([]);
     expect(summary.evidenceLevel).toBe("none");
     expect(summary.compatibleSampleCount).toBe(0);
+    expect(summary.informativeSampleCount).toBe(0);
     expect(summary.mostRecentAt).toBeNull();
     expect(summary.medianLoadTimeMs).toBeNull();
     expect(summary.medianFirstTokenTimeMs).toBeNull();
-    expect(summary.medianGenerationTokensPerSecond).toBeNull();
+    expect(summary.medianOverallCompletionTokensPerSecond).toBeNull();
   });
 
   it("a single run is always 'weak' -- one result must never become strong evidence, no matter how good it looked", () => {
@@ -95,6 +96,119 @@ describe("summarizeModelBenchmarkEvidence -- stability tallies", () => {
   });
 });
 
+describe("summarizeModelBenchmarkEvidence -- evidence strength counts INFORMATIVE samples only", () => {
+  const zeroTokens: ModelBenchmarkResult["generation"] = {
+    tokenCountConfidence: "exact",
+    generationDurationMs: 1000,
+    generatedTokenCount: 0,
+    overallCompletionTokensPerSecond: 0,
+  };
+  const neutralStalledShape = {
+    stage: "generating" as const,
+    firstToken: { firstTokenTimeMs: 100 },
+    generation: { tokenCountConfidence: "unavailable" as const },
+  };
+  const zeroTokenNeutral = (index: number) => buildResult({ id: `zero-${index}`, generation: zeroTokens });
+  const informative = (index: number) => buildResult({ id: `informative-${index}` });
+
+  it("one zero-token run is neutral history: it is counted as compatible but is NOT informative, so the level stays 'none'", () => {
+    const summary = summarizeModelBenchmarkEvidence([zeroTokenNeutral(0)]);
+    expect(summary.compatibleSampleCount).toBe(1);
+    expect(summary.informativeSampleCount).toBe(0);
+    expect(summary.evidenceLevel).toBe("none");
+  });
+
+  it("15 zero-token neutral runs STILL do not strengthen evidence (the old raw-count gate would have reported 'strong')", () => {
+    const results = Array.from({ length: MODEL_BENCHMARK_EVIDENCE_THRESHOLDS.strong }, (_, index) => zeroTokenNeutral(index));
+    const summary = summarizeModelBenchmarkEvidence(results);
+    expect(summary.compatibleSampleCount).toBe(MODEL_BENCHMARK_EVIDENCE_THRESHOLDS.strong);
+    expect(summary.informativeSampleCount).toBe(0);
+    expect(summary.evidenceLevel).toBe("none");
+  });
+
+  it("every explicit neutral outcome is excluded from the informative count", () => {
+    const neutralOutcomes = ["terminal_unknown", "benchmark_timeout", "cancelled", "length_limited", "unsupported_tool_call"] as const;
+    const results = neutralOutcomes.flatMap((outcome) =>
+      Array.from({ length: 5 }, (_, index) => buildResult({ id: `${outcome}-${index}`, outcome, ...neutralStalledShape }))
+    );
+    results.push(
+      ...Array.from({ length: 5 }, (_, index) =>
+        buildResult({
+          id: `load-timeout-${index}`,
+          outcome: "load_timeout",
+          stage: "loading_model",
+          firstToken: {},
+          generation: { tokenCountConfidence: "unavailable" },
+        })
+      )
+    );
+    const summary = summarizeModelBenchmarkEvidence(results);
+    expect(summary.compatibleSampleCount).toBe(30);
+    expect(summary.neutralRunCount).toBe(30);
+    expect(summary.informativeSampleCount).toBe(0);
+    expect(summary.evidenceLevel).toBe("none");
+  });
+
+  it("genuine NEGATIVE model evidence is informative and does count (a stalled model is evidence)", () => {
+    const results = Array.from({ length: MODEL_BENCHMARK_EVIDENCE_THRESHOLDS.moderate }, (_, index) =>
+      buildResult({ id: `stalled-${index}`, outcome: "stalled", ...neutralStalledShape })
+    );
+    const summary = summarizeModelBenchmarkEvidence(results);
+    expect(summary.negativeRunCount).toBe(MODEL_BENCHMARK_EVIDENCE_THRESHOLDS.moderate);
+    expect(summary.informativeSampleCount).toBe(MODEL_BENCHMARK_EVIDENCE_THRESHOLDS.moderate);
+    expect(summary.evidenceLevel).toBe("moderate");
+  });
+
+  it("4 informative runs stay 'weak', 5 become 'moderate', 15 become 'strong' -- the existing thresholds, now on informative count", () => {
+    const level = (count: number) =>
+      summarizeModelBenchmarkEvidence(Array.from({ length: count }, (_, index) => informative(index))).evidenceLevel;
+    expect(level(MODEL_BENCHMARK_EVIDENCE_THRESHOLDS.moderate - 1)).toBe("weak");
+    expect(level(MODEL_BENCHMARK_EVIDENCE_THRESHOLDS.moderate)).toBe("moderate");
+    expect(level(MODEL_BENCHMARK_EVIDENCE_THRESHOLDS.strong - 1)).toBe("moderate");
+    expect(level(MODEL_BENCHMARK_EVIDENCE_THRESHOLDS.strong)).toBe("strong");
+  });
+
+  it("mixed neutral + informative: the level depends ONLY on the informative count", () => {
+    const manyNeutral = Array.from({ length: 40 }, (_, index) => zeroTokenNeutral(index));
+    const fourInformative = Array.from({ length: 4 }, (_, index) => informative(index));
+    const fiveInformative = Array.from({ length: 5 }, (_, index) => informative(index));
+    const fifteenInformative = Array.from({ length: 15 }, (_, index) => informative(index));
+
+    const weak = summarizeModelBenchmarkEvidence([...manyNeutral, ...fourInformative]);
+    expect(weak.compatibleSampleCount).toBe(44);
+    expect(weak.informativeSampleCount).toBe(4);
+    expect(weak.evidenceLevel).toBe("weak");
+    expect(summarizeModelBenchmarkEvidence([...manyNeutral, ...fiveInformative]).evidenceLevel).toBe("moderate");
+    expect(summarizeModelBenchmarkEvidence([...manyNeutral, ...fifteenInformative]).evidenceLevel).toBe("strong");
+  });
+});
+
+describe("summarizeModelBenchmarkEvidence -- an empty completion never improves the record", () => {
+  const zeroTokens: ModelBenchmarkResult["generation"] = {
+    tokenCountConfidence: "exact",
+    generationDurationMs: 1000,
+    generatedTokenCount: 0,
+    overallCompletionTokensPerSecond: 0,
+  };
+
+  it("counts a 'completed' record with zero exact tokens as neutral, never stable", () => {
+    const summary = summarizeModelBenchmarkEvidence([buildResult({ generation: zeroTokens })]);
+    expect(summary.stableRunCount).toBe(0);
+    expect(summary.neutralRunCount).toBe(1);
+    expect(summary.negativeRunCount).toBe(0);
+  });
+
+  it("excludes a zero-token measurement from the throughput median instead of averaging in a meaningless 0 tok/s", () => {
+    const summary = summarizeModelBenchmarkEvidence([
+      buildResult({ generation: zeroTokens }),
+      buildResult({
+        generation: { tokenCountConfidence: "exact", generationDurationMs: 4000, generatedTokenCount: 200, overallCompletionTokensPerSecond: 50 },
+      }),
+    ]);
+    expect(summary.medianOverallCompletionTokensPerSecond).toBe(50);
+  });
+});
+
 describe("summarizeModelBenchmarkEvidence -- most recent timestamp", () => {
   it("picks the maximum createdAt regardless of input array order", () => {
     const results = [
@@ -129,13 +243,13 @@ describe("summarizeModelBenchmarkEvidence -- median aggregation", () => {
     expect(summarizeModelBenchmarkEvidence(results).medianLoadTimeMs).toBe(5000);
   });
 
-  it("aggregates medianGenerationTokensPerSecond only from exact-confidence samples, ignoring unavailable ones", () => {
+  it("aggregates medianOverallCompletionTokensPerSecond only from exact-confidence samples, ignoring unavailable ones", () => {
     const results = [
-      buildResult({ id: "exact-1", generation: { tokenCountConfidence: "exact", generationDurationMs: 1000, generatedTokenCount: 40, generationTokensPerSecond: 40 } }),
-      buildResult({ id: "exact-2", generation: { tokenCountConfidence: "exact", generationDurationMs: 1000, generatedTokenCount: 60, generationTokensPerSecond: 60 } }),
+      buildResult({ id: "exact-1", generation: { tokenCountConfidence: "exact", generationDurationMs: 1000, generatedTokenCount: 40, overallCompletionTokensPerSecond: 40 } }),
+      buildResult({ id: "exact-2", generation: { tokenCountConfidence: "exact", generationDurationMs: 1000, generatedTokenCount: 60, overallCompletionTokensPerSecond: 60 } }),
       buildResult({ id: "unavailable", generation: { tokenCountConfidence: "unavailable", generationDurationMs: 1000 } }),
     ];
-    expect(summarizeModelBenchmarkEvidence(results).medianGenerationTokensPerSecond).toBe(50);
+    expect(summarizeModelBenchmarkEvidence(results).medianOverallCompletionTokensPerSecond).toBe(50);
   });
 
   it("returns null medians when no sample in the set carries that measurement", () => {
@@ -150,6 +264,6 @@ describe("summarizeModelBenchmarkEvidence -- median aggregation", () => {
     const summary = summarizeModelBenchmarkEvidence(results);
     expect(summary.medianLoadTimeMs).toBeNull();
     expect(summary.medianFirstTokenTimeMs).toBeNull();
-    expect(summary.medianGenerationTokensPerSecond).toBeNull();
+    expect(summary.medianOverallCompletionTokensPerSecond).toBeNull();
   });
 });

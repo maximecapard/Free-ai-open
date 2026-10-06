@@ -136,6 +136,13 @@ export interface AttemptModelLoadOptions {
   // model" once attemptIndex > 0, without this module knowing anything about
   // React state.
   onAttempt?: (candidate: ModelLoadCandidate, attemptIndex: number) => void;
+  // Checked before each candidate and again after each load settles. Once it
+  // returns true the loop stops AT ONCE: no further candidate is tried and no
+  // observation is recorded. The caller sets it when it has given up on this
+  // attempt (a bounded recovery timed out and the runtime was torn down), so a
+  // late-settling load can never resume work on a runtime that no longer
+  // belongs to it.
+  isCancelled?: () => boolean;
 }
 
 // Walks an ordered candidate list — typically [selectedModel,
@@ -161,6 +168,7 @@ export async function attemptModelLoadWithFallback(
   let attemptIndex = 0;
 
   for (const candidate of candidates) {
+    if (options.isCancelled?.()) break;
     if (seen.has(candidate.webllmModelId)) continue;
     seen.add(candidate.webllmModelId);
 
@@ -173,6 +181,9 @@ export async function attemptModelLoadWithFallback(
       initialStatus: options.initialStatus,
       contextWindowTokens: options.contextWindowTokens,
     });
+    if (options.isCancelled?.()) {
+      return { registryId: null, webllmModelId: null, succeeded: false, attemptedRegistryIds, failedRegistryIds };
+    }
     const state = runtime.getState();
     const succeeded = state.status === "ready" && state.modelId === candidate.webllmModelId;
 
